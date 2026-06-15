@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0b0d0b"
+      "backgroundColor": "#13110D"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -27,7 +27,7 @@
       "package": "app.se7a.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0b0d0b"
+        "backgroundColor": "#13110D"
       },
       "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
     },
