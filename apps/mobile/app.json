@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "SE7A",
+    "slug": "se7a",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "se7a",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b0d0b"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.se7a.mobile",
+      "associatedDomains": ["applinks:se7a.app"],
+      "infoPlist": {
+        "NSCameraUsageDescription": "SE7A uses the camera to scan plates, menus, and physique photos for nutrition and body-composition estimates.",
+        "NSPhotoLibraryUsageDescription": "SE7A reads photos from your library to analyze plates and menus."
+      }
+    },
+    "android": {
+      "package": "app.se7a.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0b0d0b"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SE7A needs photo access to analyze plates and menus.",
+          "cameraPermission": "SE7A needs camera access to scan plates, menus, and physique photos."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": { "origin": false },
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
