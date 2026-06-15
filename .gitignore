@@ -8,3 +8,4 @@ out/
 
 # Legacy single-file prototype, predates the TS migration. Kept locally for reference.
 se7a-app.jsx
+.vercel
