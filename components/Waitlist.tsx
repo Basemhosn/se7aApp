@@ -27,13 +27,13 @@ export default function Waitlist() {
     const { error } = await supabase.from("waitlist").insert({ email: clean });
     if (error && error.code === "23505") {
       setState("done");
-      setMsg("You're already on the list \u2014 sahtain, we'll be in touch.");
+      setMsg("You're already on the list \u2014 sahtain, we'll be in touch when the beta opens.");
     } else if (error) {
       setState("error");
       setMsg("Something went wrong \u2014 try again in a moment.");
     } else {
       setState("done");
-      setMsg("You're in. We'll email you when the beta opens. Sahtain!");
+      setMsg("You're on the list. We'll reach out when the beta opens. Sahtain!");
     }
   };
 
