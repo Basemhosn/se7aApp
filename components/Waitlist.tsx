@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { getBrowserClient } from "@/lib/supabase/client";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = url && key ? createClient(url, key) : null;
+type WaitlistState = "idle" | "busy" | "done" | "error";
 
 export default function Waitlist() {
   const [email, setEmail] = useState("");
-  const [state, setState] = useState("idle"); // idle | busy | done | error
+  const [state, setState] = useState<WaitlistState>("idle");
   const [msg, setMsg] = useState("");
 
   const join = async () => {
@@ -19,6 +17,7 @@ export default function Waitlist() {
       setMsg("That doesn't look like an email \u2014 try again?");
       return;
     }
+    const supabase = getBrowserClient();
     if (!supabase) {
       setState("error");
       setMsg("Waitlist isn't wired up yet \u2014 missing Supabase env vars.");

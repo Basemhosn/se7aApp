@@ -1,6 +1,8 @@
 import "./globals.css";
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "SE7A — AI Food & Fitness Coach",
   description:
     "Scan any menu. Know what to order. SE7A reads restaurant menus and your remaining macros, then tells you exactly what to eat. Eat smart, train smart.",
@@ -14,7 +16,7 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
