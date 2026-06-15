@@ -1,25 +1,37 @@
 /**
- * SE7A AI Gateway model picker.
+ * SE7A model picker.
  *
- * All vision calls route through the Vercel AI Gateway. A plain
- * "provider/model" string is enough — AI SDK v6 uses Gateway by default
- * when no explicit provider is configured.
- *
- * Privacy policy commits us to Anthropic Claude as the user-facing AI
- * processor — keep Claude as the default. If you add a non-Anthropic
- * fallback, update /privacy first (see project memory).
+ * Calls Anthropic directly via @ai-sdk/anthropic. The privacy policy
+ * names Anthropic as the user-facing AI processor — if a non-Anthropic
+ * fallback is ever added, /privacy must be updated first.
  */
-export const MODELS = {
-  plate_default: "anthropic/claude-sonnet-4-6" as const,
-  menu_default: "anthropic/claude-sonnet-4-6" as const,
-  body_default: "anthropic/claude-sonnet-4-6" as const,
-};
+import { anthropic } from "@ai-sdk/anthropic";
 
-export type ModelId = (typeof MODELS)[keyof typeof MODELS];
+const SONNET = "claude-sonnet-4-6";
 
 /**
- * Tracks the prompt version per scan kind. Bump this when the prompt
- * changes meaningfully, so historical scans stay comparable.
+ * Stable string identifiers for each scan kind's default model.
+ * Persisted on scans.model so historical rows stay queryable when the
+ * picker rotates.
+ */
+export const MODEL_IDS = {
+  plate_default: SONNET,
+  menu_default: SONNET,
+  body_default: SONNET,
+} as const;
+
+/**
+ * Bound LanguageModel instances for AI SDK calls.
+ */
+export const MODELS = {
+  plate_default: anthropic(MODEL_IDS.plate_default),
+  menu_default: anthropic(MODEL_IDS.menu_default),
+  body_default: anthropic(MODEL_IDS.body_default),
+};
+
+/**
+ * Prompt version per scan kind. Bump when a prompt changes meaningfully
+ * so historical scans stay comparable.
  */
 export const PROMPT_VERSION = {
   plate: "plate.v1",
@@ -28,9 +40,9 @@ export const PROMPT_VERSION = {
 } as const;
 
 /**
- * The menu scanner hands the model the user's remaining daily budget as a
- * range. When no daily targets exist (profile not fully set), fall back to
- * a generous default so the call still ranks dishes coherently.
+ * The menu scanner hands the model the user's remaining daily budget as
+ * a range. When no daily targets exist (profile not fully set), fall
+ * back to a generous default so the call still ranks dishes coherently.
  */
 export const MENU_FALLBACK_BUDGET = {
   kcal_low: 1500,

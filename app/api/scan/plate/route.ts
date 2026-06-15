@@ -6,7 +6,7 @@ import {
   plateScanResultSchema,
 } from "@/lib/schemas/scan";
 import { PLATE_SYSTEM_PROMPT, PLATE_USER_PROMPT } from "@/lib/prompts/plate.v1";
-import { MODELS, PROMPT_VERSION } from "@/lib/ai";
+import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 
 export const runtime = "nodejs";
 // Vision calls can be slow; allow up to 60s for Claude.
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     user_id: user.id,
     kind: "plate",
     image_path: storedPath,
-    model: MODELS.plate_default,
+    model: MODEL_IDS.plate_default,
     prompt_version: PROMPT_VERSION.plate,
     raw_response: scanRes.value.object,
     parsed,

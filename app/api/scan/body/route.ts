@@ -6,7 +6,7 @@ import {
   normalizeBodyScan,
 } from "@/lib/schemas/body";
 import { BODY_SYSTEM_PROMPT, bodyUserPrompt } from "@/lib/prompts/body.v1";
-import { MODELS, PROMPT_VERSION } from "@/lib/ai";
+import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { project, type BodyProjection } from "@/lib/body";
 import type { Goal, Sex } from "@/lib/macros";
 
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     user_id: user.id,
     kind: "body",
     image_path: null, // intentional — see privacy policy
-    model: MODELS.body_default,
+    model: MODEL_IDS.body_default,
     prompt_version: PROMPT_VERSION.body,
     raw_response: parsed,
     parsed: { ...parsed, projection, pose },

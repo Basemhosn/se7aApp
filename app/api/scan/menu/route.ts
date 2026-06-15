@@ -7,7 +7,7 @@ import {
   normalizeMenuScan,
 } from "@/lib/schemas/menu";
 import { MENU_SYSTEM_PROMPT, menuUserPrompt } from "@/lib/prompts/menu.v1";
-import { MENU_FALLBACK_BUDGET, MODELS, PROMPT_VERSION } from "@/lib/ai";
+import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     user_id: user.id,
     kind: "menu",
     image_path: storedPath,
-    model: MODELS.menu_default,
+    model: MODEL_IDS.menu_default,
     prompt_version: PROMPT_VERSION.menu,
     raw_response: scanRes.value.object,
     parsed: { ...parsed, budget_used: budget },
