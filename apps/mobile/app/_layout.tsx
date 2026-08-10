@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
 import {
   Syne_700Bold,
@@ -17,9 +18,15 @@ import {
 } from "@expo-google-fonts/ibm-plex-mono";
 import { AuthProvider } from "@/auth/AuthContext";
 
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: 0,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+});
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded] = useFonts({
     Syne_700Bold,
     Syne_800ExtraBold,
@@ -48,3 +55,5 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

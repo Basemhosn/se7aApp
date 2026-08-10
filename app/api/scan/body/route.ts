@@ -9,6 +9,7 @@ import { BODY_SYSTEM_PROMPT, bodyUserPrompt } from "@/lib/prompts/body.v1";
 import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { project, type BodyProjection } from "@/lib/body";
 import type { Goal, Sex } from "@/lib/macros";
+import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkScanLimits(user.id);
+  if (!rl.ok) return rateLimitedResponse(rl);
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("image");

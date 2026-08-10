@@ -7,6 +7,7 @@ import {
 } from "@/lib/schemas/scan";
 import { PLATE_SYSTEM_PROMPT, PLATE_USER_PROMPT } from "@/lib/prompts/plate.v1";
 import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
+import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 // Vision calls can be slow; allow up to 60s for Claude.
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkScanLimits(user.id);
+  if (!rl.ok) return rateLimitedResponse(rl);
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("image");

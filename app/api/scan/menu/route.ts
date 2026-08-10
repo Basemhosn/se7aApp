@@ -8,6 +8,7 @@ import {
 } from "@/lib/schemas/menu";
 import { MENU_SYSTEM_PROMPT, menuUserPrompt } from "@/lib/prompts/menu.v1";
 import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
+import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkScanLimits(user.id);
+  if (!rl.ok) return rateLimitedResponse(rl);
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("image");
