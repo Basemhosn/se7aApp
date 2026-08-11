@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Linking from "expo-linking";
+import * as Sentry from "@sentry/react-native";
 import { supabase } from "@/lib/supabase";
 import { colors, font, spacing } from "@/lib/theme";
 
@@ -25,10 +26,36 @@ export default function AuthCallback() {
         if (!cancelled) setErr("Missing sign-in code.");
         return;
       }
-      const { error } = await supabase.auth.exchangeCodeForSession(codeStr);
-      if (cancelled) return;
-      if (error) {
-        setErr(error.message);
+      try {
+        const { error } = await supabase.auth.exchangeCodeForSession(codeStr);
+        if (cancelled) return;
+        if (error) {
+          Sentry.captureException(error, {
+            tags: { where: "auth/callback:exchangeCodeForSession" },
+            extra: {
+              supabaseUrlSet: !!process.env.EXPO_PUBLIC_SUPABASE_URL,
+              supabaseUrlHost: safeHost(process.env.EXPO_PUBLIC_SUPABASE_URL),
+              anonKeySet: !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+              errorName: error.name,
+              errorStatus: (error as { status?: number }).status,
+            },
+          });
+          setErr(
+            `${error.message}\n(host: ${safeHost(process.env.EXPO_PUBLIC_SUPABASE_URL)})`
+          );
+          return;
+        }
+      } catch (e) {
+        Sentry.captureException(e, {
+          tags: { where: "auth/callback:threw" },
+          extra: {
+            supabaseUrlSet: !!process.env.EXPO_PUBLIC_SUPABASE_URL,
+            supabaseUrlHost: safeHost(process.env.EXPO_PUBLIC_SUPABASE_URL),
+          },
+        });
+        setErr(
+          `${(e as Error)?.message ?? "unknown"}\n(host: ${safeHost(process.env.EXPO_PUBLIC_SUPABASE_URL)})`
+        );
         return;
       }
       const { data: { user } } = await supabase.auth.getUser();
@@ -56,6 +83,15 @@ export default function AuthCallback() {
       </Text>
     </View>
   );
+}
+
+function safeHost(u: string | undefined): string {
+  if (!u) return "unset";
+  try {
+    return new URL(u).host;
+  } catch {
+    return "invalid";
+  }
 }
 
 async function extractCodeFromInitialUrl(): Promise<string | null> {
