@@ -1,52 +1,60 @@
+// @ts-check
 const { withDangerousMod } = require("@expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
-// Xcode 26 (Apple Clang 21) enforces stricter C++20 consteval rules,
-// which trip RCT-Folly's vendored `fmt`. Patches the Podfile to build
-// the `fmt` pod with C++17 + FMT_USE_CONSTEVAL=0. Remove after upgrading
-// past Expo SDK 56 / RN 0.83.9 where fmt is patched upstream.
-const MARKER = "# fmt-consteval-fix";
+// Xcode 26 (Apple Clang 21) tightened C++20 consteval rules, breaking
+// FMT_STRING in the vendored fmt 11.0.2 that ships with RN < 0.83.9.
+// The fix: patch fmt/base.h to force FMT_USE_CONSTEVAL to 0, making fmt
+// validate format strings at runtime instead of compile time. Behavior
+// is identical; nanosecond overhead per format call.
+// Remove after upgrading past Expo SDK 56 (fmt 12.1.0 has upstream fix).
+const MARKER = "fmt-consteval-fix";
 
-const SNIPPET = `
-  ${MARKER}
-  installer.pods_project.targets.each do |target|
-    if target.name == 'fmt'
-      target.build_configurations.each do |cfg|
-        cfg.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
-        cfg.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
-        cfg.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FMT_USE_CONSTEVAL=0'
-      end
-    end
-  end
-`;
+function rubyPatch(installerVar) {
+  return [
+    "",
+    `    # === ${MARKER}: disable fmt consteval for Xcode 26 (Apple Clang 21) ===`,
+    `    fmt_base = File.join(${installerVar}.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')`,
+    "    if File.exist?(fmt_base)",
+    "      original = File.read(fmt_base)",
+    "      patched = original.gsub(/^(#\\s*define\\s+FMT_USE_CONSTEVAL)\\s+1\\s*$/, '\\1 0')",
+    "      if patched != original",
+    "        File.chmod(0644, fmt_base)",
+    "        File.write(fmt_base, patched)",
+    `        Pod::UI.puts '[${MARKER}] disabled fmt consteval (Xcode 26 compatibility)'`,
+    "      end",
+    "    end",
+  ].join("\n");
+}
 
 module.exports = function withFmtConstevalFix(config) {
   return withDangerousMod(config, [
     "ios",
-    async (config) => {
+    (cfg) => {
       const podfilePath = path.join(
-        config.modRequest.platformProjectRoot,
+        cfg.modRequest.platformProjectRoot,
         "Podfile"
       );
-      let podfile = fs.readFileSync(podfilePath, "utf-8");
+      let contents = fs.readFileSync(podfilePath, "utf8");
 
-      if (podfile.includes(MARKER)) return config;
+      if (contents.includes(MARKER)) return cfg;
 
-      const anchor = "react_native_post_install(";
-      const idx = podfile.indexOf(anchor);
-      if (idx === -1) {
+      const match = contents.match(/post_install do \|(\w+)\|/);
+      if (!match) {
         throw new Error(
-          "withFmtConstevalFix: could not find react_native_post_install anchor in Podfile"
+          `[${MARKER}] No "post_install do |installer|" block found in Podfile.`
         );
       }
 
-      const endOfLine = podfile.indexOf("\n", idx);
-      podfile =
-        podfile.slice(0, endOfLine + 1) + SNIPPET + podfile.slice(endOfLine + 1);
+      const installerVar = match[1];
+      contents = contents.replace(
+        match[0],
+        `${match[0]}\n${rubyPatch(installerVar)}`
+      );
 
-      fs.writeFileSync(podfilePath, podfile);
-      return config;
+      fs.writeFileSync(podfilePath, contents);
+      return cfg;
     },
   ]);
 };
