@@ -24,7 +24,8 @@
       ],
       "infoPlist": {
         "NSCameraUsageDescription": "SE7A uses the camera to scan plates, menus, and physique photos for nutrition and body-composition estimates.",
-        "NSPhotoLibraryUsageDescription": "SE7A reads photos from your library to analyze plates and menus."
+        "NSPhotoLibraryUsageDescription": "SE7A reads photos from your library to analyze plates and menus.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -49,7 +50,8 @@
           "cameraPermission": "SE7A needs camera access to scan plates, menus, and physique photos."
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
