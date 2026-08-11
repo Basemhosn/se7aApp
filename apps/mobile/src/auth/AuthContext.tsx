@@ -18,11 +18,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setLoading(false);
-    });
+    // If a stale token in AsyncStorage fails to refresh, getSession() rejects.
+    // Wipe the session and continue booting rather than hanging on the loader.
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setSession(data.session);
+      })
+      .catch(async () => {
+        if (!mounted) return;
+        await supabase.auth.signOut().catch(() => {});
+        setSession(null);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
     });
