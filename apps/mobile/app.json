@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SE7A",
-    "slug": "se7a",
+    "slug": "se7aapp",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -34,8 +34,9 @@
         "backgroundColor": "#13110D"
       },
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -58,8 +59,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "252c5b23-9df2-41f6-a066-4d2e2c5fb64f"
       }
-    }
+    },
+    "owner": "basemhosns-team"
   }
 }
