@@ -51,7 +51,8 @@
         }
       ],
       "@sentry/react-native",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withFmtConstevalFix"
     ],
     "experiments": {
       "typedRoutes": true
