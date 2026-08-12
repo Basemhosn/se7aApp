@@ -67,8 +67,15 @@ export default function BodyScan() {
     setErr("");
   };
 
+  const footer =
+    phase === "result" && result ? (
+      <>
+        <Btn label="Scan again" variant="ghost" onPress={reset} />
+      </>
+    ) : undefined;
+
   return (
-    <Screen>
+    <Screen footer={footer}>
       <View style={styles.head}>
         <Pressable onPress={() => router.back()}>
           <Wordmark size={20} />
@@ -198,8 +205,6 @@ function Result({
           not any single estimate, as your signal.
         </Text>
       </View>
-
-      <Btn label="Scan again" variant="ghost" onPress={onReset} />
     </>
   );
 }

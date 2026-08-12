@@ -145,8 +145,46 @@ export default function PlateScan() {
     setErr("");
   };
 
+  const footer =
+    phase === "review" || phase === "saving" ? (
+      <>
+        {!!err && <Text style={styles.err}>{err}</Text>}
+        <View style={styles.slotRow}>
+          {(["breakfast", "lunch", "dinner", "snack"] as MealSlot[]).map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => setSlot(s)}
+              style={[styles.chip, slot === s && styles.chipOn]}
+            >
+              <Text style={[styles.chipText, slot === s && styles.chipTextOn]}>
+                {s}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Btn
+          label={
+            phase === "saving"
+              ? "Saving…"
+              : selected.size === 0
+                ? "Pick at least one item"
+                : `Add to ${slot}`
+          }
+          onPress={save}
+          loading={phase === "saving"}
+          disabled={selected.size === 0}
+        />
+        <Btn
+          label="Discard"
+          variant="ghost"
+          onPress={reset}
+          disabled={phase === "saving"}
+        />
+      </>
+    ) : undefined;
+
   return (
-    <Screen>
+    <Screen footer={footer}>
       <View style={styles.head}>
         <Pressable onPress={() => router.back()}>
           <Wordmark size={20} />
@@ -178,8 +216,12 @@ export default function PlateScan() {
 
       {(phase === "review" || phase === "saving") && (
         <>
-          {previewUri && <Image source={{ uri: previewUri }} style={styles.preview} />}
-          <ConfidencePill level={confidence} />
+          <View style={styles.reviewHead}>
+            {previewUri && (
+              <Image source={{ uri: previewUri }} style={styles.thumb} />
+            )}
+            <ConfidencePill level={confidence} />
+          </View>
           <Text style={styles.sectionTitle}>What we see</Text>
           <Text style={styles.sub}>
             Uncheck anything you didn{"’"}t eat. Ranges are honest; high
@@ -245,29 +287,6 @@ export default function PlateScan() {
               ))}
             </View>
           )}
-
-          <View style={styles.slotRow}>
-            {(["breakfast", "lunch", "dinner", "snack"] as MealSlot[]).map((s) => (
-              <Pressable
-                key={s}
-                onPress={() => setSlot(s)}
-                style={[styles.chip, slot === s && styles.chipOn]}
-              >
-                <Text style={[styles.chipText, slot === s && styles.chipTextOn]}>
-                  {s}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {!!err && <Text style={styles.err}>{err}</Text>}
-
-          <Btn
-            label={phase === "saving" ? "Saving…" : "Add to today"}
-            onPress={save}
-            loading={phase === "saving"}
-          />
-          <Btn label="Discard" variant="ghost" onPress={reset} disabled={phase === "saving"} />
         </>
       )}
     </Screen>
@@ -304,6 +323,18 @@ const styles = StyleSheet.create({
   preview: {
     width: "100%",
     aspectRatio: 4 / 3,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  reviewHead: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "center",
+  },
+  thumb: {
+    width: 72,
+    height: 72,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.line,

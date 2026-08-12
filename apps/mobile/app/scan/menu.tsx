@@ -7,25 +7,29 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { Wordmark } from "@/components/Wordmark";
 import { ConfidencePill } from "@/components/Pill";
-import { apiUpload } from "@/lib/api";
+import { api, apiUpload } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
+  MealSlot,
   MenuDish,
   MenuScanBudget,
   MenuScanResponse,
 } from "@/types";
 
-type Phase = "idle" | "analyzing" | "result";
+type Phase = "idle" | "analyzing" | "result" | "saving";
 
 export default function MenuScan() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
   const [dishes, setDishes] = useState<MenuDish[]>([]);
   const [confidence, setConfidence] = useState<"low" | "medium" | "high">("medium");
   const [budget, setBudget] = useState<MenuScanBudget | null>(null);
   const [targetsKnown, setTargetsKnown] = useState(true);
   const [restaurantGuess, setRestaurantGuess] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [slot, setSlot] = useState<MealSlot>(slotForNow());
 
   const pickAndAnalyze = async (source: "camera" | "library") => {
     setErr("");
@@ -58,11 +62,13 @@ export default function MenuScan() {
         "image",
         { uri: resized.uri, mimeType: "image/jpeg", fileName: "menu.jpg" }
       );
+      setScanId(body.scan_id);
       setDishes(body.result.dishes);
       setConfidence(body.result.confidence);
       setBudget(body.budget);
       setTargetsKnown(body.targets_known);
       setRestaurantGuess(body.result.restaurant_guess ?? null);
+      setSelected(new Set());
       setPhase("result");
     } catch (e) {
       setErr((e as Error).message || "Couldn't read the menu.");
@@ -73,18 +79,111 @@ export default function MenuScan() {
   const reset = () => {
     setPhase("idle");
     setPreviewUri(null);
+    setScanId(null);
     setDishes([]);
     setBudget(null);
     setRestaurantGuess(null);
+    setSelected(new Set());
     setErr("");
   };
 
-  const orders = dishes.filter((d) => d.verdict === "order");
-  const considers = dishes.filter((d) => d.verdict === "consider");
-  const skips = dishes.filter((d) => d.verdict === "skip");
+  const toggle = (i: number) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+
+  const save = async () => {
+    if (!scanId) return;
+    const picked = dishes.filter((_, i) => selected.has(i));
+    if (picked.length === 0) return;
+    setPhase("saving");
+    setErr("");
+    try {
+      await api("/api/ledger/add", {
+        method: "POST",
+        body: JSON.stringify({
+          scan_id: scanId,
+          source: "menu_scan",
+          meal_slot: slot,
+          items: picked.map((d) => ({
+            name: d.name,
+            portion_estimate: d.description ?? null,
+            kcal_low: d.kcal_low,
+            kcal_high: d.kcal_high,
+            protein_g_low: d.protein_g_low,
+            protein_g_high: d.protein_g_high,
+            carb_g_low: d.carb_g_low,
+            carb_g_high: d.carb_g_high,
+            fat_g_low: d.fat_g_low,
+            fat_g_high: d.fat_g_high,
+            confidence,
+          })),
+        }),
+      });
+      router.replace("/dashboard");
+    } catch (e) {
+      setErr((e as Error).message || "Couldn't save — try again.");
+      setPhase("result");
+    }
+  };
+
+  const totals = dishes.reduce(
+    (acc, d, i) => {
+      if (!selected.has(i)) return acc;
+      acc.kcal_low += d.kcal_low;
+      acc.kcal_high += d.kcal_high;
+      return acc;
+    },
+    { kcal_low: 0, kcal_high: 0 }
+  );
+
+  const orders = dishes.map((d, i) => ({ d, i })).filter((x) => x.d.verdict === "order");
+  const considers = dishes.map((d, i) => ({ d, i })).filter((x) => x.d.verdict === "consider");
+  const skips = dishes.map((d, i) => ({ d, i })).filter((x) => x.d.verdict === "skip");
+
+  const footer =
+    phase === "result" || phase === "saving" ? (
+      <>
+        {!!err && <Text style={styles.err}>{err}</Text>}
+        <View style={styles.slotRow}>
+          {(["breakfast", "lunch", "dinner", "snack"] as MealSlot[]).map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => setSlot(s)}
+              style={[styles.chip, slot === s && styles.chipOn]}
+            >
+              <Text style={[styles.chipText, slot === s && styles.chipTextOn]}>
+                {s}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Btn
+          label={
+            phase === "saving"
+              ? "Saving…"
+              : selected.size === 0
+                ? "Pick a dish to log"
+                : `Log ${selected.size} to ${slot} · ${totals.kcal_low}–${totals.kcal_high} kcal`
+          }
+          onPress={save}
+          loading={phase === "saving"}
+          disabled={selected.size === 0}
+        />
+        <Btn
+          label="Scan another"
+          variant="ghost"
+          onPress={reset}
+          disabled={phase === "saving"}
+        />
+      </>
+    ) : undefined;
 
   return (
-    <Screen>
+    <Screen footer={footer}>
       <View style={styles.head}>
         <Pressable onPress={() => router.back()}>
           <Wordmark size={20} />
@@ -114,8 +213,20 @@ export default function MenuScan() {
         </View>
       )}
 
-      {phase === "result" && budget && (
+      {(phase === "result" || phase === "saving") && budget && (
         <>
+          <View style={styles.reviewHead}>
+            {previewUri && (
+              <Image source={{ uri: previewUri }} style={styles.thumb} />
+            )}
+            <View style={{ flex: 1 }}>
+              <ConfidencePill level={confidence} />
+              {restaurantGuess && (
+                <Text style={[styles.dim, { marginTop: 4 }]}>{restaurantGuess}</Text>
+              )}
+            </View>
+          </View>
+
           <View style={styles.budget}>
             <Text style={styles.kicker}>
               {targetsKnown ? "YOUR REMAINING BUDGET" : "USING DEFAULT BUDGET"}
@@ -128,63 +239,96 @@ export default function MenuScan() {
             </Text>
           </View>
 
-          <View style={styles.metaRow}>
-            {restaurantGuess && <Text style={styles.dim}>{restaurantGuess}</Text>}
-            <ConfidencePill level={confidence} />
-          </View>
-
-          <Section title="Order" tint={colors.mint} dishes={orders} verdict="order" />
-          <Section title="Consider" tint={colors.gold} dishes={considers} verdict="consider" />
-          <Section title="Skip" tint={colors.dim} dishes={skips} verdict="skip" />
-
-          <Btn label="Scan another" variant="ghost" onPress={reset} />
+          <DishSection
+            title="Order"
+            tint={colors.mint}
+            rows={orders}
+            selected={selected}
+            onToggle={toggle}
+          />
+          <DishSection
+            title="Consider"
+            tint={colors.gold}
+            rows={considers}
+            selected={selected}
+            onToggle={toggle}
+          />
+          <DishSection
+            title="Skip"
+            tint={colors.dim}
+            rows={skips}
+            selected={selected}
+            onToggle={toggle}
+            skipped
+          />
         </>
       )}
     </Screen>
   );
 }
 
-function Section({
+function DishSection({
   title,
   tint,
-  dishes,
-  verdict,
+  rows,
+  selected,
+  onToggle,
+  skipped,
 }: {
   title: string;
   tint: string;
-  dishes: MenuDish[];
-  verdict: "order" | "consider" | "skip";
+  rows: { d: MenuDish; i: number }[];
+  selected: Set<number>;
+  onToggle: (i: number) => void;
+  skipped?: boolean;
 }) {
-  if (dishes.length === 0) return null;
+  if (rows.length === 0) return null;
   return (
     <View style={{ gap: spacing.sm }}>
       <Text style={[styles.sectionH, { color: tint }]}>
         {title}
-        <Text style={styles.sectionCount}> {dishes.length}</Text>
+        <Text style={styles.sectionCount}> {rows.length}</Text>
       </Text>
-      {dishes.map((d, i) => (
-        <View
-          key={i}
-          style={[
-            styles.dish,
-            { borderLeftColor: tint, borderLeftWidth: 3 },
-            verdict === "skip" && { opacity: 0.7 },
-          ]}
-        >
-          <View style={styles.dishHead}>
-            <Text style={styles.dishName}>{d.name}</Text>
-            <Text style={styles.dishKcal}>
-              {d.kcal_low}–{d.kcal_high} kcal
-            </Text>
-          </View>
-          <Text style={styles.dishReason}>{d.reason}</Text>
-          <Text style={styles.dishMacros}>
-            P {fmt(d.protein_g_low)}–{fmt(d.protein_g_high)} · C {fmt(d.carb_g_low)}–{fmt(d.carb_g_high)} · F {fmt(d.fat_g_low)}–{fmt(d.fat_g_high)}
-          </Text>
-        </View>
-      ))}
+      {rows.map(({ d, i }) => {
+        const on = selected.has(i);
+        return (
+          <Pressable
+            key={i}
+            onPress={() => onToggle(i)}
+            style={[
+              styles.dish,
+              { borderLeftColor: tint, borderLeftWidth: 3 },
+              on && styles.dishOn,
+              skipped && !on && { opacity: 0.7 },
+            ]}
+          >
+            <View style={[styles.checkbox, on && styles.checkboxOn]}>
+              {on && <Text style={styles.checkMark}>✓</Text>}
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.dishName}>{d.name}</Text>
+              <Text style={styles.dishKcal}>
+                {d.kcal_low}–{d.kcal_high}
+                <Text style={styles.dishKcalUnit}> kcal</Text>
+              </Text>
+              <Text style={styles.dishReason}>{d.reason}</Text>
+              <Text style={styles.dishMacros}>
+                P {fmt(d.protein_g_low)}–{fmt(d.protein_g_high)} · C {fmt(d.carb_g_low)}–{fmt(d.carb_g_high)} · F {fmt(d.fat_g_low)}–{fmt(d.fat_g_high)}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
+}
+
+function slotForNow(): MealSlot {
+  const h = new Date().getHours();
+  if (h < 11) return "breakfast";
+  if (h < 16) return "lunch";
+  if (h < 21) return "dinner";
+  return "snack";
 }
 
 function fmt(n: number): string {
@@ -215,6 +359,18 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     resizeMode: "cover",
   },
+  reviewHead: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "center",
+  },
+  thumb: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
   busy: { fontFamily: font.displayBold, fontSize: 16, color: colors.ink, marginTop: spacing.md },
   budget: {
     backgroundColor: colors.panel2,
@@ -226,21 +382,56 @@ const styles = StyleSheet.create({
   },
   budgetMain: { fontFamily: font.displayBold, fontSize: 22, color: colors.gold, marginTop: 4 },
   budgetMacros: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, flexWrap: "wrap" },
   sectionH: { fontFamily: font.displayBold, fontSize: 17 },
   sectionCount: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
   dish: {
+    flexDirection: "row",
+    gap: spacing.md,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
     padding: spacing.md,
-    gap: 4,
   },
-  dishHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  dishName: { fontFamily: font.body, fontSize: 15, color: colors.ink, flex: 1 },
-  dishKcal: { fontFamily: font.mono, fontSize: 11, color: colors.dim, marginLeft: spacing.sm },
-  dishReason: { fontFamily: font.body, fontSize: 13, color: colors.ink, lineHeight: 19 },
-  dishMacros: { fontFamily: font.mono, fontSize: 11, color: colors.dim, marginTop: 4 },
+  dishOn: { borderColor: colors.goldDim, backgroundColor: "rgba(246,183,60,0.04)" },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxOn: { borderColor: colors.gold, backgroundColor: colors.gold },
+  checkMark: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.panel,
+    lineHeight: 16,
+  },
+  dishName: { fontFamily: font.body, fontSize: 15, color: colors.ink },
+  dishKcal: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+  },
+  dishKcalUnit: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
+  dishReason: { fontFamily: font.body, fontSize: 13, color: colors.ink, lineHeight: 19, marginTop: 2 },
+  dishMacros: { fontFamily: font.mono, fontSize: 11, color: colors.dim, marginTop: 2 },
+  slotRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.panel2,
+  },
+  chipOn: { borderColor: colors.gold, backgroundColor: "rgba(246,183,60,0.10)" },
+  chipText: { fontFamily: font.body, fontSize: 12, color: colors.ink, textTransform: "capitalize" },
+  chipTextOn: { color: colors.gold },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
 });
