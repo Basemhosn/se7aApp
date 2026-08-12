@@ -76,6 +76,31 @@ export default function PlateScan() {
     }
   };
 
+  const totals = items.reduce(
+    (acc, it, i) => {
+      if (!selected.has(i)) return acc;
+      acc.kcal_low += it.kcal_low;
+      acc.kcal_high += it.kcal_high;
+      acc.protein_g_low += it.protein_g_low;
+      acc.protein_g_high += it.protein_g_high;
+      acc.carb_g_low += it.carb_g_low;
+      acc.carb_g_high += it.carb_g_high;
+      acc.fat_g_low += it.fat_g_low;
+      acc.fat_g_high += it.fat_g_high;
+      return acc;
+    },
+    {
+      kcal_low: 0,
+      kcal_high: 0,
+      protein_g_low: 0,
+      protein_g_high: 0,
+      carb_g_low: 0,
+      carb_g_high: 0,
+      fat_g_low: 0,
+      fat_g_high: 0,
+    }
+  );
+
   const toggle = (i: number) =>
     setSelected((s) => {
       const n = new Set(s);
@@ -160,27 +185,55 @@ export default function PlateScan() {
             Uncheck anything you didn{"’"}t eat. Ranges are honest; high
             end is the cap.
           </Text>
-          {items.map((it, i) => (
-            <Pressable
-              key={i}
-              onPress={() => toggle(i)}
-              style={[styles.item, selected.has(i) && styles.itemOn]}
-            >
-              <View style={styles.itemHead}>
-                <Text style={styles.itemName}>{it.name}</Text>
-                <Text style={styles.itemPortion}>{it.portion_estimate}</Text>
-              </View>
-              <Text style={styles.itemMacros}>
-                {it.kcal_low}–{it.kcal_high} kcal · P {fmt(it.protein_g_low)}–
-                {fmt(it.protein_g_high)} · C {fmt(it.carb_g_low)}–
-                {fmt(it.carb_g_high)} · F {fmt(it.fat_g_low)}–
-                {fmt(it.fat_g_high)}
+          {items.map((it, i) => {
+            const on = selected.has(i);
+            return (
+              <Pressable
+                key={i}
+                onPress={() => toggle(i)}
+                style={[styles.item, on && styles.itemOn]}
+              >
+                <View style={[styles.checkbox, on && styles.checkboxOn]}>
+                  {on && <Text style={styles.checkMark}>✓</Text>}
+                </View>
+                <View style={styles.itemContent}>
+                  <Text style={styles.itemName}>{it.name}</Text>
+                  {!!it.portion_estimate && (
+                    <Text style={styles.itemPortion}>{it.portion_estimate}</Text>
+                  )}
+                  <Text style={styles.itemKcal}>
+                    {it.kcal_low}–{it.kcal_high}
+                    <Text style={styles.itemKcalUnit}> kcal</Text>
+                  </Text>
+                  <Text style={styles.itemMacros}>
+                    P {fmt(it.protein_g_low)}–{fmt(it.protein_g_high)} · C{" "}
+                    {fmt(it.carb_g_low)}–{fmt(it.carb_g_high)} · F{" "}
+                    {fmt(it.fat_g_low)}–{fmt(it.fat_g_high)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+
+          {selected.size > 0 && (
+            <View style={styles.total}>
+              <Text style={styles.totalKicker}>
+                PLATE TOTAL
+                {selected.size < items.length
+                  ? ` · ${selected.size} OF ${items.length}`
+                  : ""}
               </Text>
-              <Text style={styles.itemCheck}>
-                {selected.has(i) ? "✓ included" : "tap to include"}
+              <Text style={styles.totalKcal}>
+                {totals.kcal_low}–{totals.kcal_high}
+                <Text style={styles.totalKcalUnit}> kcal</Text>
               </Text>
-            </Pressable>
-          ))}
+              <Text style={styles.totalMacros}>
+                P {fmt(totals.protein_g_low)}–{fmt(totals.protein_g_high)} · C{" "}
+                {fmt(totals.carb_g_low)}–{fmt(totals.carb_g_high)} · F{" "}
+                {fmt(totals.fat_g_low)}–{fmt(totals.fat_g_high)}
+              </Text>
+            </View>
+          )}
 
           {invisible.length > 0 && (
             <View style={styles.invisible}>
@@ -258,19 +311,66 @@ const styles = StyleSheet.create({
   busy: { fontFamily: font.displayBold, fontSize: 16, color: colors.ink, marginTop: spacing.md },
   sectionTitle: { fontFamily: font.displayBold, fontSize: 18, color: colors.ink },
   item: {
+    flexDirection: "row",
+    gap: spacing.md,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
     padding: spacing.md,
-    gap: 4,
   },
   itemOn: { borderColor: colors.goldDim, backgroundColor: "rgba(246,183,60,0.04)" },
-  itemHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxOn: { borderColor: colors.gold, backgroundColor: colors.gold },
+  checkMark: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.panel,
+    lineHeight: 16,
+  },
+  itemContent: { flex: 1, gap: 2 },
   itemName: { fontFamily: font.body, fontSize: 15, color: colors.ink },
   itemPortion: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
-  itemMacros: { fontFamily: font.mono, fontSize: 12, color: colors.ink, marginTop: 4 },
-  itemCheck: { fontFamily: font.mono, fontSize: 10, color: colors.dim, marginTop: 4 },
+  itemKcal: {
+    fontFamily: font.displayBold,
+    fontSize: 20,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  itemKcalUnit: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
+  itemMacros: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
+  total: {
+    backgroundColor: "rgba(246,183,60,0.06)",
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 2,
+  },
+  totalKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  totalKcal: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  totalKcalUnit: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
+  totalMacros: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
   invisible: {
     backgroundColor: colors.panel2,
     borderWidth: 1,
