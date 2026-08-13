@@ -3,6 +3,7 @@ import { getServerClient } from "@/lib/supabase/server";
 import { computeRemaining, getTodayTotals } from "@/lib/ledger";
 import { signOut } from "../actions";
 import WeightLogForm from "./WeightLogForm";
+import DeleteAccount from "./DeleteAccount";
 
 export const metadata = { title: "Dashboard — SE7A" };
 export const dynamic = "force-dynamic";
@@ -190,6 +191,11 @@ export default async function DashboardPage() {
             </table>
           </section>
         )}
+
+        <section className="dash-card" style={{ borderColor: "rgba(240,143,114,0.35)" }}>
+          <h2 className="display">Danger zone</h2>
+          <DeleteAccount email={user.email ?? ""} />
+        </section>
       </main>
     </div>
   );

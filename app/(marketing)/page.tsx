@@ -80,6 +80,7 @@ export default function Home() {
       <footer>
         <div className="mono">SE7A {"\u00a9"} 2026 {"\u00b7"} DUBAI, UAE</div>
         <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
       </footer>
     </div>
   );
