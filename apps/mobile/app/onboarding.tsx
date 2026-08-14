@@ -7,22 +7,14 @@ import { Wordmark } from "@/components/Wordmark";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import type { ActivityLevel, Goal, Sex } from "@/types";
+import {
+  rankPrograms,
+  type Equipment,
+  type Experience,
+  type Program,
+  type Scored,
+} from "@/lib/programs";
 import { colors, font, radius, spacing } from "@/lib/theme";
-
-const ACTIVITY: { v: ActivityLevel; label: string }[] = [
-  { v: "sedentary", label: "Sedentary" },
-  { v: "light", label: "Light" },
-  { v: "moderate", label: "Moderate" },
-  { v: "active", label: "Active" },
-  { v: "very_active", label: "Very active" },
-];
-
-const GOAL: { v: Goal; label: string }[] = [
-  { v: "cut", label: "Cut" },
-  { v: "recomp", label: "Recomp" },
-  { v: "maintain", label: "Maintain" },
-  { v: "bulk", label: "Bulk" },
-];
 
 const DEFAULT_RATE: Record<Goal, number> = {
   cut: -0.5,
@@ -31,71 +23,201 @@ const DEFAULT_RATE: Record<Goal, number> = {
   bulk: 0.25,
 };
 
+const STEPS = [
+  "welcome",
+  "sex",
+  "birthdate",
+  "size",
+  "activity",
+  "goal",
+  "rate",
+  "experience",
+  "equipment",
+  "days",
+  "injuries",
+  "reveal",
+] as const;
+type Step = (typeof STEPS)[number];
+
 export default function Onboarding() {
   const { user } = useAuth();
+  const [step, setStep] = useState<Step>("welcome");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const [sex, setSex] = useState<Sex>("male");
+  const [name, setName] = useState("");
+  const [sex, setSex] = useState<Sex | null>(null);
   const [birthdate, setBirthdate] = useState("");
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
-  const [activity, setActivity] = useState<ActivityLevel>("moderate");
-  const [goal, setGoal] = useState<Goal>("cut");
-  const [rate, setRate] = useState<number>(DEFAULT_RATE.cut);
-  const [name, setName] = useState("");
+  const [activity, setActivity] = useState<ActivityLevel | null>(null);
+  const [goal, setGoal] = useState<Goal | null>(null);
+  const [rate, setRate] = useState<number>(-0.5);
+  const [experience, setExperience] = useState<Experience | null>(null);
+  const [equipment, setEquipment] = useState<Equipment | null>(null);
+  const [days, setDays] = useState<number | null>(null);
+  const [injuryText, setInjuryText] = useState("");
 
-  const submit = async () => {
+  const [ranked, setRanked] = useState<Scored[] | null>(null);
+  const [pickedProgram, setPickedProgram] = useState<Program | null>(null);
+
+  const stepIndex = STEPS.indexOf(step);
+  const progress = (stepIndex / (STEPS.length - 1)) * 100;
+
+  const canAdvance = (() => {
+    switch (step) {
+      case "welcome": return true;
+      case "sex": return !!sex;
+      case "birthdate": return /^\d{4}-\d{2}-\d{2}$/.test(birthdate);
+      case "size": return Number(height) > 0 && Number(weight) > 0;
+      case "activity": return !!activity;
+      case "goal": return !!goal;
+      case "rate": return !Number.isNaN(rate);
+      case "experience": return !!experience;
+      case "equipment": return !!equipment;
+      case "days": return !!days;
+      case "injuries": return true; // optional
+      case "reveal": return !!pickedProgram;
+      default: return false;
+    }
+  })();
+
+  const back = () => {
     setErr("");
+    const i = STEPS.indexOf(step);
+    if (i > 0) setStep(STEPS[i - 1]!);
+  };
+
+  const advance = async () => {
+    setErr("");
+    if (!canAdvance) return;
+    const i = STEPS.indexOf(step);
+    const next = STEPS[i + 1];
+    if (!next) return;
+
+    // Between "injuries" and "reveal": submit profile + fetch catalog.
+    if (step === "injuries") {
+      setBusy(true);
+      try {
+        const injuries = injuryText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        await api("/api/profile", {
+          method: "POST",
+          body: JSON.stringify({
+            display_name: name.trim() || undefined,
+            sex,
+            birthdate,
+            height_cm: Number(height),
+            weight_kg: Number(weight),
+            activity_level: activity,
+            goal,
+            goal_rate_kg_per_week: rate,
+            units: "metric",
+            training_experience: experience,
+            equipment_access: equipment,
+            days_per_week: days,
+            injuries,
+          }),
+        });
+        const catalog = await api<{ programs: Program[] }>(
+          "/api/workouts/catalog"
+        );
+        const scored = rankPrograms(catalog.programs, {
+          experience: experience!,
+          equipment: equipment!,
+          days_per_week: days!,
+          goal: goal!,
+        });
+        setRanked(scored);
+        setPickedProgram(scored[0]?.program ?? null);
+      } catch (e) {
+        setErr((e as Error).message || "Couldn't compute your plan — try again.");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
+
+    setStep(next);
+  };
+
+  const finish = async () => {
+    if (!pickedProgram) return;
     setBusy(true);
+    setErr("");
     try {
-      await api("/api/profile", {
+      await api("/api/workouts/pick", {
         method: "POST",
-        body: JSON.stringify({
-          display_name: name.trim() || undefined,
-          sex,
-          birthdate,
-          height_cm: Number(height),
-          weight_kg: Number(weight),
-          activity_level: activity,
-          goal,
-          goal_rate_kg_per_week: rate,
-          units: "metric",
-        }),
+        body: JSON.stringify({ program_id: pickedProgram.id }),
       });
       router.replace("/dashboard");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't save — check the fields.");
-    } finally {
+      setErr((e as Error).message || "Couldn't save your plan — try again.");
       setBusy(false);
     }
   };
 
-  return (
-    <Screen>
-      <View style={styles.head}>
-        <Wordmark size={22} />
+  const footer = (
+    <>
+      {!!err && <Text style={styles.err}>{err}</Text>}
+      <View style={styles.footerRow}>
+        {stepIndex > 0 && step !== "reveal" ? (
+          <View style={{ flex: 1 }}>
+            <Btn label="Back" variant="ghost" onPress={back} disabled={busy} />
+          </View>
+        ) : null}
+        <View style={{ flex: 2 }}>
+          {step === "reveal" ? (
+            <Btn
+              label={busy ? "Saving…" : "Start this plan"}
+              onPress={finish}
+              loading={busy}
+              disabled={!canAdvance}
+            />
+          ) : (
+            <Btn
+              label={
+                busy
+                  ? "Building your plan…"
+                  : step === "welcome"
+                    ? "Let's build it"
+                    : step === "injuries"
+                      ? "Show me my plan"
+                      : "Continue"
+              }
+              onPress={advance}
+              loading={busy}
+              disabled={!canAdvance}
+            />
+          )}
+        </View>
       </View>
-      <Text style={styles.h1}>Set up your targets</Text>
-      <Text style={styles.sub}>
-        Real formulas, not vibes. Mifflin-St Jeor for BMR, your activity
-        level for TDEE, then your goal rate sets today&apos;s calorie and
-        macro targets. You can change any of this later.
-      </Text>
+    </>
+  );
 
-      <Field label="Display name (optional)">
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder={user?.email?.split("@")[0] ?? ""}
-          placeholderTextColor={colors.dim}
-          style={styles.input}
-        />
-      </Field>
+  return (
+    <Screen footer={footer}>
+      <View style={styles.head}>
+        <Wordmark size={20} />
+      </View>
 
-      <View style={styles.row}>
-        <Field label="Sex (for BMR)" style={{ flex: 1 }}>
-          <ChipGroup
+      {step !== "welcome" && (
+        <View style={styles.progressWrap}>
+          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        </View>
+      )}
+
+      {step === "welcome" && <WelcomeStep name={user?.email?.split("@")[0]} />}
+
+      {step === "sex" && (
+        <StepBody
+          kicker="ABOUT YOU · 1 OF 10"
+          h1="What's your sex assigned at birth?"
+          hint="Used only for BMR math — SE7A doesn't care about identity here, it cares about metabolic rate."
+        >
+          <BigChoice
             options={[
               { v: "male", label: "Male" },
               { v: "female", label: "Female" },
@@ -103,118 +225,301 @@ export default function Onboarding() {
             value={sex}
             onChange={(v) => setSex(v as Sex)}
           />
-        </Field>
-      </View>
+        </StepBody>
+      )}
 
-      <Field label="Birthdate (YYYY-MM-DD)">
-        <TextInput
-          value={birthdate}
-          onChangeText={setBirthdate}
-          placeholder="1995-06-11"
-          placeholderTextColor={colors.dim}
-          autoCapitalize="none"
-          style={styles.input}
-        />
-      </Field>
-
-      <View style={styles.row}>
-        <Field label="Height (cm)" style={{ flex: 1 }}>
+      {step === "birthdate" && (
+        <StepBody
+          kicker="ABOUT YOU · 2 OF 10"
+          h1="Your birthdate?"
+          hint="Metabolism shifts with age. Format: YYYY-MM-DD. You must be 16+."
+        >
           <TextInput
-            value={height}
-            onChangeText={setHeight}
-            keyboardType="numeric"
+            value={birthdate}
+            onChangeText={setBirthdate}
+            placeholder="1995-06-11"
+            placeholderTextColor={colors.dim}
+            autoCapitalize="none"
+            keyboardType="numbers-and-punctuation"
+            style={styles.bigInput}
+          />
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder={`Display name (optional) — ${user?.email?.split("@")[0] ?? ""}`}
+            placeholderTextColor={colors.dim}
             style={styles.input}
           />
-        </Field>
-        <Field label="Weight (kg)" style={{ flex: 1 }}>
-          <TextInput
-            value={weight}
-            onChangeText={setWeight}
-            keyboardType="numeric"
-            style={styles.input}
+        </StepBody>
+      )}
+
+      {step === "size" && (
+        <StepBody
+          kicker="ABOUT YOU · 3 OF 10"
+          h1="Height and weight."
+          hint="In centimeters and kilograms. Whatever the scale says today — we'll recalibrate as it changes."
+        >
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>HEIGHT (CM)</Text>
+              <TextInput
+                value={height}
+                onChangeText={setHeight}
+                keyboardType="numeric"
+                placeholder="175"
+                placeholderTextColor={colors.dim}
+                style={styles.input}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>WEIGHT (KG)</Text>
+              <TextInput
+                value={weight}
+                onChangeText={setWeight}
+                keyboardType="numeric"
+                placeholder="75"
+                placeholderTextColor={colors.dim}
+                style={styles.input}
+              />
+            </View>
+          </View>
+        </StepBody>
+      )}
+
+      {step === "activity" && (
+        <StepBody
+          kicker="ABOUT YOU · 4 OF 10"
+          h1="How active are you day-to-day?"
+          hint="Not counting workouts. Just your regular life — desk vs on-feet vs manual labor."
+        >
+          <BigChoice
+            options={[
+              { v: "sedentary", label: "Sedentary", sub: "Desk work, little walking" },
+              { v: "light", label: "Light", sub: "Some walking, standing job" },
+              { v: "moderate", label: "Moderate", sub: "On feet most of the day" },
+              { v: "active", label: "Active", sub: "Physical job, always moving" },
+              { v: "very_active", label: "Very active", sub: "Manual labor, athlete" },
+            ]}
+            value={activity}
+            onChange={(v) => setActivity(v as ActivityLevel)}
           />
-        </Field>
-      </View>
+        </StepBody>
+      )}
 
-      <Field label="Activity level">
-        <ChipGroup
-          options={ACTIVITY.map((a) => ({ v: a.v, label: a.label }))}
-          value={activity}
-          onChange={(v) => setActivity(v as ActivityLevel)}
+      {step === "goal" && (
+        <StepBody
+          kicker="YOUR GOAL · 5 OF 10"
+          h1="What are we chasing?"
+          hint="You can change this any time. Body composition shifts happen over months, not weeks."
+        >
+          <BigChoice
+            options={[
+              { v: "cut", label: "Cut", sub: "Lose fat, keep muscle" },
+              { v: "recomp", label: "Recomp", sub: "Slow lean gain / slow loss" },
+              { v: "maintain", label: "Maintain", sub: "Hold current composition" },
+              { v: "bulk", label: "Bulk", sub: "Add muscle, accept some fat" },
+            ]}
+            value={goal}
+            onChange={(v) => {
+              const g = v as Goal;
+              setGoal(g);
+              setRate(DEFAULT_RATE[g]);
+            }}
+          />
+        </StepBody>
+      )}
+
+      {step === "rate" && (
+        <StepBody
+          kicker="YOUR GOAL · 6 OF 10"
+          h1="How fast?"
+          hint="Aggressive rates work short-term. Sustainable rates work long-term. Negative = losing, positive = gaining."
+        >
+          <View style={styles.chipRow}>
+            {rateOptions(goal ?? "maintain").map((r) => (
+              <Pressable
+                key={r.v}
+                onPress={() => setRate(r.v)}
+                style={[styles.chip, Math.abs(rate - r.v) < 0.001 && styles.chipOn]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    Math.abs(rate - r.v) < 0.001 && styles.chipTextOn,
+                  ]}
+                >
+                  {r.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.sub}>
+            {rateDescription(rate)}
+          </Text>
+        </StepBody>
+      )}
+
+      {step === "experience" && (
+        <StepBody
+          kicker="YOUR TRAINING · 7 OF 10"
+          h1="How much lifting experience?"
+          hint="Be honest — if you overestimate, we'll prescribe volume that grinds you down. Underestimate is easier to correct."
+        >
+          <BigChoice
+            options={[
+              { v: "beginner", label: "Beginner", sub: "Less than a year of consistent training" },
+              { v: "intermediate", label: "Intermediate", sub: "1–3 years, know the main lifts" },
+              { v: "advanced", label: "Advanced", sub: "3+ years, chasing PRs and specificity" },
+            ]}
+            value={experience}
+            onChange={(v) => setExperience(v as Experience)}
+          />
+        </StepBody>
+      )}
+
+      {step === "equipment" && (
+        <StepBody
+          kicker="YOUR TRAINING · 8 OF 10"
+          h1="What do you have access to?"
+          hint="Programs are picked to match. Home + gym works for a lot of people."
+        >
+          <BigChoice
+            options={[
+              { v: "gym", label: "Full gym", sub: "Barbells, racks, machines" },
+              { v: "home", label: "Home setup", sub: "Dumbbells, bands, maybe a bench" },
+              { v: "bodyweight", label: "Bodyweight only", sub: "You + gravity + maybe a pull-up bar" },
+              { v: "both", label: "Both", sub: "Gym some days, home others" },
+            ]}
+            value={equipment}
+            onChange={(v) => setEquipment(v as Equipment)}
+          />
+        </StepBody>
+      )}
+
+      {step === "days" && (
+        <StepBody
+          kicker="YOUR TRAINING · 9 OF 10"
+          h1="Days per week you can realistically commit?"
+          hint="Consistency > intensity. A 3-day plan you actually do beats a 6-day plan you don't."
+        >
+          <View style={styles.chipRow}>
+            {[2, 3, 4, 5, 6].map((n) => (
+              <Pressable
+                key={n}
+                onPress={() => setDays(n)}
+                style={[
+                  styles.dayChip,
+                  days === n && styles.dayChipOn,
+                ]}
+              >
+                <Text
+                  style={[styles.dayChipText, days === n && styles.dayChipTextOn]}
+                >
+                  {n}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </StepBody>
+      )}
+
+      {step === "injuries" && (
+        <StepBody
+          kicker="YOUR TRAINING · 10 OF 10"
+          h1="Anything to work around?"
+          hint="Comma-separated. Examples: lower back, right shoulder, knees. Leave blank if nothing."
+        >
+          <TextInput
+            value={injuryText}
+            onChangeText={setInjuryText}
+            placeholder="lower back, right knee"
+            placeholderTextColor={colors.dim}
+            autoCapitalize="none"
+            style={styles.input}
+            multiline
+          />
+        </StepBody>
+      )}
+
+      {step === "reveal" && ranked && pickedProgram && (
+        <PlanReveal
+          ranked={ranked}
+          picked={pickedProgram}
+          onPick={setPickedProgram}
+          goal={goal!}
         />
-      </Field>
-
-      <Field label="Goal">
-        <ChipGroup
-          options={GOAL.map((g) => ({ v: g.v, label: g.label }))}
-          value={goal}
-          onChange={(v) => {
-            const g = v as Goal;
-            setGoal(g);
-            setRate(DEFAULT_RATE[g]);
-          }}
-        />
-      </Field>
-
-      <Field label="Rate (kg / week)">
-        <TextInput
-          value={String(rate)}
-          onChangeText={(v) => setRate(Number(v))}
-          keyboardType="numbers-and-punctuation"
-          style={styles.input}
-        />
-      </Field>
-
-      {!!err && <Text style={styles.err}>{err}</Text>}
-
-      <Btn
-        label={busy ? "Computing…" : "Compute my targets"}
-        onPress={submit}
-        loading={busy}
-      />
+      )}
     </Screen>
   );
 }
 
-function Field({
-  label,
-  children,
-  style,
-}: {
-  label: string;
-  children: React.ReactNode;
-  style?: object;
-}) {
+function WelcomeStep({ name }: { name?: string }) {
   return (
-    <View style={[styles.field, style]}>
-      <Text style={styles.label}>{label.toUpperCase()}</Text>
-      {children}
+    <View style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
+      <Text style={styles.kicker}>WELCOME</Text>
+      <Text style={styles.hero}>
+        {name ? `Hey ${name}.` : "Let's set you up."}
+      </Text>
+      <Text style={styles.heroSub}>
+        Ten questions. Then we compute your calorie + macro targets, pick a
+        workout plan that fits your week, and drop you into your dashboard.
+      </Text>
+      <Text style={[styles.sub, { marginTop: spacing.md }]}>
+        This takes ~90 seconds. You can change any of it later.
+      </Text>
     </View>
   );
 }
 
-function ChipGroup({
+function StepBody({
+  kicker,
+  h1,
+  hint,
+  children,
+}: {
+  kicker: string;
+  h1: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ gap: spacing.md, paddingTop: spacing.md }}>
+      <Text style={styles.kicker}>{kicker}</Text>
+      <Text style={styles.h1}>{h1}</Text>
+      <Text style={styles.sub}>{hint}</Text>
+      <View style={{ marginTop: spacing.md, gap: spacing.sm }}>{children}</View>
+    </View>
+  );
+}
+
+function BigChoice<T extends string>({
   options,
   value,
   onChange,
 }: {
-  options: { v: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
+  options: { v: T; label: string; sub?: string }[];
+  value: T | null;
+  onChange: (v: T) => void;
 }) {
   return (
-    <View style={styles.chipRow}>
+    <View style={{ gap: spacing.xs }}>
       {options.map((o) => {
         const on = o.v === value;
         return (
           <Pressable
             key={o.v}
             onPress={() => onChange(o.v)}
-            style={[styles.chip, on && styles.chipOn]}
+            style={[styles.card, on && styles.cardOn]}
           >
-            <Text style={[styles.chipText, on && styles.chipTextOn]}>
-              {o.label}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardLabel, on && styles.cardLabelOn]}>
+                {o.label}
+              </Text>
+              {o.sub && <Text style={styles.cardSub}>{o.sub}</Text>}
+            </View>
+            <View style={[styles.radio, on && styles.radioOn]}>
+              {on && <View style={styles.radioDot} />}
+            </View>
           </Pressable>
         );
       })}
@@ -222,17 +527,148 @@ function ChipGroup({
   );
 }
 
+function PlanReveal({
+  ranked,
+  picked,
+  onPick,
+  goal,
+}: {
+  ranked: Scored[];
+  picked: Program;
+  onPick: (p: Program) => void;
+  goal: Goal;
+}) {
+  const others = ranked.slice(1, 3).map((r) => r.program);
+  return (
+    <View style={{ gap: spacing.md }}>
+      <Text style={styles.kicker}>YOUR PLAN</Text>
+      <Text style={styles.h1}>Here&apos;s where we start.</Text>
+      <Text style={styles.sub}>
+        Based on your goal ({goal}), experience, equipment, and days per
+        week. You can switch plans any time from your dashboard.
+      </Text>
+
+      <View style={styles.pickCard}>
+        <Text style={styles.pickKicker}>RECOMMENDED</Text>
+        <Text style={styles.pickName}>{picked.name}</Text>
+        <Text style={styles.pickMeta}>
+          {picked.days_per_week} days / week · {picked.target_experience} · {picked.target_equipment}
+        </Text>
+        <Text style={styles.pickDesc}>{picked.description}</Text>
+      </View>
+
+      {others.length > 0 && (
+        <>
+          <Text style={styles.kicker}>OR PICK ANOTHER</Text>
+          {others.map((p) => {
+            const on = p.id === picked.id;
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => onPick(p)}
+                style={[styles.altCard, on && styles.altCardOn]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.altName}>{p.name}</Text>
+                  <Text style={styles.altMeta}>
+                    {p.days_per_week} d/w · {p.target_experience}
+                  </Text>
+                </View>
+                {on && <Text style={styles.altOn}>✓ picked</Text>}
+              </Pressable>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+}
+
+function rateOptions(g: Goal): { v: number; label: string }[] {
+  if (g === "cut") {
+    return [
+      { v: -0.25, label: "Slow (0.25 kg/wk)" },
+      { v: -0.5, label: "Standard (0.5)" },
+      { v: -0.75, label: "Aggressive (0.75)" },
+      { v: -1.0, label: "Very fast (1.0)" },
+    ];
+  }
+  if (g === "bulk") {
+    return [
+      { v: 0.15, label: "Slow (0.15)" },
+      { v: 0.25, label: "Standard (0.25)" },
+      { v: 0.4, label: "Fast (0.4)" },
+    ];
+  }
+  if (g === "recomp") {
+    return [
+      { v: -0.15, label: "Slight deficit" },
+      { v: -0.25, label: "Small cut" },
+      { v: 0, label: "True recomp" },
+    ];
+  }
+  return [{ v: 0, label: "0 (maintenance)" }];
+}
+
+function rateDescription(rate: number): string {
+  const abs = Math.abs(rate);
+  if (abs === 0) return "Maintenance calories. Body composition holds.";
+  if (abs <= 0.25) return `Slow ${rate < 0 ? "loss" : "gain"}. Easiest to sustain, minimal muscle risk / minimal fat gain.`;
+  if (abs <= 0.5) return `Standard rate. Recommended for most people.`;
+  if (abs <= 0.75) return `Aggressive. Works short-term; harder to sustain past 8 weeks.`;
+  return `Very fast. Only appropriate for short cuts with lots of fat to lose. Not recommended long-term.`;
+}
+
 const styles = StyleSheet.create({
-  head: { marginTop: spacing.md },
-  h1: { fontFamily: font.displayBold, fontSize: 30, color: colors.ink },
-  sub: { color: colors.dim, fontFamily: font.body, fontSize: 14, lineHeight: 22 },
+  head: { marginTop: spacing.sm },
+  progressWrap: {
+    height: 4,
+    backgroundColor: colors.panel2,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: colors.gold,
+    borderRadius: 2,
+  },
+  kicker: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  hero: {
+    fontFamily: font.displayBold,
+    fontSize: 44,
+    color: colors.ink,
+    lineHeight: 48,
+  },
+  heroSub: {
+    fontFamily: font.body,
+    fontSize: 16,
+    color: colors.ink,
+    lineHeight: 24,
+  },
+  h1: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    color: colors.ink,
+    lineHeight: 32,
+  },
+  sub: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 14,
+    lineHeight: 21,
+  },
   row: { flexDirection: "row", gap: spacing.md },
-  field: { gap: spacing.xs },
   label: {
     fontFamily: font.mono,
     fontSize: 10,
     color: colors.dim,
     letterSpacing: 1.2,
+    marginBottom: 4,
   },
   input: {
     backgroundColor: colors.panel2,
@@ -241,9 +677,63 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     color: colors.ink,
     fontFamily: font.body,
-    fontSize: 15,
+    fontSize: 16,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  bigInput: {
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    color: colors.ink,
+    fontFamily: font.mono,
+    fontSize: 22,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    textAlign: "center",
+  },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  cardOn: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.06)",
+  },
+  cardLabel: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+  },
+  cardLabelOn: { color: colors.gold },
+  cardSub: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioOn: { borderColor: colors.gold },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.gold,
   },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   chip: {
@@ -260,5 +750,87 @@ const styles = StyleSheet.create({
   },
   chipText: { fontFamily: font.body, fontSize: 13, color: colors.ink },
   chipTextOn: { color: colors.gold },
+  dayChip: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayChipOn: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  dayChipText: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+  },
+  dayChipTextOn: { color: colors.gold },
+  pickCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: 6,
+  },
+  pickKicker: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  pickName: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+  },
+  pickMeta: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  pickDesc: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
+    lineHeight: 21,
+    marginTop: 6,
+  },
+  altCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  altCardOn: { borderColor: colors.gold },
+  altName: {
+    fontFamily: font.body,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  altMeta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  altOn: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+  },
+  footerRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
 });

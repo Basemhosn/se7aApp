@@ -14,24 +14,38 @@ import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import type { LedgerTodayResponse, Profile } from "@/types";
+import type { Program, Session } from "@/lib/programs";
+
+interface CurrentWorkoutResponse {
+  active: boolean;
+  program?: Program;
+  next_session?: Session;
+  next_session_index?: number;
+  completed_this_week?: number;
+  orphaned?: boolean;
+}
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
+  const [workout, setWorkout] = useState<CurrentWorkoutResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [{ data: profileData }, ledgerRes] = await Promise.all([
+    const [{ data: profileData }, ledgerRes, workoutRes] = await Promise.all([
       supabase
         .from("profiles")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle(),
       api<LedgerTodayResponse>("/api/ledger/today"),
+      api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
+        active: false,
+      })),
     ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
@@ -39,6 +53,7 @@ export default function Dashboard() {
     }
     setProfile(profileData as Profile);
     setLedger(ledgerRes);
+    setWorkout(workoutRes);
     setLoading(false);
   }, [user]);
 
@@ -88,6 +103,31 @@ export default function Dashboard() {
         <Macro label="Carbs" value={profile.daily_carb_g} unit="g" />
         <Macro label="Fat" value={profile.daily_fat_g} unit="g" />
       </View>
+
+      {workout?.active && workout.next_session && workout.program && (
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/workout",
+              params: {
+                program_id: workout.program!.id,
+                session_index: String(workout.next_session_index ?? 0),
+              },
+            })
+          }
+          style={styles.workoutCard}
+        >
+          <Text style={[styles.kicker, { color: colors.mint }]}>
+            TODAY{"’"}S SESSION · {workout.completed_this_week ?? 0} DONE THIS WEEK
+          </Text>
+          <Text style={styles.workoutName}>{workout.next_session.name}</Text>
+          <Text style={styles.workoutFocus}>{workout.next_session.focus}</Text>
+          <Text style={styles.workoutMeta}>
+            {workout.next_session.exercises.length} exercises · {workout.program.name}
+          </Text>
+          <Text style={[styles.ctaArrow, { color: colors.mint }]}>→</Text>
+        </Pressable>
+      )}
 
       <View style={styles.ctaCol}>
         <CTA
@@ -340,4 +380,31 @@ const styles = StyleSheet.create({
   rowName: { fontFamily: font.body, fontSize: 14, color: colors.ink },
   rowMeta: { fontFamily: font.mono, fontSize: 11, color: colors.dim, marginTop: 2 },
   rowKcal: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
+  workoutCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.mint,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    position: "relative",
+  },
+  workoutName: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  workoutFocus: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  workoutMeta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 6,
+  },
 });
