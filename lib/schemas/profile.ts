@@ -28,6 +28,15 @@ export const onboardingSchema = z.object({
   goal: z.enum(["cut", "recomp", "maintain", "bulk"]),
   goal_rate_kg_per_week: z.number().min(-1.5).max(1.0),
   units: z.enum(["metric", "imperial"]).default("metric"),
+  // Phase 3: workout programming
+  training_experience: z
+    .enum(["beginner", "intermediate", "advanced"])
+    .optional(),
+  equipment_access: z
+    .enum(["bodyweight", "home", "gym", "both"])
+    .optional(),
+  days_per_week: z.number().int().min(2).max(7).optional(),
+  injuries: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
 });
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
