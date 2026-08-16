@@ -195,7 +195,7 @@ export default function Onboarding() {
         method: "POST",
         body: JSON.stringify({ program_id: pickedProgram.id }),
       });
-      router.replace("/dashboard");
+      router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't save your plan — try again.");
       setBusy(false);

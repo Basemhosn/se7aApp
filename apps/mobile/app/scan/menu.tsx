@@ -123,7 +123,7 @@ export default function MenuScan() {
           })),
         }),
       });
-      router.replace("/dashboard");
+      router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't save — try again.");
       setPhase("result");

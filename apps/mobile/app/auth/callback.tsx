@@ -68,7 +68,7 @@ export default function AuthCallback() {
         .select("onboarded_at")
         .eq("user_id", user.id)
         .maybeSingle();
-      router.replace(profile?.onboarded_at ? "/dashboard" : "/onboarding");
+      router.replace(profile?.onboarded_at ? "/" : "/onboarding");
     })();
     return () => {
       cancelled = true;

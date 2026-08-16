@@ -131,7 +131,7 @@ export default function Workout() {
           notes: notes.trim() || null,
         }),
       });
-      router.replace("/dashboard");
+      router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't save the session.");
       setBusy(false);

@@ -10,9 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Wordmark } from "@/components/Wordmark";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -27,7 +25,7 @@ interface HistoryResponse {
   messages: Message[];
 }
 
-export default function Chat() {
+export default function Coach() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,7 +48,6 @@ export default function Chat() {
   }, [load]);
 
   useEffect(() => {
-    // Scroll to bottom whenever messages change.
     if (messages.length > 0) {
       requestAnimationFrame(() =>
         scrollRef.current?.scrollToEnd({ animated: true })
@@ -63,8 +60,6 @@ export default function Chat() {
     if (!text || busy) return;
     setInput("");
     setErr("");
-    // Optimistic user turn — will get its real id when server reflects it,
-    // but that's fine because we don't reference id anywhere critical.
     const optimistic: Message = {
       id: Date.now(),
       role: "user",
@@ -94,18 +89,16 @@ export default function Chat() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()}>
-          <Wordmark size={20} />
-        </Pressable>
-        <Text style={styles.kicker}>COACH</Text>
+        <Text style={styles.title}>Coach</Text>
+        <Text style={styles.sub}>Knows your goals + macros. Ask anything.</Text>
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={80}
       >
         <ScrollView
           ref={scrollRef}
@@ -117,11 +110,11 @@ export default function Chat() {
             <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.xl }} />
           ) : messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Ask anything.</Text>
+              <Text style={styles.emptyTitle}>Ask me anything.</Text>
               <Text style={styles.emptyBody}>
                 What&apos;s a good pre-workout meal? Is shawarma OK tonight?
-                How do I train around a knee issue? I know your profile
-                already — I&apos;ll factor it in.
+                How do I train around a knee issue? I know your profile —
+                I&apos;ll factor it in.
               </Text>
             </View>
           ) : (
@@ -182,23 +175,27 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   head: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+    gap: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
   },
-  kicker: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.4,
+  title: {
+    fontFamily: font.displayBold,
+    fontSize: 24,
+    color: colors.ink,
+  },
+  sub: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
   },
   transcript: { flex: 1 },
   transcriptContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingVertical: spacing.md,
     gap: spacing.sm,
   },
   empty: {
@@ -207,7 +204,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: font.displayBold,
-    fontSize: 24,
+    fontSize: 22,
     color: colors.ink,
   },
   emptyBody: {
@@ -251,6 +248,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.line,
     alignItems: "flex-end",
+    backgroundColor: colors.bg,
   },
   input: {
     flex: 1,

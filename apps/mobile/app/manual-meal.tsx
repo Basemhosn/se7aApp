@@ -57,7 +57,7 @@ export default function ManualMeal() {
           ],
         }),
       });
-      router.replace("/dashboard");
+      router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't save. Try again.");
       setBusy(false);
