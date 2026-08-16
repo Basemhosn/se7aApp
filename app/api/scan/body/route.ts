@@ -10,6 +10,7 @@ import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { project, type BodyProjection } from "@/lib/body";
 import type { Goal, Sex } from "@/lib/macros";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -80,7 +81,10 @@ export async function POST(request: Request) {
       model: MODELS.body_default,
       schema: bodyScanResultSchema,
       messages: [
-        { role: "system", content: BODY_SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: `${BODY_SYSTEM_PROMPT}\n\n${languageInstruction(localeFromRequest(request))}`,
+        },
         {
           role: "user",
           content: [

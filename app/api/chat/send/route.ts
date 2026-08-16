@@ -5,6 +5,7 @@ import { getRouteClient } from "@/lib/supabase/server";
 import { sendMessageSchema } from "@/lib/schemas/chat";
 import { COACH_SYSTEM_PROMPT } from "@/lib/prompts/coach.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -69,6 +70,8 @@ export async function POST(request: Request) {
   const history = (historyRes.data ?? []).reverse();
 
   const contextBlock = buildContextBlock(profile);
+  const locale = localeFromRequest(request);
+  const langInstruction = languageInstruction(locale);
 
   const messages: Array<{
     role: "user" | "assistant";
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
   try {
     const result = await generateText({
       model: anthropic(MODEL_ID),
-      system: `${COACH_SYSTEM_PROMPT}\n\n${contextBlock}`,
+      system: `${COACH_SYSTEM_PROMPT}\n\n${langInstruction}\n\n${contextBlock}`,
       messages,
       maxOutputTokens: 800,
     });

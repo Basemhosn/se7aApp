@@ -9,6 +9,7 @@ import {
 import { MENU_SYSTEM_PROMPT, menuUserPrompt } from "@/lib/prompts/menu.v1";
 import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -100,7 +101,10 @@ export async function POST(request: Request) {
       model: MODELS.menu_default,
       schema: menuScanResultSchema,
       messages: [
-        { role: "system", content: MENU_SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: `${MENU_SYSTEM_PROMPT}\n\n${languageInstruction(localeFromRequest(request))}`,
+        },
         {
           role: "user",
           content: [

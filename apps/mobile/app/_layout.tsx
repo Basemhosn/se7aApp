@@ -16,7 +16,13 @@ import {
   IBMPlexMono_400Regular,
   IBMPlexMono_500Medium,
 } from "@expo-google-fonts/ibm-plex-mono";
+import {
+  IBMPlexSansArabic_400Regular,
+  IBMPlexSansArabic_500Medium,
+  IBMPlexSansArabic_700Bold,
+} from "@expo-google-fonts/ibm-plex-sans-arabic";
 import { AuthProvider } from "@/auth/AuthContext";
+import { hydrateLocaleFromStorage } from "@/lib/i18n";
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -34,7 +40,14 @@ function RootLayout() {
     InstrumentSans_600SemiBold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
+    IBMPlexSansArabic_400Regular,
+    IBMPlexSansArabic_500Medium,
+    IBMPlexSansArabic_700Bold,
   });
+
+  useEffect(() => {
+    hydrateLocaleFromStorage();
+  }, []);
 
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync().catch(() => {});

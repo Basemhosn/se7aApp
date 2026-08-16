@@ -1,3 +1,4 @@
+import i18n from "./i18n";
 import { supabase } from "./supabase";
 
 const BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://se7a.app";
@@ -6,6 +7,11 @@ async function bearerHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function localeHeader(): Record<string, string> {
+  const lang = i18n.language || "en";
+  return { "Accept-Language": lang };
 }
 
 export class ApiError extends Error {
@@ -42,6 +48,7 @@ export async function api<T>(
 ): Promise<T> {
   const headers = {
     "Content-Type": "application/json",
+    ...localeHeader(),
     ...(await bearerHeader()),
     ...(init.headers ?? {}),
   };
@@ -74,6 +81,7 @@ export async function apiUpload<T>(
     method: "POST",
     body: form,
     headers: {
+      ...localeHeader(),
       ...(await bearerHeader()),
     },
   });

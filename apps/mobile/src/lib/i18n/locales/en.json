@@ -1,0 +1,120 @@
+{
+  "tabs": {
+    "home": "HOME",
+    "log": "LOG",
+    "progress": "PROGRESS",
+    "coach": "COACH"
+  },
+  "common": {
+    "back": "Back",
+    "continue": "Continue",
+    "save": "Save",
+    "cancel": "Cancel",
+    "discard": "Discard",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "sign_out": "SIGN OUT",
+    "of": "of",
+    "kcal": "kcal",
+    "g": "g",
+    "kg": "kg",
+    "day_names": ["M", "T", "W", "T", "F", "S", "S"]
+  },
+  "home": {
+    "remaining_today": "REMAINING TODAY",
+    "lift_day_remaining": "LIFT DAY · REMAINING",
+    "rest_day_remaining": "REST DAY · REMAINING",
+    "of_target": "of {{target}} target",
+    "ate_range": "ate {{low}}–{{high}}",
+    "protein": "Protein",
+    "carbs": "Carbs",
+    "fat": "Fat",
+    "eaten_today": "Eaten today",
+    "remaining": "Remaining",
+    "fasting_target": "FASTING · {{hours}}H TARGET",
+    "tap_to_end_fast": "Tap to end the fast.",
+    "todays_session": "TODAY'S SESSION · {{count}} DONE THIS WEEK",
+    "n_exercises_program": "{{count}} exercises · {{program}}",
+    "start_fast": "Start a fast",
+    "change_my_plan": "Change my plan",
+    "change_my_plan_sub": "Redo the intake if your goal, equipment, or schedule shifted."
+  },
+  "onboarding": {
+    "welcome_kicker_new": "YOUR PLAN",
+    "welcome_kicker_returning": "REDO YOUR PLAN",
+    "welcome_hero_new": "Hey {{name}}.",
+    "welcome_hero_new_no_name": "Let's build your plan.",
+    "welcome_hero_returning": "Life changed, {{name}}?",
+    "welcome_body_new": "Eleven quick questions. We compute your calorie + macro targets and pick a workout plan that fits your week.",
+    "welcome_body_returning": "Your current answers are prefilled — just change what's different and tap through the rest.",
+    "welcome_footnote_new": "~90 seconds. You can change any of it any time.",
+    "welcome_footnote_returning": "Fast — usually 20 seconds if not much has changed.",
+    "welcome_cta_new": "Let's build it",
+    "cta_continue": "Continue",
+    "cta_show_plan": "Show me my plan",
+    "cta_building": "Building your plan…",
+    "cta_start_plan": "Start this plan",
+    "sex": {
+      "kicker": "ABOUT YOU · 1 OF 11",
+      "title": "What's your sex assigned at birth?",
+      "hint": "Used only for BMR math — SE7A doesn't care about identity here, it cares about metabolic rate.",
+      "male": "Male",
+      "female": "Female"
+    },
+    "birthdate": {
+      "kicker": "ABOUT YOU · 2 OF 11",
+      "title": "Your birthdate?",
+      "hint": "Metabolism shifts with age. Format: YYYY-MM-DD. You must be 16+.",
+      "name_placeholder": "Display name (optional) — {{email}}"
+    },
+    "size": {
+      "kicker": "ABOUT YOU · 3 OF 11",
+      "title": "Height and weight.",
+      "hint": "In centimeters and kilograms. Whatever the scale says today — we'll recalibrate as it changes.",
+      "height_label": "HEIGHT (CM)",
+      "weight_label": "WEIGHT (KG)"
+    },
+    "activity": {
+      "kicker": "ABOUT YOU · 4 OF 11",
+      "title": "How active are you day-to-day?",
+      "hint": "Not counting workouts. Just your regular life — desk vs on-feet vs manual labor.",
+      "sedentary": "Sedentary",
+      "sedentary_sub": "Desk work, little walking",
+      "light": "Light",
+      "light_sub": "Some walking, standing job",
+      "moderate": "Moderate",
+      "moderate_sub": "On feet most of the day",
+      "active": "Active",
+      "active_sub": "Physical job, always moving",
+      "very_active": "Very active",
+      "very_active_sub": "Manual labor, athlete"
+    },
+    "goal": {
+      "kicker": "YOUR GOAL · 5 OF 11",
+      "title": "What are we chasing?",
+      "hint": "You can change this any time. Body composition shifts happen over months, not weeks.",
+      "cut": "Cut",
+      "cut_sub": "Lose fat, keep muscle",
+      "recomp": "Recomp",
+      "recomp_sub": "Slow lean gain / slow loss",
+      "maintain": "Maintain",
+      "maintain_sub": "Hold current composition",
+      "bulk": "Bulk",
+      "bulk_sub": "Add muscle, accept some fat"
+    },
+    "reveal": {
+      "kicker": "YOUR PLAN",
+      "title": "Here's where we start.",
+      "sub": "Based on your goal ({{goal}}), experience, equipment, and days per week. You can switch plans any time from your dashboard.",
+      "recommended": "RECOMMENDED",
+      "or_pick_another": "OR PICK ANOTHER",
+      "picked": "✓ picked"
+    }
+  },
+  "language": {
+    "title": "Language",
+    "english": "English",
+    "arabic": "العربية",
+    "auto_detect": "Auto (device)"
+  }
+}

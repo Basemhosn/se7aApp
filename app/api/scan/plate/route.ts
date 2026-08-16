@@ -8,6 +8,7 @@ import {
 import { PLATE_SYSTEM_PROMPT, PLATE_USER_PROMPT } from "@/lib/prompts/plate.v1";
 import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 // Vision calls can be slow; allow up to 60s for Claude.
@@ -63,7 +64,10 @@ export async function POST(request: Request) {
       model: MODELS.plate_default,
       schema: plateScanResultSchema,
       messages: [
-        { role: "system", content: PLATE_SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: `${PLATE_SYSTEM_PROMPT}\n\n${languageInstruction(localeFromRequest(request))}`,
+        },
         {
           role: "user",
           content: [

@@ -7,6 +7,8 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Wordmark } from "@/components/Wordmark";
 import { WaterRing } from "@/components/WaterRing";
@@ -45,6 +47,7 @@ interface FastingActiveResponse {
 
 export default function Home() {
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
   usePushRegistration();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -128,9 +131,14 @@ export default function Home() {
     <Screen>
       <View style={styles.head}>
         <Wordmark size={22} />
-        <Pressable onPress={signOut} hitSlop={12}>
-          <Text style={styles.signout}>SIGN OUT</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <Pressable onPress={() => router.push("/language")} hitSlop={12}>
+            <Ionicons name="language-outline" size={20} color={colors.dim} />
+          </Pressable>
+          <Pressable onPress={signOut} hitSlop={12}>
+            <Text style={styles.signout}>{t("common.sign_out")}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View>
@@ -139,10 +147,10 @@ export default function Home() {
         </Text>
         <Text style={styles.heroKicker}>
           {dayStatus?.kind === "lift"
-            ? "LIFT DAY · REMAINING"
+            ? t("home.lift_day_remaining")
             : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
-              ? "REST DAY · REMAINING"
-              : "REMAINING TODAY"}
+              ? t("home.rest_day_remaining")
+              : t("home.remaining_today")}
         </Text>
         <View style={styles.heroRow}>
           <Text style={styles.heroNum}>
@@ -152,20 +160,22 @@ export default function Home() {
           <Text style={styles.heroNum}>
             {Math.round(ledger.remaining.kcal.high)}
           </Text>
-          <Text style={styles.heroUnit}> kcal</Text>
+          <Text style={styles.heroUnit}> {t("common.kcal")}</Text>
         </View>
         <Text style={styles.heroSub}>
-          of {dayStatus?.adjusted_target ?? profile.daily_kcal_target} target
+          {t("home.of_target", {
+            target: dayStatus?.adjusted_target ?? profile.daily_kcal_target,
+          })}
           {ledger.totals.items.length > 0
-            ? ` · ate ${Math.round(ledger.totals.kcal.low)}–${Math.round(ledger.totals.kcal.high)}`
+            ? ` · ${t("home.ate_range", { low: Math.round(ledger.totals.kcal.low), high: Math.round(ledger.totals.kcal.high) })}`
             : ""}
         </Text>
       </View>
 
       <View style={styles.macros}>
-        <Macro label="Protein" value={profile.daily_protein_g} unit="g" />
-        <Macro label="Carbs" value={profile.daily_carb_g} unit="g" />
-        <Macro label="Fat" value={profile.daily_fat_g} unit="g" />
+        <Macro label={t("home.protein")} value={profile.daily_protein_g} unit={t("common.g")} />
+        <Macro label={t("home.carbs")} value={profile.daily_carb_g} unit={t("common.g")} />
+        <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
       {fasting?.active ? (
@@ -174,12 +184,12 @@ export default function Home() {
           style={styles.fastingCard}
         >
           <Text style={[styles.kicker, { color: colors.gold }]}>
-            FASTING · {fasting.active.target_hours}H TARGET
+            {t("home.fasting_target", { hours: fasting.active.target_hours })}
           </Text>
           <Text style={styles.fastingBig}>
             {formatFastElapsed(fasting.active.started_at)}
           </Text>
-          <Text style={styles.fastingSub}>Tap to end the fast.</Text>
+          <Text style={styles.fastingSub}>{t("home.tap_to_end_fast")}</Text>
         </Pressable>
       ) : null}
 
@@ -197,12 +207,17 @@ export default function Home() {
           style={styles.workoutCard}
         >
           <Text style={[styles.kicker, { color: colors.mint }]}>
-            TODAY{"’"}S SESSION · {workout.completed_this_week ?? 0} DONE THIS WEEK
+            {t("home.todays_session", {
+              count: workout.completed_this_week ?? 0,
+            })}
           </Text>
           <Text style={styles.workoutName}>{workout.next_session.name}</Text>
           <Text style={styles.workoutFocus}>{workout.next_session.focus}</Text>
           <Text style={styles.workoutMeta}>
-            {workout.next_session.exercises.length} exercises · {workout.program.name}
+            {t("home.n_exercises_program", {
+              count: workout.next_session.exercises.length,
+              program: workout.program.name,
+            })}
           </Text>
         </Pressable>
       )}
@@ -217,17 +232,15 @@ export default function Home() {
 
       {!fasting?.active && (
         <Pressable onPress={() => router.push("/fasting")} style={styles.miniLink}>
-          <Text style={styles.miniLinkLabel}>Start a fast</Text>
+          <Text style={styles.miniLinkLabel}>{t("home.start_fast")}</Text>
           <Text style={styles.miniLinkArrow}>→</Text>
         </Pressable>
       )}
 
       <Pressable onPress={() => router.push("/onboarding")} style={styles.redoRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.redoLabel}>Change my plan</Text>
-          <Text style={styles.redoSub}>
-            Redo the intake if your goal, equipment, or schedule shifted.
-          </Text>
+          <Text style={styles.redoLabel}>{t("home.change_my_plan")}</Text>
+          <Text style={styles.redoSub}>{t("home.change_my_plan_sub")}</Text>
         </View>
         <Text style={styles.redoArrow}>→</Text>
       </Pressable>

@@ -1,11 +1,13 @@
 import { ActivityIndicator, View } from "react-native";
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/auth/AuthContext";
 import { colors, font } from "@/lib/theme";
 
 export default function TabsLayout() {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
 
   if (loading) {
     return (
@@ -44,7 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "HOME",
+          title: t("tabs.home"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
@@ -53,7 +55,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="log"
         options={{
-          title: "LOG",
+          title: t("tabs.log"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="add-circle-outline" size={size} color={color} />
           ),
@@ -62,7 +64,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="progress"
         options={{
-          title: "PROGRESS",
+          title: t("tabs.progress"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="stats-chart-outline" size={size} color={color} />
           ),
@@ -71,7 +73,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="coach"
         options={{
-          title: "COACH",
+          title: t("tabs.coach"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble-outline" size={size} color={color} />
           ),
