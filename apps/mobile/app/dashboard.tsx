@@ -43,6 +43,18 @@ interface WeightTrendResponse {
   }[];
 }
 
+interface DayStatusResponse {
+  kind: "lift" | "rest" | "none";
+  workouts_today: number;
+  base_target: number | null;
+  delta_applied: number;
+  adjusted_target: number | null;
+}
+
+interface FastingActiveResponse {
+  active: { id: number; started_at: string; target_hours: number } | null;
+}
+
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -50,32 +62,45 @@ export default function Dashboard() {
   const [workout, setWorkout] = useState<CurrentWorkoutResponse | null>(null);
   const [water, setWater] = useState<WaterTodayResponse | null>(null);
   const [trend, setTrend] = useState<WeightTrendResponse | null>(null);
+  const [dayStatus, setDayStatus] = useState<DayStatusResponse | null>(null);
+  const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [{ data: profileData }, ledgerRes, workoutRes, waterRes, trendRes] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        api<LedgerTodayResponse>("/api/ledger/today"),
-        api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
-          active: false,
-        })),
-        api<WaterTodayResponse>("/api/water/today").catch(() => ({
-          total_ml: 0,
-          target_ml: 2500,
-          entries: 0,
-        })),
-        api<WeightTrendResponse>("/api/weight/trend?days=30").catch(() => ({
-          days: 30,
-          points: [],
-        })),
-      ]);
+    const [
+      { data: profileData },
+      ledgerRes,
+      workoutRes,
+      waterRes,
+      trendRes,
+      dayRes,
+      fastingRes,
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      api<LedgerTodayResponse>("/api/ledger/today"),
+      api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
+        active: false,
+      })),
+      api<WaterTodayResponse>("/api/water/today").catch(() => ({
+        total_ml: 0,
+        target_ml: 2500,
+        entries: 0,
+      })),
+      api<WeightTrendResponse>("/api/weight/trend?days=30").catch(() => ({
+        days: 30,
+        points: [],
+      })),
+      api<DayStatusResponse>("/api/day/status").catch(() => null),
+      api<FastingActiveResponse>("/api/fasting/current").catch(() => ({
+        active: null,
+      })),
+    ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
       return;
@@ -85,6 +110,8 @@ export default function Dashboard() {
     setWorkout(workoutRes);
     setWater(waterRes);
     setTrend(trendRes);
+    setDayStatus(dayRes);
+    setFasting(fastingRes);
     setLoading(false);
   }, [user]);
 
@@ -131,6 +158,9 @@ export default function Dashboard() {
       <View style={styles.head}>
         <Wordmark size={22} />
         <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
+          <Pressable onPress={() => router.push("/chat")}>
+            <Text style={styles.headBtn}>COACH</Text>
+          </Pressable>
           <Pressable onPress={() => router.push("/calendar")}>
             <Text style={styles.headBtn}>CALENDAR</Text>
           </Pressable>
@@ -147,12 +177,47 @@ export default function Dashboard() {
         </Text>
       </View>
 
+      {dayStatus &&
+        dayStatus.kind !== "none" &&
+        dayStatus.delta_applied !== 0 && (
+          <View style={styles.dayBanner}>
+            <Text style={styles.dayBannerKicker}>
+              {dayStatus.kind === "lift" ? "LIFT DAY" : "REST DAY"}
+            </Text>
+            <Text style={styles.dayBannerBody}>
+              {dayStatus.kind === "rest"
+                ? `${dayStatus.adjusted_target} kcal today (${dayStatus.delta_applied > 0 ? "+" : ""}${dayStatus.delta_applied} from base)`
+                : `${dayStatus.base_target} kcal today (base)`}
+            </Text>
+          </View>
+        )}
+
       <View style={styles.macros}>
-        <Macro label="Calories" value={profile.daily_kcal_target} unit="kcal" hi />
+        <Macro
+          label="Calories"
+          value={dayStatus?.adjusted_target ?? profile.daily_kcal_target}
+          unit="kcal"
+          hi
+        />
         <Macro label="Protein" value={profile.daily_protein_g} unit="g" />
         <Macro label="Carbs" value={profile.daily_carb_g} unit="g" />
         <Macro label="Fat" value={profile.daily_fat_g} unit="g" />
       </View>
+
+      {fasting?.active ? (
+        <Pressable
+          onPress={() => router.push("/fasting")}
+          style={styles.fastingCard}
+        >
+          <Text style={[styles.kicker, { color: colors.gold }]}>
+            FASTING · {fasting.active.target_hours}H TARGET
+          </Text>
+          <Text style={styles.fastingBig}>
+            {formatFastElapsed(fasting.active.started_at)}
+          </Text>
+          <Text style={styles.fastingSub}>Tap to end the fast.</Text>
+        </Pressable>
+      ) : null}
 
       {workout?.active && workout.next_session && workout.program && (
         <Pressable
@@ -264,6 +329,16 @@ export default function Dashboard() {
         </View>
       )}
 
+      {!fasting?.active && (
+        <Pressable
+          onPress={() => router.push("/fasting")}
+          style={styles.miniLink}
+        >
+          <Text style={styles.miniLinkLabel}>Start a fast</Text>
+          <Text style={styles.miniLinkArrow}>→</Text>
+        </Pressable>
+      )}
+
       <Pressable
         onPress={() => router.push("/onboarding")}
         style={styles.redoRow}
@@ -278,6 +353,14 @@ export default function Dashboard() {
       </Pressable>
     </Screen>
   );
+}
+
+function formatFastElapsed(startIso: string): string {
+  const ms = Date.now() - new Date(startIso).getTime();
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  return `${h}h ${String(m).padStart(2, "0")}m`;
 }
 
 function Macro({
@@ -546,5 +629,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.dim,
     marginTop: 2,
+  },
+  dayBanner: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: colors.panel2,
+    borderRadius: radius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gold,
+  },
+  dayBannerKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  dayBannerBody: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    flex: 1,
+  },
+  fastingCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: 2,
+  },
+  fastingBig: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  fastingSub: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  miniLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+  },
+  miniLinkLabel: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.dim,
+  },
+  miniLinkArrow: {
+    fontFamily: font.displayBold,
+    fontSize: 16,
+    color: colors.dim,
   },
 });
