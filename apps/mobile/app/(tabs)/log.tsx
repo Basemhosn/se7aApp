@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,14 +15,52 @@ import { api } from "@/lib/api";
 import type { LedgerTodayResponse } from "@/types";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
+interface RecentItem {
+  id: number;
+  name: string;
+  portion_estimate: string | null;
+  scan_id: string | null;
+  photo_url: string | null;
+  kcal_low: number;
+  kcal_high: number;
+  protein_g_low: number;
+  protein_g_high: number;
+  carb_g_low: number;
+  carb_g_high: number;
+  fat_g_low: number;
+  fat_g_high: number;
+  confidence: "low" | "medium" | "high" | null;
+  times_logged: number;
+}
+
+interface RecentResponse {
+  items: RecentItem[];
+}
+
+function slotForNow(): "breakfast" | "lunch" | "dinner" | "snack" {
+  const h = new Date().getHours();
+  if (h < 11) return "breakfast";
+  if (h < 16) return "lunch";
+  if (h < 21) return "dinner";
+  return "snack";
+}
+
 export default function Log() {
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
+  const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [relogBusy, setRelogBusy] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<LedgerTodayResponse>("/api/ledger/today");
-      setLedger(res);
+      const [today, rec] = await Promise.all([
+        api<LedgerTodayResponse>("/api/ledger/today"),
+        api<RecentResponse>("/api/ledger/recent?limit=12").catch(() => ({
+          items: [] as RecentItem[],
+        })),
+      ]);
+      setLedger(today);
+      setRecent(rec.items);
     } catch {
       /* empty */
     }
@@ -31,6 +72,38 @@ export default function Log() {
       load();
     }, [load])
   );
+
+  const relog = async (item: RecentItem) => {
+    setRelogBusy(item.id);
+    try {
+      await api("/api/ledger/add", {
+        method: "POST",
+        body: JSON.stringify({
+          source: "manual",
+          meal_slot: slotForNow(),
+          items: [
+            {
+              name: item.name,
+              portion_estimate: item.portion_estimate ?? undefined,
+              kcal_low: item.kcal_low,
+              kcal_high: item.kcal_high,
+              protein_g_low: item.protein_g_low,
+              protein_g_high: item.protein_g_high,
+              carb_g_low: item.carb_g_low,
+              carb_g_high: item.carb_g_high,
+              fat_g_low: item.fat_g_low,
+              fat_g_high: item.fat_g_high,
+              confidence: item.confidence ?? "medium",
+            },
+          ],
+        }),
+      });
+      await load();
+    } catch (e) {
+      Alert.alert("Couldn't log", (e as Error).message);
+    }
+    setRelogBusy(null);
+  };
 
   return (
     <Screen>
@@ -63,6 +136,47 @@ export default function Log() {
         />
       </View>
 
+      {recent.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Recent</Text>
+          <Text style={styles.cardSub}>
+            One tap to re-log something you eat often.
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: spacing.sm, paddingVertical: 4 }}
+          >
+            {recent.map((it) => (
+              <Pressable
+                key={it.id}
+                onPress={() => relog(it)}
+                disabled={relogBusy === it.id}
+                style={styles.recentChip}
+              >
+                {relogBusy === it.id ? (
+                  <ActivityIndicator color={colors.gold} />
+                ) : (
+                  <>
+                    <Text style={styles.recentName} numberOfLines={1}>
+                      {it.name}
+                    </Text>
+                    <Text style={styles.recentKcal}>
+                      {it.kcal_low}–{it.kcal_high} kcal
+                    </Text>
+                    {it.times_logged > 1 && (
+                      <Text style={styles.recentTimes}>
+                        {it.times_logged}× logged
+                      </Text>
+                    )}
+                  </>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {loading ? (
         <View style={{ alignItems: "center", paddingVertical: spacing.xl }}>
           <ActivityIndicator color={colors.gold} />
@@ -76,6 +190,15 @@ export default function Log() {
           </Text>
           {ledger.totals.items.map((it) => (
             <View key={it.id} style={styles.row}>
+              {it.photo_url ? (
+                <Image source={{ uri: it.photo_url }} style={styles.thumb} />
+              ) : (
+                <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                  <Text style={styles.thumbPlaceholderText}>
+                    {it.name.slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowName}>{it.name}</Text>
                 <Text style={styles.rowMeta}>
@@ -180,16 +303,44 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardTitle: { fontFamily: font.displayBold, fontSize: 18, color: colors.ink },
-  cardSub: { fontFamily: font.mono, fontSize: 11, color: colors.dim, marginBottom: spacing.sm },
+  cardSub: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginBottom: spacing.sm,
+  },
   row: {
     flexDirection: "row",
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.line,
     alignItems: "center",
+    gap: spacing.sm,
+  },
+  thumb: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  thumbPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbPlaceholderText: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.dim,
   },
   rowName: { fontFamily: font.body, fontSize: 14, color: colors.ink },
-  rowMeta: { fontFamily: font.mono, fontSize: 11, color: colors.dim, marginTop: 2 },
+  rowMeta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
+  },
   rowKcal: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
   emptyTitle: {
     fontFamily: font.displayBold,
@@ -202,5 +353,31 @@ const styles = StyleSheet.create({
     color: colors.dim,
     marginTop: 4,
     lineHeight: 20,
+  },
+  recentChip: {
+    minWidth: 130,
+    padding: spacing.sm,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    gap: 2,
+  },
+  recentName: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  recentKcal: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    marginTop: 2,
+  },
+  recentTimes: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    marginTop: 2,
   },
 });

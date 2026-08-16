@@ -195,7 +195,9 @@ export default function Onboarding() {
         method: "POST",
         body: JSON.stringify({ program_id: pickedProgram.id }),
       });
-      router.replace("/");
+      // First-time users get pushed straight into a plate scan for the
+      // AHA moment. Returning users (redoing plan) go back to Home.
+      router.replace(returning ? "/" : "/scan/plate");
     } catch (e) {
       setErr((e as Error).message || "Couldn't save your plan — try again.");
       setBusy(false);

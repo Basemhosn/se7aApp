@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +35,40 @@ export default function Workout() {
   const [err, setErr] = useState("");
   const [startedAt] = useState(() => Date.now());
   const [notes, setNotes] = useState("");
+  const [swapped, setSwapped] = useState<Record<number, string>>({});
+
+  const swapExercise = (exIdx: number, spec: ExerciseSpec) => {
+    const options = spec.substitutes ?? [];
+    if (options.length === 0) {
+      Alert.alert(
+        spec.name,
+        "No substitutes listed for this exercise."
+      );
+      return;
+    }
+    const buttons = [
+      { text: "Cancel", style: "cancel" as const },
+      {
+        text: `Original: ${spec.name}`,
+        onPress: () =>
+          setSwapped((s) => {
+            const n = { ...s };
+            delete n[exIdx];
+            return n;
+          }),
+      },
+      ...options.map((name) => ({
+        text: name,
+        onPress: () => {
+          setSwapped((s) => ({ ...s, [exIdx]: name }));
+          setLogs((prev) =>
+            prev.map((e, i) => (i === exIdx ? { ...e, name } : e))
+          );
+        },
+      })),
+    ];
+    Alert.alert("Swap exercise", `Pick a substitute for ${spec.name}.`, buttons);
+  };
 
   useEffect(() => {
     (async () => {
@@ -190,9 +226,11 @@ export default function Workout() {
           key={`${ex.name}-${exIdx}`}
           spec={ex}
           log={logs[exIdx]}
+          displayName={swapped[exIdx] ?? ex.name}
           onSetChange={(setIdx, field, value) =>
             updateSet(exIdx, setIdx, field, value)
           }
+          onSwap={() => swapExercise(exIdx, ex)}
         />
       ))}
 
@@ -214,26 +252,48 @@ export default function Workout() {
 function ExerciseCard({
   spec,
   log,
+  displayName,
   onSetChange,
+  onSwap,
 }: {
   spec: ExerciseSpec;
   log: ExerciseLog | undefined;
+  displayName: string;
   onSetChange: (setIdx: number, field: "reps" | "weight", value: string) => void;
+  onSwap: () => void;
 }) {
+  const [restLeft, setRestLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (restLeft == null) return;
+    if (restLeft <= 0) {
+      setRestLeft(null);
+      return;
+    }
+    const id = setInterval(() => {
+      setRestLeft((r) => (r == null || r <= 1 ? null : r - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [restLeft]);
+
   if (!log) return null;
+  const swapped = displayName !== spec.name;
   return (
     <View style={styles.exCard}>
-      <Text style={styles.exName}>{spec.name}</Text>
+      <Pressable onLongPress={onSwap} delayLongPress={400}>
+        <View style={styles.exNameRow}>
+          <Text style={styles.exName}>{displayName}</Text>
+          {swapped && <Text style={styles.exSwapped}>swapped</Text>}
+        </View>
+      </Pressable>
       <Text style={styles.exTarget}>
         {spec.sets} × {spec.reps}
         {spec.rpe ? ` @ RPE ${spec.rpe}` : ""}
         {spec.rest_sec ? ` · ${spec.rest_sec}s rest` : ""}
       </Text>
       {spec.cue && <Text style={styles.exCue}>{spec.cue}</Text>}
-      {spec.substitutes && spec.substitutes.length > 0 && (
-        <Text style={styles.exSubs}>
-          Substitutes: {spec.substitutes.join(", ")}
-        </Text>
+      {spec.substitutes && spec.substitutes.length > 0 && !swapped && (
+        <Text style={styles.exSubs}>Long-press to swap.</Text>
       )}
 
       <View style={styles.setHeader}>
@@ -264,8 +324,29 @@ function ExerciseCard({
           />
         </View>
       ))}
+
+      {spec.rest_sec ? (
+        <Pressable
+          onPress={() => setRestLeft(restLeft ? null : spec.rest_sec)}
+          style={[styles.restBtn, restLeft ? styles.restBtnActive : null]}
+        >
+          <Text
+            style={[styles.restLabel, restLeft ? styles.restLabelActive : null]}
+          >
+            {restLeft
+              ? `Resting · ${formatMMSS(restLeft)}`
+              : `Start rest · ${spec.rest_sec}s`}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
+}
+
+function formatMMSS(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 const styles = StyleSheet.create({
@@ -300,10 +381,43 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: 4,
   },
+  exNameRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.sm,
+  },
   exName: {
     fontFamily: font.displayBold,
     fontSize: 17,
     color: colors.ink,
+  },
+  exSwapped: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.mint,
+    letterSpacing: 1.2,
+  },
+  restBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+  },
+  restBtnActive: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  restLabel: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    letterSpacing: 1,
+  },
+  restLabelActive: {
+    color: colors.gold,
   },
   exTarget: {
     fontFamily: font.mono,

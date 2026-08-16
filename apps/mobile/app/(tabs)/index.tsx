@@ -131,53 +131,38 @@ export default function Home() {
       </View>
 
       <View>
-        <Text style={styles.kicker}>TODAY{"’"}S TARGETS</Text>
-        <Text style={styles.h1}>
+        <Text style={styles.kicker}>
           {profile.display_name || user?.email?.split("@")[0]}
+        </Text>
+        <Text style={styles.heroKicker}>
+          {dayStatus?.kind === "lift"
+            ? "LIFT DAY · REMAINING"
+            : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
+              ? "REST DAY · REMAINING"
+              : "REMAINING TODAY"}
+        </Text>
+        <View style={styles.heroRow}>
+          <Text style={styles.heroNum}>
+            {Math.round(ledger.remaining.kcal.low)}
+          </Text>
+          <Text style={styles.heroDash}>–</Text>
+          <Text style={styles.heroNum}>
+            {Math.round(ledger.remaining.kcal.high)}
+          </Text>
+          <Text style={styles.heroUnit}> kcal</Text>
+        </View>
+        <Text style={styles.heroSub}>
+          of {dayStatus?.adjusted_target ?? profile.daily_kcal_target} target
+          {ledger.totals.items.length > 0
+            ? ` · ate ${Math.round(ledger.totals.kcal.low)}–${Math.round(ledger.totals.kcal.high)}`
+            : ""}
         </Text>
       </View>
 
-      {dayStatus &&
-        dayStatus.kind !== "none" &&
-        dayStatus.delta_applied !== 0 && (
-          <View style={styles.dayBanner}>
-            <Text style={styles.dayBannerKicker}>
-              {dayStatus.kind === "lift" ? "LIFT DAY" : "REST DAY"}
-            </Text>
-            <Text style={styles.dayBannerBody}>
-              {dayStatus.kind === "rest"
-                ? `${dayStatus.adjusted_target} kcal today (${dayStatus.delta_applied > 0 ? "+" : ""}${dayStatus.delta_applied} from base)`
-                : `${dayStatus.base_target} kcal today (base)`}
-            </Text>
-          </View>
-        )}
-
       <View style={styles.macros}>
-        <Macro
-          label="Calories"
-          value={dayStatus?.adjusted_target ?? profile.daily_kcal_target}
-          unit="kcal"
-          hi
-        />
         <Macro label="Protein" value={profile.daily_protein_g} unit="g" />
         <Macro label="Carbs" value={profile.daily_carb_g} unit="g" />
         <Macro label="Fat" value={profile.daily_fat_g} unit="g" />
-      </View>
-
-      <View style={styles.ledgerRow}>
-        <LedgerCard
-          title="Eaten today"
-          low={ledger.totals.kcal.low}
-          high={ledger.totals.kcal.high}
-          unit="kcal"
-        />
-        <LedgerCard
-          title="Remaining"
-          low={ledger.remaining.kcal.low}
-          high={ledger.remaining.kcal.high}
-          unit="kcal"
-          remaining
-        />
       </View>
 
       {fasting?.active ? (
@@ -334,20 +319,48 @@ const styles = StyleSheet.create({
     color: colors.gold,
     letterSpacing: 1.4,
   },
-  h1: {
+  heroKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
+    marginTop: spacing.md,
+  },
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginTop: 4,
+  },
+  heroNum: {
+    fontFamily: font.displayBold,
+    fontSize: 52,
+    color: colors.gold,
+    lineHeight: 58,
+  },
+  heroDash: {
     fontFamily: font.displayBold,
     fontSize: 32,
-    color: colors.ink,
-    marginTop: 4,
+    color: colors.dim,
+    marginHorizontal: 6,
+  },
+  heroUnit: {
+    fontFamily: font.body,
+    fontSize: 16,
+    color: colors.dim,
+    marginLeft: 4,
+  },
+  heroSub: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 6,
   },
   macros: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: spacing.sm,
   },
   macro: {
-    flexGrow: 1,
-    flexBasis: "47%",
+    flex: 1,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,

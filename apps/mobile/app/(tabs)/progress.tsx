@@ -23,6 +23,13 @@ interface TrendResponse {
   }[];
 }
 
+interface AdherenceResponse {
+  days_window: number;
+  days_logged: number;
+  percentage: number;
+  comparison: string;
+}
+
 const RANGES = [
   { days: 30, label: "30D" },
   { days: 60, label: "60D" },
@@ -31,6 +38,7 @@ const RANGES = [
 
 export default function Progress() {
   const [trend, setTrend] = useState<TrendResponse | null>(null);
+  const [adherence, setAdherence] = useState<AdherenceResponse | null>(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
 
@@ -42,8 +50,12 @@ export default function Progress() {
   const load = useCallback(async (d: number) => {
     setLoading(true);
     try {
-      const res = await api<TrendResponse>(`/api/weight/trend?days=${d}`);
-      setTrend(res);
+      const [tr, adh] = await Promise.all([
+        api<TrendResponse>(`/api/weight/trend?days=${d}`),
+        api<AdherenceResponse>("/api/progress/adherence?days=7").catch(() => null),
+      ]);
+      setTrend(tr);
+      setAdherence(adh);
     } catch {
       /* empty */
     }
@@ -84,6 +96,18 @@ export default function Progress() {
         <Text style={styles.title}>Progress</Text>
         <Text style={styles.sub}>Trend over weeks, not any single day.</Text>
       </View>
+
+      {adherence && (
+        <View style={styles.adherenceCard}>
+          <Text style={styles.adherenceKicker}>LAST 7 DAYS</Text>
+          <View style={styles.adherenceRow}>
+            <Text style={styles.adherenceNum}>{adherence.days_logged}</Text>
+            <Text style={styles.adherenceOf}>of 7</Text>
+            <Text style={styles.adherencePct}>· {adherence.percentage}%</Text>
+          </View>
+          <Text style={styles.adherenceCompare}>{adherence.comparison}.</Text>
+        </View>
+      )}
 
       <View style={styles.card}>
         <View style={styles.cardHead}>
@@ -286,5 +310,48 @@ const styles = StyleSheet.create({
   linkArrow: {
     fontFamily: font.displayBold,
     fontSize: 22,
+  },
+  adherenceCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.mint,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: 4,
+  },
+  adherenceKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.mint,
+    letterSpacing: 1.4,
+  },
+  adherenceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 6,
+    marginTop: 4,
+  },
+  adherenceNum: {
+    fontFamily: font.displayBold,
+    fontSize: 44,
+    color: colors.ink,
+    lineHeight: 48,
+  },
+  adherenceOf: {
+    fontFamily: font.body,
+    fontSize: 16,
+    color: colors.dim,
+  },
+  adherencePct: {
+    fontFamily: font.mono,
+    fontSize: 14,
+    color: colors.dim,
+  },
+  adherenceCompare: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 20,
+    marginTop: 8,
   },
 });

@@ -43,6 +43,8 @@ export interface MealItemRow {
   source: string;
   confidence: Confidence | null;
   eaten_at: string;
+  scan_id?: string | null;
+  photo_url?: string | null;
   kcal_low: number;
   kcal_high: number;
   protein_g_low: number;
