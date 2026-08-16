@@ -456,16 +456,16 @@ export default function Onboarding() {
 function WelcomeStep({ name }: { name?: string }) {
   return (
     <View style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
-      <Text style={styles.kicker}>WELCOME</Text>
+      <Text style={styles.kicker}>YOUR PLAN</Text>
       <Text style={styles.hero}>
-        {name ? `Hey ${name}.` : "Let's set you up."}
+        {name ? `Hey ${name}.` : "Let's build your plan."}
       </Text>
       <Text style={styles.heroSub}>
-        Ten questions. Then we compute your calorie + macro targets, pick a
-        workout plan that fits your week, and drop you into your dashboard.
+        Ten questions. We compute your calorie + macro targets and pick a
+        workout plan that fits your week.
       </Text>
       <Text style={[styles.sub, { marginTop: spacing.md }]}>
-        This takes ~90 seconds. You can change any of it later.
+        ~90 seconds. You can change any of it any time.
       </Text>
     </View>
   );

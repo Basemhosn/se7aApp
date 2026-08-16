@@ -188,6 +188,19 @@ export default function Dashboard() {
           ))}
         </View>
       )}
+
+      <Pressable
+        onPress={() => router.push("/onboarding")}
+        style={styles.redoRow}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.redoLabel}>Change my plan</Text>
+          <Text style={styles.redoSub}>
+            Redo the intake if your goal, equipment, or schedule shifted.
+          </Text>
+        </View>
+        <Text style={styles.redoArrow}>→</Text>
+      </Pressable>
     </Screen>
   );
 }
@@ -406,5 +419,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.dim,
     marginTop: 6,
+  },
+  redoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  redoLabel: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  redoSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  redoArrow: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.dim,
   },
 });
