@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       equipment_access: input.equipment_access ?? null,
       days_per_week: input.days_per_week ?? null,
       injuries: input.injuries ?? [],
+      rest_day_kcal_delta: input.rest_day_kcal_delta ?? 0,
       daily_kcal_target: targets.daily_kcal_target,
       daily_protein_g: targets.daily_protein_g,
       daily_carb_g: targets.daily_carb_g,

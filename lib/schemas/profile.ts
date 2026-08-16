@@ -37,6 +37,8 @@ export const onboardingSchema = z.object({
     .optional(),
   days_per_week: z.number().int().min(2).max(7).optional(),
   injuries: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  // Kcal delta applied on rest days (negative subtracts, positive adds).
+  rest_day_kcal_delta: z.number().int().min(-1000).max(1000).optional(),
 });
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
