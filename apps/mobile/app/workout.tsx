@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -10,7 +9,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
-import { Wordmark } from "@/components/Wordmark";
+import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import type { ExerciseSpec, Program, Session } from "@/lib/programs";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -168,12 +167,9 @@ export default function Workout() {
     return (
       <Screen>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()}>
-            <Wordmark size={20} />
-          </Pressable>
+          <BackButton />
         </View>
         <Text style={styles.h1}>{err || "Session not available."}</Text>
-        <Btn label="Back" variant="ghost" onPress={() => router.back()} />
       </Screen>
     );
   }
@@ -181,9 +177,7 @@ export default function Workout() {
   return (
     <Screen footer={footer}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()}>
-          <Wordmark size={20} />
-        </Pressable>
+        <BackButton />
       </View>
       <Text style={styles.kicker}>
         {program.name.toUpperCase()} · SESSION {sessionIndex + 1}

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
-import { Wordmark } from "@/components/Wordmark";
+import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import type { MealSlot } from "@/types";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -92,9 +92,7 @@ export default function ManualMeal() {
   return (
     <Screen footer={footer}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()}>
-          <Wordmark size={20} />
-        </Pressable>
+        <BackButton />
       </View>
       <Text style={styles.kicker}>MANUAL ENTRY</Text>
       <Text style={styles.h1}>Add without scanning.</Text>

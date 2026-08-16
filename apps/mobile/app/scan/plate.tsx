@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
-import { Wordmark } from "@/components/Wordmark";
+import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, apiUpload } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -186,9 +186,7 @@ export default function PlateScan() {
   return (
     <Screen footer={footer}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()}>
-          <Wordmark size={20} />
-        </Pressable>
+        <BackButton />
       </View>
       <Text style={styles.kicker}>PLATE SCAN</Text>
       <Text style={styles.h1}>What did you eat?</Text>

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/Screen";
-import { Wordmark } from "@/components/Wordmark";
+import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -118,9 +118,7 @@ export default function Calendar() {
   return (
     <Screen>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()}>
-          <Wordmark size={20} />
-        </Pressable>
+        <BackButton />
       </View>
 
       <View style={styles.monthRow}>
