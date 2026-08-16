@@ -17,8 +17,8 @@ export const colors = {
 } as const;
 
 export const font = {
-  display: "Syne_700Bold",
-  displayBold: "Syne_800ExtraBold",
+  display: "Manrope_700Bold",
+  displayBold: "Manrope_800ExtraBold",
   body: "InstrumentSans_400Regular",
   bodyBold: "InstrumentSans_600SemiBold",
   mono: "IBMPlexMono_400Regular",

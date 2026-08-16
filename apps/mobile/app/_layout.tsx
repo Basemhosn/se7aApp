@@ -5,9 +5,9 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
 import {
-  Syne_700Bold,
-  Syne_800ExtraBold,
-} from "@expo-google-fonts/syne";
+  Manrope_700Bold,
+  Manrope_800ExtraBold,
+} from "@expo-google-fonts/manrope";
 import {
   InstrumentSans_400Regular,
   InstrumentSans_600SemiBold,
@@ -28,8 +28,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
   const [loaded] = useFonts({
-    Syne_700Bold,
-    Syne_800ExtraBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
     InstrumentSans_400Regular,
     InstrumentSans_600SemiBold,
     IBMPlexMono_400Regular,
