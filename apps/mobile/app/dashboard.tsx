@@ -15,6 +15,9 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import type { LedgerTodayResponse, Profile } from "@/types";
 import type { Program, Session } from "@/lib/programs";
+import { TrendChart } from "@/components/TrendChart";
+import { WaterRing } from "@/components/WaterRing";
+import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface CurrentWorkoutResponse {
   active: boolean;
@@ -24,29 +27,55 @@ interface CurrentWorkoutResponse {
   completed_this_week?: number;
   orphaned?: boolean;
 }
-import { colors, font, radius, spacing } from "@/lib/theme";
+
+interface WaterTodayResponse {
+  total_ml: number;
+  target_ml: number;
+  entries: number;
+}
+
+interface WeightTrendResponse {
+  days: number;
+  points: {
+    weight_kg: number;
+    body_fat_pct: number | null;
+    logged_at: string;
+  }[];
+}
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
   const [workout, setWorkout] = useState<CurrentWorkoutResponse | null>(null);
+  const [water, setWater] = useState<WaterTodayResponse | null>(null);
+  const [trend, setTrend] = useState<WeightTrendResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [{ data: profileData }, ledgerRes, workoutRes] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      api<LedgerTodayResponse>("/api/ledger/today"),
-      api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
-        active: false,
-      })),
-    ]);
+    const [{ data: profileData }, ledgerRes, workoutRes, waterRes, trendRes] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        api<LedgerTodayResponse>("/api/ledger/today"),
+        api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
+          active: false,
+        })),
+        api<WaterTodayResponse>("/api/water/today").catch(() => ({
+          total_ml: 0,
+          target_ml: 2500,
+          entries: 0,
+        })),
+        api<WeightTrendResponse>("/api/weight/trend?days=30").catch(() => ({
+          days: 30,
+          points: [],
+        })),
+      ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
       return;
@@ -54,8 +83,24 @@ export default function Dashboard() {
     setProfile(profileData as Profile);
     setLedger(ledgerRes);
     setWorkout(workoutRes);
+    setWater(waterRes);
+    setTrend(trendRes);
     setLoading(false);
   }, [user]);
+
+  const addWater = async (ml: number) => {
+    if (!water) return;
+    setWater({ ...water, total_ml: water.total_ml + ml, entries: water.entries + 1 });
+    try {
+      await api("/api/water/log", {
+        method: "POST",
+        body: JSON.stringify({ ml }),
+      });
+    } catch {
+      // Rollback optimistic update on failure.
+      setWater(water);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -85,9 +130,14 @@ export default function Dashboard() {
     <Screen>
       <View style={styles.head}>
         <Wordmark size={22} />
-        <Pressable onPress={signOut}>
-          <Text style={styles.signout}>SIGN OUT</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
+          <Pressable onPress={() => router.push("/calendar")}>
+            <Text style={styles.headBtn}>CALENDAR</Text>
+          </Pressable>
+          <Pressable onPress={signOut}>
+            <Text style={styles.signout}>SIGN OUT</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View>
@@ -169,6 +219,24 @@ export default function Dashboard() {
         />
       </View>
 
+      {water && (
+        <WaterRing
+          totalMl={water.total_ml}
+          targetMl={water.target_ml}
+          onAdd={addWater}
+        />
+      )}
+
+      <Pressable
+        onPress={() => router.push("/manual-meal")}
+        style={styles.manualRow}
+      >
+        <Text style={styles.manualLabel}>+ Add manually</Text>
+        <Text style={styles.manualSub}>
+          Log food you know without scanning.
+        </Text>
+      </Pressable>
+
       {ledger.totals.items.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Today{"’"}s log</Text>
@@ -186,6 +254,13 @@ export default function Dashboard() {
               </Text>
             </View>
           ))}
+        </View>
+      )}
+
+      {trend && trend.points.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Weight trend · 30 days</Text>
+          <TrendChart points={trend.points} />
         </View>
       )}
 
@@ -446,5 +521,30 @@ const styles = StyleSheet.create({
     fontFamily: font.displayBold,
     fontSize: 18,
     color: colors.dim,
+  },
+  headBtn: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.5,
+  },
+  manualRow: {
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderStyle: "dashed",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 2,
+  },
+  manualLabel: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  manualSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
   },
 });
