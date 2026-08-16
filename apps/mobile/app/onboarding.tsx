@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { Wordmark } from "@/components/Wordmark";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import type { ActivityLevel, Goal, Sex } from "@/types";
 import {
@@ -62,6 +63,44 @@ export default function Onboarding() {
 
   const [ranked, setRanked] = useState<Scored[] | null>(null);
   const [pickedProgram, setPickedProgram] = useState<Program | null>(null);
+  const [returning, setReturning] = useState(false);
+
+  // Prefill from existing profile so returning users don't re-enter
+  // everything. Runs once on mount; new users (no onboarded_at) get no-op.
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (prefilled.current || !user) return;
+    prefilled.current = true;
+    (async () => {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!profile || !profile.onboarded_at) return;
+      setReturning(true);
+      if (profile.display_name) setName(profile.display_name);
+      if (profile.sex) setSex(profile.sex as Sex);
+      if (profile.birthdate) setBirthdate(profile.birthdate);
+      if (profile.height_cm != null) setHeight(String(profile.height_cm));
+      if (profile.weight_kg != null) setWeight(String(profile.weight_kg));
+      if (profile.activity_level)
+        setActivity(profile.activity_level as ActivityLevel);
+      if (profile.goal) setGoal(profile.goal as Goal);
+      if (profile.goal_rate_kg_per_week != null)
+        setRate(Number(profile.goal_rate_kg_per_week));
+      if (profile.training_experience)
+        setExperience(profile.training_experience as Experience);
+      if (profile.equipment_access)
+        setEquipment(profile.equipment_access as Equipment);
+      if (profile.days_per_week != null) setDays(profile.days_per_week);
+      if (profile.rest_day_kcal_delta != null)
+        setRestDayDelta(profile.rest_day_kcal_delta);
+      if (Array.isArray(profile.injuries) && profile.injuries.length > 0) {
+        setInjuryText((profile.injuries as string[]).join(", "));
+      }
+    })();
+  }, [user]);
 
   const stepIndex = STEPS.indexOf(step);
   const progress = (stepIndex / (STEPS.length - 1)) * 100;
@@ -213,7 +252,9 @@ export default function Onboarding() {
         </View>
       )}
 
-      {step === "welcome" && <WelcomeStep name={user?.email?.split("@")[0]} />}
+      {step === "welcome" && (
+        <WelcomeStep name={user?.email?.split("@")[0]} returning={returning} />
+      )}
 
       {step === "sex" && (
         <StepBody
@@ -476,19 +517,34 @@ export default function Onboarding() {
   );
 }
 
-function WelcomeStep({ name }: { name?: string }) {
+function WelcomeStep({
+  name,
+  returning,
+}: {
+  name?: string;
+  returning: boolean;
+}) {
   return (
     <View style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
-      <Text style={styles.kicker}>YOUR PLAN</Text>
+      <Text style={styles.kicker}>
+        {returning ? "REDO YOUR PLAN" : "YOUR PLAN"}
+      </Text>
       <Text style={styles.hero}>
-        {name ? `Hey ${name}.` : "Let's build your plan."}
+        {returning
+          ? `Life changed, ${name ?? "hey"}?`
+          : name
+            ? `Hey ${name}.`
+            : "Let's build your plan."}
       </Text>
       <Text style={styles.heroSub}>
-        Eleven quick questions. We compute your calorie + macro targets and pick a
-        workout plan that fits your week.
+        {returning
+          ? "Your current answers are prefilled — just change what's different and tap through the rest."
+          : "Eleven quick questions. We compute your calorie + macro targets and pick a workout plan that fits your week."}
       </Text>
       <Text style={[styles.sub, { marginTop: spacing.md }]}>
-        ~90 seconds. You can change any of it any time.
+        {returning
+          ? "Fast — usually 20 seconds if not much has changed."
+          : "~90 seconds. You can change any of it any time."}
       </Text>
     </View>
   );
