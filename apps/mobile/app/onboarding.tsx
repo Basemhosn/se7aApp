@@ -34,6 +34,7 @@ const STEPS = [
   "experience",
   "equipment",
   "days",
+  "rest_day",
   "injuries",
   "reveal",
 ] as const;
@@ -56,6 +57,7 @@ export default function Onboarding() {
   const [experience, setExperience] = useState<Experience | null>(null);
   const [equipment, setEquipment] = useState<Equipment | null>(null);
   const [days, setDays] = useState<number | null>(null);
+  const [restDayDelta, setRestDayDelta] = useState<number>(0);
   const [injuryText, setInjuryText] = useState("");
 
   const [ranked, setRanked] = useState<Scored[] | null>(null);
@@ -76,6 +78,7 @@ export default function Onboarding() {
       case "experience": return !!experience;
       case "equipment": return !!equipment;
       case "days": return !!days;
+      case "rest_day": return true; // always advances — default 0
       case "injuries": return true; // optional
       case "reveal": return !!pickedProgram;
       default: return false;
@@ -119,6 +122,7 @@ export default function Onboarding() {
             equipment_access: equipment,
             days_per_week: days,
             injuries,
+            rest_day_kcal_delta: restDayDelta,
           }),
         });
         const catalog = await api<{ programs: Program[] }>(
@@ -213,7 +217,7 @@ export default function Onboarding() {
 
       {step === "sex" && (
         <StepBody
-          kicker="ABOUT YOU · 1 OF 10"
+          kicker="ABOUT YOU · 1 OF 11"
           h1="What's your sex assigned at birth?"
           hint="Used only for BMR math — SE7A doesn't care about identity here, it cares about metabolic rate."
         >
@@ -230,7 +234,7 @@ export default function Onboarding() {
 
       {step === "birthdate" && (
         <StepBody
-          kicker="ABOUT YOU · 2 OF 10"
+          kicker="ABOUT YOU · 2 OF 11"
           h1="Your birthdate?"
           hint="Metabolism shifts with age. Format: YYYY-MM-DD. You must be 16+."
         >
@@ -255,7 +259,7 @@ export default function Onboarding() {
 
       {step === "size" && (
         <StepBody
-          kicker="ABOUT YOU · 3 OF 10"
+          kicker="ABOUT YOU · 3 OF 11"
           h1="Height and weight."
           hint="In centimeters and kilograms. Whatever the scale says today — we'll recalibrate as it changes."
         >
@@ -288,7 +292,7 @@ export default function Onboarding() {
 
       {step === "activity" && (
         <StepBody
-          kicker="ABOUT YOU · 4 OF 10"
+          kicker="ABOUT YOU · 4 OF 11"
           h1="How active are you day-to-day?"
           hint="Not counting workouts. Just your regular life — desk vs on-feet vs manual labor."
         >
@@ -308,7 +312,7 @@ export default function Onboarding() {
 
       {step === "goal" && (
         <StepBody
-          kicker="YOUR GOAL · 5 OF 10"
+          kicker="YOUR GOAL · 5 OF 11"
           h1="What are we chasing?"
           hint="You can change this any time. Body composition shifts happen over months, not weeks."
         >
@@ -331,7 +335,7 @@ export default function Onboarding() {
 
       {step === "rate" && (
         <StepBody
-          kicker="YOUR GOAL · 6 OF 10"
+          kicker="YOUR GOAL · 6 OF 11"
           h1="How fast?"
           hint="Aggressive rates work short-term. Sustainable rates work long-term. Negative = losing, positive = gaining."
         >
@@ -361,7 +365,7 @@ export default function Onboarding() {
 
       {step === "experience" && (
         <StepBody
-          kicker="YOUR TRAINING · 7 OF 10"
+          kicker="YOUR TRAINING · 7 OF 11"
           h1="How much lifting experience?"
           hint="Be honest — if you overestimate, we'll prescribe volume that grinds you down. Underestimate is easier to correct."
         >
@@ -379,7 +383,7 @@ export default function Onboarding() {
 
       {step === "equipment" && (
         <StepBody
-          kicker="YOUR TRAINING · 8 OF 10"
+          kicker="YOUR TRAINING · 8 OF 11"
           h1="What do you have access to?"
           hint="Programs are picked to match. Home + gym works for a lot of people."
         >
@@ -398,7 +402,7 @@ export default function Onboarding() {
 
       {step === "days" && (
         <StepBody
-          kicker="YOUR TRAINING · 9 OF 10"
+          kicker="YOUR TRAINING · 9 OF 11"
           h1="Days per week you can realistically commit?"
           hint="Consistency > intensity. A 3-day plan you actually do beats a 6-day plan you don't."
         >
@@ -423,9 +427,28 @@ export default function Onboarding() {
         </StepBody>
       )}
 
+      {step === "rest_day" && (
+        <StepBody
+          kicker="YOUR TRAINING · 10 OF 11"
+          h1="Rest days different?"
+          hint="On days without a workout, eat less. Common for cutting — helps you land the weekly deficit without under-eating on training days. Skip if you'd rather keep it simple."
+        >
+          <BigChoice
+            options={[
+              { v: "0", label: "Same as lift days", sub: "No cycling. Simplest." },
+              { v: "-200", label: "-200 kcal", sub: "Small adjustment." },
+              { v: "-300", label: "-300 kcal", sub: "Common for a cut." },
+              { v: "-500", label: "-500 kcal", sub: "Aggressive. Only for lean-outs." },
+            ]}
+            value={String(restDayDelta)}
+            onChange={(v) => setRestDayDelta(Number(v))}
+          />
+        </StepBody>
+      )}
+
       {step === "injuries" && (
         <StepBody
-          kicker="YOUR TRAINING · 10 OF 10"
+          kicker="YOUR TRAINING · 11 OF 11"
           h1="Anything to work around?"
           hint="Comma-separated. Examples: lower back, right shoulder, knees. Leave blank if nothing."
         >
@@ -461,7 +484,7 @@ function WelcomeStep({ name }: { name?: string }) {
         {name ? `Hey ${name}.` : "Let's build your plan."}
       </Text>
       <Text style={styles.heroSub}>
-        Ten questions. We compute your calorie + macro targets and pick a
+        Eleven quick questions. We compute your calorie + macro targets and pick a
         workout plan that fits your week.
       </Text>
       <Text style={[styles.sub, { marginTop: spacing.md }]}>
