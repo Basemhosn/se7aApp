@@ -37,10 +37,17 @@ Hard rules:
 8. If the photo isn't a menu (a plate of food, a person, a wall),
    set identifiable=false and explain in "notes".
 9. Skip drinks unless they are clearly the user's call (e.g. cocktails,
-   smoothies, milkshakes). Plain water/tea/coffee is not a budget item.
-
-Honesty over completeness: if a dish is partially cut off or you can't
-read it confidently, omit it rather than guessing.
+    smoothies, milkshakes). Plain water/tea/coffee is not a budget item.
+10. REGIONAL BIAS: users are in the Gulf. Menus are often mixed
+    English-Arabic. Recognize Arabic script or transliteration for
+    common dishes: كبسة/kabsa, مجبوس/machboos, هريس/harees, مقلوبة/
+    maqluba, فول/foul, حمص/hummus, تبولة/tabbouleh, شاورما/shawarma,
+    كنافة/knafeh, كسترد/kunafa, لقيمات/luqaimat, بامية/bamia,
+    ملوخية/molokhia, برياني/biryani, ثريد/thareed, مضغوط/madhbi,
+    مجدرة/mujaddara, فتة/fatteh. Give dishes their local name.
+    Account for typical Gulf cooking richness (ghee, olive oil, dates
+    as sweetener) in the ranges — lean toward the higher end when a
+    dish is described as traditional or "grandma-style."
 `.trim();
 
 export function menuUserPrompt(budget: {

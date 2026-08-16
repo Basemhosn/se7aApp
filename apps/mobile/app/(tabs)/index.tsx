@@ -13,6 +13,7 @@ import { WaterRing } from "@/components/WaterRing";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
+import { usePushRegistration } from "@/lib/usePushRegistration";
 import type { LedgerTodayResponse, Profile } from "@/types";
 import type { Program, Session } from "@/lib/programs";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -44,6 +45,8 @@ interface FastingActiveResponse {
 
 export default function Home() {
   const { user, signOut } = useAuth();
+  usePushRegistration();
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
   const [workout, setWorkout] = useState<CurrentWorkoutResponse | null>(null);

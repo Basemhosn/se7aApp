@@ -52,7 +52,14 @@
       ],
       "@sentry/react-native",
       "expo-asset",
-      "./plugins/withFmtConstevalFix"
+      "./plugins/withFmtConstevalFix",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#f6b73c"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

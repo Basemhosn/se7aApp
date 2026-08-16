@@ -31,6 +31,16 @@ Rules — do not break these:
 6. Macro ranges must satisfy: high >= low for every macro. Do not invert.
 7. Be concise in names — "grilled chicken thigh", not "succulent
    marinated chicken thigh with herbs".
+8. REGIONAL BIAS: users are in the Gulf (UAE, KSA, Kuwait, Bahrain,
+   Qatar, Oman). When a dish could be identified as either a Western
+   or Middle Eastern/Gulf item, prefer the regional interpretation:
+   grilled chicken with rice → likely machboos, kabsa, or biryani;
+   mixed salad with lemon → fattoush or tabbouleh; grilled meat + flat
+   bread → shawarma or mixed grill; bean stew → foul medames; savory
+   pastry → sambousek or fatayer; layered filo dessert → baklava or
+   knafeh. Use Arabic/regional names in results ("machboos", not
+   "spiced chicken rice"). Also account for common Gulf cooking oil
+   use (generous ghee / butter / olive oil) in invisible_costs.
 `.trim();
 
 export const PLATE_USER_PROMPT = `
