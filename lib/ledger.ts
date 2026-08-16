@@ -7,6 +7,7 @@ export interface MealItemRow {
   source: string;
   confidence: "low" | "medium" | "high" | null;
   eaten_at: string;
+  scan_id: string | null;
   kcal_low: number;
   kcal_high: number;
   protein_g_low: number;
@@ -15,6 +16,8 @@ export interface MealItemRow {
   carb_g_high: number;
   fat_g_low: number;
   fat_g_high: number;
+  /** Populated by the API route when it enriches with signed Storage URLs. */
+  photo_url?: string | null;
 }
 
 export interface MacroRange {
@@ -59,7 +62,7 @@ export async function getTodayTotals(
   const { data, error } = await supabase
     .from("meal_items")
     .select(
-      "id, name, portion_estimate, source, confidence, eaten_at, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high"
+      "id, name, portion_estimate, source, confidence, eaten_at, scan_id, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high"
     )
     .eq("user_id", userId)
     .gte("eaten_at", dayStart)
@@ -77,6 +80,69 @@ export async function getTodayTotals(
     carb_g: { low: sum("carb_g_low"), high: sum("carb_g_high") },
     fat_g: { low: sum("fat_g_low"), high: sum("fat_g_high") },
   };
+}
+
+/**
+ * Attach signed Storage URLs to any items with a scan_id + stored photo.
+ * Body scans never have image_path (privacy commitment) so those stay null.
+ * URLs expire in an hour — plenty for a client render cycle.
+ */
+export async function enrichWithPhotos(
+  supabase: SupabaseClient,
+  items: MealItemRow[]
+): Promise<MealItemRow[]> {
+  const scanIds = items
+    .map((it) => it.scan_id)
+    .filter((id): id is string => !!id);
+  if (scanIds.length === 0) {
+    return items.map((it) => ({ ...it, photo_url: null }));
+  }
+
+  const { data: scans } = await supabase
+    .from("scans")
+    .select("id, kind, image_path")
+    .in("id", scanIds);
+  const scanMap = new Map(
+    (scans ?? []).map((s) => [s.id as string, s as { id: string; kind: string; image_path: string | null }])
+  );
+
+  const platePaths: string[] = [];
+  const menuPaths: string[] = [];
+  for (const it of items) {
+    if (!it.scan_id) continue;
+    const scan = scanMap.get(it.scan_id);
+    if (!scan?.image_path) continue;
+    if (scan.kind === "plate") platePaths.push(scan.image_path);
+    else if (scan.kind === "menu") menuPaths.push(scan.image_path);
+  }
+
+  const urlMap = new Map<string, string>();
+  const addSigned = (rows: unknown) => {
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+      const r = row as { path?: string | null; signedUrl?: string };
+      if (r.path && r.signedUrl) urlMap.set(r.path, r.signedUrl);
+    }
+  };
+  const [plateSigned, menuSigned] = await Promise.all([
+    platePaths.length
+      ? supabase.storage
+          .from("plate-scans")
+          .createSignedUrls(platePaths, 3600)
+      : { data: null },
+    menuPaths.length
+      ? supabase.storage.from("menu-scans").createSignedUrls(menuPaths, 3600)
+      : { data: null },
+  ]);
+  addSigned(plateSigned.data);
+  addSigned(menuSigned.data);
+
+  return items.map((it) => {
+    if (!it.scan_id) return { ...it, photo_url: null };
+    const scan = scanMap.get(it.scan_id);
+    const path = scan?.image_path ?? null;
+    return { ...it, photo_url: path ? urlMap.get(path) ?? null : null };
+  });
 }
 
 /**

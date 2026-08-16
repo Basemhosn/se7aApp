@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
-import { computeRemaining, getTodayTotals } from "@/lib/ledger";
+import { computeRemaining, enrichWithPhotos, getTodayTotals } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +24,9 @@ export async function GET(request: Request) {
     getTodayTotals(supabase, user.id),
   ]);
 
+  const enrichedItems = await enrichWithPhotos(supabase, totals.items);
+  const totalsWithPhotos = { ...totals, items: enrichedItems };
+
   const remaining = computeRemaining(totals, {
     daily_kcal_target: profile?.daily_kcal_target ?? null,
     daily_protein_g: profile?.daily_protein_g ?? null,
@@ -31,5 +34,5 @@ export async function GET(request: Request) {
     daily_fat_g: profile?.daily_fat_g ?? null,
   });
 
-  return NextResponse.json({ totals, remaining });
+  return NextResponse.json({ totals: totalsWithPhotos, remaining });
 }
