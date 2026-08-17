@@ -48,7 +48,7 @@ interface FastingActiveResponse {
 }
 
 export default function Home() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   usePushRegistration();
   useHealthSync(user?.id);
@@ -135,14 +135,9 @@ export default function Home() {
     <Screen>
       <View style={styles.head}>
         <Wordmark size={22} />
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-          <Pressable onPress={() => router.push("/language")} hitSlop={12}>
-            <Ionicons name="language-outline" size={20} color={colors.dim} />
-          </Pressable>
-          <Pressable onPress={signOut} hitSlop={12}>
-            <Text style={styles.signout}>{t("common.sign_out")}</Text>
-          </Pressable>
-        </View>
+        <Pressable onPress={() => router.push("/settings")} hitSlop={12}>
+          <Ionicons name="settings-outline" size={22} color={colors.dim} />
+        </Pressable>
       </View>
 
       <View>
