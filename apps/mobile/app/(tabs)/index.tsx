@@ -177,6 +177,22 @@ export default function Home() {
         <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
+      <Pressable
+        onPress={() => router.push("/meals-suggest")}
+        style={styles.suggestCard}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.kicker, { color: colors.gold }]}>
+            WHAT SHOULD I EAT?
+          </Text>
+          <Text style={styles.suggestTitle}>Ask SE7A</Text>
+          <Text style={styles.suggestSub}>
+            AI picks 3 dishes that fit your remaining budget.
+          </Text>
+        </View>
+        <Text style={styles.suggestArrow}>→</Text>
+      </Pressable>
+
       {fasting?.active ? (
         <Pressable
           onPress={() => router.push("/fasting")}
@@ -480,6 +496,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.dim,
     marginTop: 2,
+  },
+  suggestCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  suggestTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  suggestSub: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  suggestArrow: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    color: colors.gold,
   },
   miniLink: {
     flexDirection: "row",

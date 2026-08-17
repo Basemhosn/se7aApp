@@ -136,6 +136,20 @@ export default function Log() {
           onPress={() => router.push("/manual-meal")}
           tint={colors.ink}
         />
+        <CTA
+          kicker="DON'T KNOW WHAT TO EAT?"
+          title="Ask SE7A"
+          subtitle="AI picks 3 dishes that fit what you have left today."
+          onPress={() => router.push("/meals-suggest")}
+          tint={colors.gold}
+        />
+        <CTA
+          kicker="BROWSE GULF DISHES"
+          title="Recipes"
+          subtitle="Machboos, kabsa, shawarma — with macros. Tap to log."
+          onPress={() => router.push("/recipes")}
+          tint={colors.mint}
+        />
       </View>
 
       {recent.length > 0 && (
