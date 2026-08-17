@@ -18,6 +18,9 @@
     "production": {
       "autoIncrement": true,
       "environment": "production",
+      "env": {
+        "SENTRY_ALLOW_FAILURE": "true"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "image": "macos-sequoia-15.5-xcode-26.0"
