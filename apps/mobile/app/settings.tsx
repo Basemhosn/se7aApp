@@ -143,6 +143,17 @@ export default function Settings() {
         </Section>
       )}
 
+      <View style={styles.safetyCard}>
+        <Text style={styles.safetyKicker}>
+          {isArabic ? "ملاحظة أمان" : "SAFETY"}
+        </Text>
+        <Text style={styles.safetyBody}>
+          {isArabic
+            ? "SE7A أداة تتبع وتدريب — ليس جهازًا طبيًا. النطاقات تقديرات لا تشخيصات. لو عندك حالة طبية، حامل، أو تاريخ اضطراب أكل — استشيري طبيبك قبل أي تغيير كبير في النظام أو التمرين."
+            : "SE7A is a tracking and coaching tool — not a medical device. Ranges are estimates, not diagnoses. If you have a medical condition, are pregnant, or have a history of disordered eating, talk to your doctor before any significant change in diet or training."}
+        </Text>
+      </View>
+
       <Section title={isArabic ? "قانوني" : "Legal"}>
         <RowLink
           label={isArabic ? "الشروط والأحكام" : "Terms of Service"}
@@ -346,5 +357,27 @@ const styles = StyleSheet.create({
     fontFamily: font.body,
     fontSize: 14,
     color: colors.ink,
+  },
+  safetyCard: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.coral,
+    borderRadius: radius.md,
+    gap: 6,
+  },
+  safetyKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.coral,
+    letterSpacing: 1.4,
+  },
+  safetyBody: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 19,
   },
 });

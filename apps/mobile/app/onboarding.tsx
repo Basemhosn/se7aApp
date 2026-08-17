@@ -66,6 +66,7 @@ export default function Onboarding() {
   const [ranked, setRanked] = useState<Scored[] | null>(null);
   const [pickedProgram, setPickedProgram] = useState<Program | null>(null);
   const [returning, setReturning] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   // Prefill from existing profile so returning users don't re-enter
   // everything. Runs once on mount; new users (no onboarded_at) get no-op.
@@ -147,7 +148,10 @@ export default function Onboarding() {
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
-        await api("/api/profile", {
+        const profileRes = await api<{
+          ok: boolean;
+          warnings?: string[];
+        }>("/api/profile", {
           method: "POST",
           body: JSON.stringify({
             display_name: name.trim() || undefined,
@@ -166,6 +170,7 @@ export default function Onboarding() {
             rest_day_kcal_delta: restDayDelta,
           }),
         });
+        setWarnings(profileRes.warnings ?? []);
         const catalog = await api<{ programs: Program[] }>(
           "/api/workouts/catalog"
         );
@@ -510,13 +515,26 @@ export default function Onboarding() {
       )}
 
       {step === "reveal" && ranked && pickedProgram && (
-        <PlanReveal
-          ranked={ranked}
-          picked={pickedProgram}
-          onPick={setPickedProgram}
-          goal={goal!}
-          t={t}
-        />
+        <>
+          {warnings.includes("kcal_floor_applied") && (
+            <View style={styles.warnCard}>
+              <Text style={styles.warnKicker}>SAFETY NOTE</Text>
+              <Text style={styles.warnBody}>
+                Your goal rate would have taken you below a safe daily
+                calorie floor, so SE7A clamped it. You&apos;ll lose weight
+                slower than you asked — but sustainably. If you want faster
+                loss, work with a dietitian.
+              </Text>
+            </View>
+          )}
+          <PlanReveal
+            ranked={ranked}
+            picked={pickedProgram}
+            onPick={setPickedProgram}
+            goal={goal!}
+            t={t}
+          />
+        </>
       )}
     </Screen>
   );
@@ -927,4 +945,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
+  warnCard: {
+    borderWidth: 1,
+    borderColor: colors.coral,
+    backgroundColor: "rgba(240,143,114,0.06)",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 4,
+  },
+  warnKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.coral,
+    letterSpacing: 1.4,
+  },
+  warnBody: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 19,
+  },
 });

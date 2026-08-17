@@ -73,5 +73,9 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, targets });
+  return NextResponse.json({
+    ok: true,
+    targets,
+    warnings: targets.notes ?? [],
+  });
 }

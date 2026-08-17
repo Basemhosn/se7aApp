@@ -2,17 +2,28 @@ import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+const SITE_URL = "https://se7a.vercel.app";
+const TITLE = "SE7A — AI Food & Fitness Coach";
+const DESCRIPTION =
+  "Scan a plate, scan a menu, ask a coach — honest calorie ranges built for the Gulf. Not fake precision.";
+
 export const metadata: Metadata = {
-  title: "SE7A — AI Food & Fitness Coach",
-  description:
-    "Scan any menu. Know what to order. SE7A reads restaurant menus and your remaining macros, then tells you exactly what to eat. Eat smart, train smart.",
-  metadataBase: new URL("https://se7a.app"),
+  title: TITLE,
+  description: DESCRIPTION,
+  metadataBase: new URL(SITE_URL),
   openGraph: {
-    title: "SE7A — AI Food & Fitness Coach",
-    description: "Scan any menu. Know what to order. Built for how we actually eat.",
-    url: "https://se7a.app",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
     siteName: "SE7A",
     type: "website",
+    locale: "en_US",
+    // opengraph-image.tsx in this folder auto-populates og:image at 1200×630
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 

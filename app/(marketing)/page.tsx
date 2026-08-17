@@ -55,8 +55,9 @@ export default function Home() {
           <div className="num">01</div>
           <h3>Menu intelligence</h3>
           <p>
-            Photograph any menu. SE7A recommends dishes against your remaining macros for the
-            day {"\u2014"} not generic advice, your actual budget, computed server-side.
+            Photograph any menu. SE7A ranks dishes by what actually fits
+            what you have left for today {"\u2014"} so you order once, right,
+            without doing the math at the table.
           </p>
         </div>
         <div className="feature">
