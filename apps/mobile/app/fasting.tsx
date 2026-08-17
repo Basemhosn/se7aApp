@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
@@ -24,16 +25,17 @@ interface FastingResponse {
   } | null;
 }
 
-const PROTOCOLS: { hours: number; label: string; sub: string }[] = [
-  { hours: 12, label: "12:12", sub: "Beginner. Overnight fast." },
-  { hours: 14, label: "14:10", sub: "Approachable. Skip breakfast." },
-  { hours: 16, label: "16:8", sub: "Standard IF. Most common." },
-  { hours: 18, label: "18:6", sub: "Aggressive. Later first meal." },
-  { hours: 20, label: "20:4", sub: "Warrior. One main meal." },
-  { hours: 24, label: "24:0", sub: "Full day. Rare, advanced." },
+const PROTOCOLS: { hours: number; key: "12_12" | "14_10" | "16_8" | "18_6" | "20_4" | "24_0" }[] = [
+  { hours: 12, key: "12_12" },
+  { hours: 14, key: "14_10" },
+  { hours: 16, key: "16_8" },
+  { hours: 18, key: "18_6" },
+  { hours: 20, key: "20_4" },
+  { hours: 24, key: "24_0" },
 ];
 
 export default function Fasting() {
+  const { t } = useTranslation();
   const [data, setData] = useState<FastingResponse | null>(null);
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -44,9 +46,9 @@ export default function Fasting() {
       const res = await api<FastingResponse>("/api/fasting/current");
       setData(res);
     } catch (e) {
-      setErr((e as Error).message || "Couldn't load.");
+      setErr((e as Error).message || t("fasting.couldnt_load"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -69,16 +71,16 @@ export default function Fasting() {
       });
       await load();
     } catch (e) {
-      setErr((e as Error).message || "Couldn't start.");
+      setErr((e as Error).message || t("fasting.couldnt_start"));
     }
     setBusy(false);
   };
 
   const end = async () => {
-    Alert.alert("End fast?", "This will stop the timer and record the duration.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("fasting.end_confirm_title"), t("fasting.end_confirm_body"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "End it",
+        text: t("fasting.end_confirm_ok"),
         style: "destructive",
         onPress: async () => {
           setBusy(true);
@@ -87,7 +89,7 @@ export default function Fasting() {
             await api("/api/fasting/end", { method: "POST" });
             await load();
           } catch (e) {
-            setErr((e as Error).message || "Couldn't end.");
+            setErr((e as Error).message || t("fasting.couldnt_end"));
           }
           setBusy(false);
         },
@@ -100,14 +102,12 @@ export default function Fasting() {
       <View style={styles.head}>
         <BackButton />
       </View>
-      <Text style={styles.kicker}>FASTING</Text>
+      <Text style={styles.kicker}>{t("fasting.kicker")}</Text>
       <Text style={styles.h1}>
-        {data?.active ? "You're fasting." : "Start a fast."}
+        {data?.active ? t("fasting.active_title") : t("fasting.idle_title")}
       </Text>
       <Text style={styles.sub}>
-        {data?.active
-          ? "The timer updates live. End it when you eat."
-          : "Pick a protocol. We track the window and log completion."}
+        {data?.active ? t("fasting.active_sub") : t("fasting.idle_sub")}
       </Text>
 
       {data?.active && (
@@ -129,8 +129,8 @@ export default function Fasting() {
               style={styles.protoCard}
             >
               <View style={{ flex: 1 }}>
-                <Text style={styles.protoLabel}>{p.label}</Text>
-                <Text style={styles.protoSub}>{p.sub}</Text>
+                <Text style={styles.protoLabel}>{t(`fasting.protocol.${p.key}`)}</Text>
+                <Text style={styles.protoSub}>{t(`fasting.protocol.${p.key}_sub`)}</Text>
               </View>
               <Text style={styles.protoArrow}>→</Text>
             </Pressable>
@@ -140,10 +140,10 @@ export default function Fasting() {
 
       {data?.last && !data.active && (
         <View style={styles.card}>
-          <Text style={styles.cardKicker}>LAST FAST</Text>
+          <Text style={styles.cardKicker}>{t("fasting.last_fast")}</Text>
           <Text style={styles.cardBody}>
-            {niceDuration(data.last.started_at, data.last.ended_at)} · target{" "}
-            {data.last.target_hours}h
+            {t("fasting.hours_completed", { hours: hoursCompleted(data.last.started_at, data.last.ended_at) })} ·{" "}
+            {t("fasting.hours_target", { hours: data.last.target_hours })}
           </Text>
           <Text style={styles.cardSub}>
             {new Date(data.last.started_at).toLocaleDateString()}
@@ -166,6 +166,7 @@ function ActiveTimer({
   onEnd: () => void;
   busy: boolean;
 }) {
+  const { t } = useTranslation();
   const startedMs = new Date(fast.started_at).getTime();
   const elapsedMs = Date.now() - startedMs;
   const targetMs = fast.target_hours * 60 * 60 * 1000;
@@ -177,15 +178,21 @@ function ActiveTimer({
   return (
     <View style={styles.timerCard}>
       <Text style={[styles.timerKicker, complete && { color: colors.mint }]}>
-        {complete ? "TARGET REACHED" : "IN THE WINDOW"}
+        {complete ? t("fasting.target_reached") : t("fasting.in_the_window")}
       </Text>
       <Text style={[styles.timerBig, complete && { color: colors.mint }]}>
         {formatDuration(elapsedMs)}
       </Text>
       <Text style={styles.timerSub}>
         {complete
-          ? `Past ${fast.target_hours}h target by ${formatDuration(elapsedMs - targetMs)}`
-          : `${formatDuration(remaining)} left · ${Math.round(pct * 100)}% there`}
+          ? t("fasting.past_target", {
+              target: fast.target_hours,
+              time: formatDuration(elapsedMs - targetMs),
+            })
+          : t("fasting.left_and_pct", {
+              time: formatDuration(remaining),
+              pct: Math.round(pct * 100),
+            })}
       </Text>
 
       <View style={styles.progress}>
@@ -201,7 +208,7 @@ function ActiveTimer({
       </View>
 
       <View style={{ height: spacing.md }} />
-      <Btn label={busy ? "Ending…" : "End fast"} onPress={onEnd} loading={busy} />
+      <Btn label={busy ? t("fasting.ending") : t("fasting.end_fast")} onPress={onEnd} loading={busy} />
     </View>
   );
 }
@@ -216,10 +223,10 @@ function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
-function niceDuration(startIso: string, endIso: string): string {
+function hoursCompleted(startIso: string, endIso: string): string {
   const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
   const hours = ms / (60 * 60 * 1000);
-  return `${hours.toFixed(1)} hours`;
+  return hours.toFixed(1);
 }
 
 const styles = StyleSheet.create({

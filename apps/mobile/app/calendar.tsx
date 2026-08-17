@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
@@ -53,9 +54,9 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const WEEKDAY_HEAD = ["M", "T", "W", "T", "F", "S", "S"];
-
 export default function Calendar() {
+  const { t } = useTranslation();
+  const weekdayHead = t("common.day_names", { returnObjects: true }) as string[];
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -126,7 +127,7 @@ export default function Calendar() {
           <Text style={styles.navText}>‹</Text>
         </Pressable>
         <Pressable onPress={jumpToday} style={{ flex: 1, alignItems: "center" }}>
-          <Text style={styles.kicker}>CALENDAR</Text>
+          <Text style={styles.kicker}>{t("calendar.title_prefix")}</Text>
           <Text style={styles.h1}>
             {MONTHS[month - 1]} {year}
           </Text>
@@ -137,7 +138,7 @@ export default function Calendar() {
       </View>
 
       <View style={styles.weekdayRow}>
-        {WEEKDAY_HEAD.map((d, i) => (
+        {weekdayHead.map((d, i) => (
           <Text key={i} style={styles.weekdayText}>
             {d}
           </Text>
@@ -184,9 +185,9 @@ export default function Calendar() {
       )}
 
       <View style={styles.legend}>
-        <Legend color={colors.gold} label="meals" />
-        <Legend color={colors.mint} label="workout" />
-        <Legend color={colors.coral} label="weigh-in" />
+        <Legend color={colors.gold} label={t("calendar.legend_meals")} />
+        <Legend color={colors.mint} label={t("calendar.legend_workout")} />
+        <Legend color={colors.coral} label={t("calendar.legend_weighin")} />
       </View>
 
       <Modal
@@ -208,7 +209,7 @@ export default function Calendar() {
             ) : detail ? (
               <DayDetailView detail={detail} />
             ) : (
-              <Text style={styles.emptyDay}>Nothing logged this day.</Text>
+              <Text style={styles.emptyDay}>{t("calendar.empty_day")}</Text>
             )}
           </View>
         </View>
@@ -218,6 +219,7 @@ export default function Calendar() {
 }
 
 function DayDetailView({ detail }: { detail: DayDetail }) {
+  const { t } = useTranslation();
   const totalKcalLow = detail.meals.reduce((s, m) => s + m.kcal_low, 0);
   const totalKcalHigh = detail.meals.reduce((s, m) => s + m.kcal_high, 0);
   const totalWater = detail.water.reduce((s, w) => s + w.ml, 0);
@@ -228,7 +230,7 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
     detail.water.length === 0;
 
   if (empty) {
-    return <Text style={styles.emptyDay}>Nothing logged this day.</Text>;
+    return <Text style={styles.emptyDay}>{t("calendar.empty_day")}</Text>;
   }
 
   return (
@@ -236,7 +238,7 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
       {detail.meals.length > 0 && (
         <View style={styles.detailSection}>
           <Text style={styles.detailKicker}>
-            MEALS · {totalKcalLow}–{totalKcalHigh} KCAL
+            {t("calendar.meals_kcal", { low: totalKcalLow, high: totalKcalHigh })}
           </Text>
           {detail.meals.map((m) => (
             <View key={m.id} style={styles.detailRow}>
@@ -256,14 +258,14 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
       )}
       {detail.workouts.length > 0 && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailKicker}>WORKOUTS</Text>
+          <Text style={styles.detailKicker}>{t("calendar.workouts")}</Text>
           {detail.workouts.map((w) => (
             <View key={w.id} style={styles.detailRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.detailName}>{w.session_name}</Text>
                 <Text style={styles.detailSub}>
-                  {w.exercises.length} exercises
-                  {w.duration_min ? ` · ${w.duration_min} min` : ""}
+                  {t("calendar.n_exercises", { count: w.exercises.length })}
+                  {w.duration_min ? ` · ${w.duration_min} ${t("common.min")}` : ""}
                 </Text>
               </View>
             </View>
@@ -272,11 +274,11 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
       )}
       {detail.weights.length > 0 && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailKicker}>WEIGH-IN</Text>
+          <Text style={styles.detailKicker}>{t("calendar.weighin")}</Text>
           {detail.weights.map((w) => (
             <View key={w.id} style={styles.detailRow}>
               <Text style={styles.detailName}>
-                {w.weight_kg} kg
+                {w.weight_kg} {t("common.kg")}
                 {w.body_fat_pct != null ? ` · ${w.body_fat_pct}% BF` : ""}
               </Text>
             </View>
@@ -285,8 +287,8 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
       )}
       {detail.water.length > 0 && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailKicker}>WATER · {totalWater / 1000} L</Text>
-          <Text style={styles.detailSub}>{detail.water.length} entries</Text>
+          <Text style={styles.detailKicker}>{t("calendar.water", { liters: totalWater / 1000 })}</Text>
+          <Text style={styles.detailSub}>{t("calendar.n_entries", { count: detail.water.length })}</Text>
         </View>
       )}
     </ScrollView>

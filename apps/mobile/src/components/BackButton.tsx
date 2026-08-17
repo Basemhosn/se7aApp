@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { colors, font, spacing } from "@/lib/theme";
 
 /**
@@ -8,7 +9,9 @@ import { colors, font, spacing } from "@/lib/theme";
  * (scan/*, calendar, workout, fasting, manual-meal, onboarding).
  * Falls back to '/' if there's nothing to go back to.
  */
-export function BackButton({ label = "Back" }: { label?: string }) {
+export function BackButton({ label }: { label?: string }) {
+  const { t } = useTranslation();
+  const displayLabel = label ?? t("common.back");
   return (
     <Pressable
       onPress={() => {
@@ -19,7 +22,7 @@ export function BackButton({ label = "Back" }: { label?: string }) {
       style={styles.btn}
     >
       <Ionicons name="chevron-back" size={22} color={colors.ink} />
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{displayLabel}</Text>
     </Pressable>
   );
 }

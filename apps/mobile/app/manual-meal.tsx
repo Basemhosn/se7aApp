@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
@@ -14,6 +15,7 @@ import { colors, font, radius, spacing } from "@/lib/theme";
  * to zero if left blank.
  */
 export default function ManualMeal() {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [portion, setPortion] = useState("");
   const [kcal, setKcal] = useState("");
@@ -59,7 +61,7 @@ export default function ManualMeal() {
       });
       router.replace("/");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't save. Try again.");
+      setErr((e as Error).message || t("manual_meal.couldnt_save"));
       setBusy(false);
     }
   };
@@ -75,13 +77,19 @@ export default function ManualMeal() {
             style={[styles.chip, slot === s && styles.chipOn]}
           >
             <Text style={[styles.chipText, slot === s && styles.chipTextOn]}>
-              {s}
+              {t(`common.meal_slot.${s}`)}
             </Text>
           </Pressable>
         ))}
       </View>
       <Btn
-        label={busy ? "Saving…" : canSave ? `Log to ${slot}` : "Add name + kcal"}
+        label={
+          busy
+            ? t("common.saving")
+            : canSave
+              ? t("manual_meal.cta_log_to", { slot: t(`common.meal_slot.${slot}`) })
+              : t("manual_meal.cta_need_name_kcal")
+        }
         onPress={save}
         loading={busy}
         disabled={!canSave}
@@ -94,46 +102,43 @@ export default function ManualMeal() {
       <View style={styles.head}>
         <BackButton />
       </View>
-      <Text style={styles.kicker}>MANUAL ENTRY</Text>
-      <Text style={styles.h1}>Add without scanning.</Text>
-      <Text style={styles.sub}>
-        For foods you know cold. Only name + kcal are required — macros stay
-        as a single value (no ranges) since you&apos;re providing them yourself.
-      </Text>
+      <Text style={styles.kicker}>{t("manual_meal.kicker")}</Text>
+      <Text style={styles.h1}>{t("manual_meal.title")}</Text>
+      <Text style={styles.sub}>{t("manual_meal.sub")}</Text>
 
-      <Field label="NAME">
+      <Field label={t("manual_meal.name_label")}>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Black coffee"
+          placeholder={t("manual_meal.name_placeholder")}
           placeholderTextColor={colors.dim}
           style={styles.input}
         />
       </Field>
 
-      <Field label="PORTION (OPTIONAL)">
+      <Field label={t("manual_meal.portion_label")}>
         <TextInput
           value={portion}
           onChangeText={setPortion}
-          placeholder="1 cup, 240 ml"
+          placeholder={t("manual_meal.portion_placeholder")}
           placeholderTextColor={colors.dim}
           style={styles.input}
         />
       </Field>
 
-      <Field label="CALORIES">
+      <Field label={t("manual_meal.kcal_label")}>
         <TextInput
           value={kcal}
           onChangeText={setKcal}
           keyboardType="numeric"
-          placeholder="150"
+          placeholder={t("manual_meal.kcal_placeholder")}
           placeholderTextColor={colors.dim}
           style={styles.bigInput}
         />
       </Field>
 
       <View style={styles.macroRow}>
-        <Field label="PROTEIN (G)" style={{ flex: 1 }}>
+        <Field label={t("manual_meal.protein_label")} style={{ flex: 1 }}>
           <TextInput
             value={protein}
             onChangeText={setProtein}
@@ -143,7 +148,7 @@ export default function ManualMeal() {
             style={styles.input}
           />
         </Field>
-        <Field label="CARBS (G)" style={{ flex: 1 }}>
+        <Field label={t("manual_meal.carbs_label")} style={{ flex: 1 }}>
           <TextInput
             value={carb}
             onChangeText={setCarb}
@@ -153,7 +158,7 @@ export default function ManualMeal() {
             style={styles.input}
           />
         </Field>
-        <Field label="FAT (G)" style={{ flex: 1 }}>
+        <Field label={t("manual_meal.fat_label")} style={{ flex: 1 }}>
           <TextInput
             value={fat}
             onChangeText={setFat}

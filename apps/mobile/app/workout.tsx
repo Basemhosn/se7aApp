@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
@@ -20,6 +21,7 @@ type SetLog = { reps: string; weight: string };
 type ExerciseLog = { name: string; sets: SetLog[] };
 
 export default function Workout() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     program_id?: string;
     session_index?: string;
@@ -42,14 +44,14 @@ export default function Workout() {
     if (options.length === 0) {
       Alert.alert(
         spec.name,
-        "No substitutes listed for this exercise."
+        t("workout.swap_no_options")
       );
       return;
     }
     const buttons = [
-      { text: "Cancel", style: "cancel" as const },
+      { text: t("common.cancel"), style: "cancel" as const },
       {
-        text: `Original: ${spec.name}`,
+        text: t("workout.original_label", { name: spec.name }),
         onPress: () =>
           setSwapped((s) => {
             const n = { ...s };
@@ -67,7 +69,7 @@ export default function Workout() {
         },
       })),
     ];
-    Alert.alert("Swap exercise", `Pick a substitute for ${spec.name}.`, buttons);
+    Alert.alert(t("workout.swap_title"), t("workout.swap_body", { name: spec.name }), buttons);
   };
 
   useEffect(() => {
@@ -98,11 +100,11 @@ export default function Workout() {
         );
         setLoading(false);
       } catch (e) {
-        setErr((e as Error).message || "Couldn't load the session.");
+        setErr((e as Error).message || t("workout.couldnt_load"));
         setLoading(false);
       }
     })();
-  }, [programId, sessionIndex]);
+  }, [programId, sessionIndex, t]);
 
   const updateSet = (
     exIdx: number,
@@ -150,7 +152,7 @@ export default function Workout() {
         }))
         .filter((e) => e.sets.length > 0);
       if (exercises.length === 0) {
-        setErr("Log at least one set on one exercise.");
+        setErr(t("workout.at_least_one_set_err"));
         setBusy(false);
         return;
       }
@@ -168,7 +170,7 @@ export default function Workout() {
       });
       router.replace("/");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't save the session.");
+      setErr((e as Error).message || t("workout.couldnt_save"));
       setBusy(false);
     }
   };
@@ -177,13 +179,13 @@ export default function Workout() {
     <>
       {!!err && <Text style={styles.err}>{err}</Text>}
       <Btn
-        label={busy ? "Saving…" : anyLogged ? "Finish workout" : "Log at least one set"}
+        label={busy ? t("common.saving") : anyLogged ? t("workout.finish") : t("workout.need_a_set")}
         onPress={finish}
         loading={busy}
         disabled={!anyLogged || busy}
       />
       <Btn
-        label="Cancel"
+        label={t("common.cancel")}
         variant="ghost"
         onPress={() => router.back()}
         disabled={busy}
@@ -205,7 +207,7 @@ export default function Workout() {
         <View style={styles.head}>
           <BackButton />
         </View>
-        <Text style={styles.h1}>{err || "Session not available."}</Text>
+        <Text style={styles.h1}>{err || t("workout.session_not_available")}</Text>
       </Screen>
     );
   }
@@ -216,7 +218,7 @@ export default function Workout() {
         <BackButton />
       </View>
       <Text style={styles.kicker}>
-        {program.name.toUpperCase()} · SESSION {sessionIndex + 1}
+        {program.name.toUpperCase()} · {t("workout.session_prefix")} {sessionIndex + 1}
       </Text>
       <Text style={styles.h1}>{session.name}</Text>
       <Text style={styles.sub}>{session.focus}</Text>
@@ -235,11 +237,11 @@ export default function Workout() {
       ))}
 
       <View style={styles.notesCard}>
-        <Text style={styles.label}>SESSION NOTES (OPTIONAL)</Text>
+        <Text style={styles.label}>{t("workout.notes_label")}</Text>
         <TextInput
           value={notes}
           onChangeText={setNotes}
-          placeholder="How did it feel? Any tweaks?"
+          placeholder={t("workout.notes_placeholder")}
           placeholderTextColor={colors.dim}
           multiline
           style={styles.notesInput}
@@ -262,6 +264,7 @@ function ExerciseCard({
   onSetChange: (setIdx: number, field: "reps" | "weight", value: string) => void;
   onSwap: () => void;
 }) {
+  const { t } = useTranslation();
   const [restLeft, setRestLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -283,7 +286,7 @@ function ExerciseCard({
       <Pressable onLongPress={onSwap} delayLongPress={400}>
         <View style={styles.exNameRow}>
           <Text style={styles.exName}>{displayName}</Text>
-          {swapped && <Text style={styles.exSwapped}>swapped</Text>}
+          {swapped && <Text style={styles.exSwapped}>{t("workout.swapped_badge")}</Text>}
         </View>
       </Pressable>
       <Text style={styles.exTarget}>
@@ -293,13 +296,13 @@ function ExerciseCard({
       </Text>
       {spec.cue && <Text style={styles.exCue}>{spec.cue}</Text>}
       {spec.substitutes && spec.substitutes.length > 0 && !swapped && (
-        <Text style={styles.exSubs}>Long-press to swap.</Text>
+        <Text style={styles.exSubs}>{t("workout.long_press_swap")}</Text>
       )}
 
       <View style={styles.setHeader}>
-        <Text style={[styles.setHeaderCell, { flex: 1 }]}>SET</Text>
-        <Text style={[styles.setHeaderCell, { flex: 2 }]}>REPS</Text>
-        <Text style={[styles.setHeaderCell, { flex: 2 }]}>WEIGHT (KG)</Text>
+        <Text style={[styles.setHeaderCell, { flex: 1 }]}>{t("workout.sets_header")}</Text>
+        <Text style={[styles.setHeaderCell, { flex: 2 }]}>{t("workout.reps_header")}</Text>
+        <Text style={[styles.setHeaderCell, { flex: 2 }]}>{t("workout.weight_header")}</Text>
       </View>
       {log.sets.map((s, i) => (
         <View key={i} style={styles.setRow}>
@@ -334,8 +337,8 @@ function ExerciseCard({
             style={[styles.restLabel, restLeft ? styles.restLabelActive : null]}
           >
             {restLeft
-              ? `Resting · ${formatMMSS(restLeft)}`
-              : `Start rest · ${spec.rest_sec}s`}
+              ? t("workout.resting", { time: formatMMSS(restLeft) })
+              : t("workout.start_rest", { sec: spec.rest_sec })}
           </Text>
         </Pressable>
       ) : null}

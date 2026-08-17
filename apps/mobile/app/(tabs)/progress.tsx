@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { TrendChart } from "@/components/TrendChart";
@@ -37,6 +38,7 @@ const RANGES = [
 ];
 
 export default function Progress() {
+  const { t } = useTranslation();
   const [trend, setTrend] = useState<TrendResponse | null>(null);
   const [adherence, setAdherence] = useState<AdherenceResponse | null>(null);
   const [days, setDays] = useState(30);
@@ -85,7 +87,7 @@ export default function Progress() {
       setBf("");
       await load(days);
     } catch (e) {
-      setLogErr((e as Error).message || "Couldn't log.");
+      setLogErr((e as Error).message || t("progress.couldnt_log"));
     }
     setLogging(false);
   };
@@ -93,16 +95,16 @@ export default function Progress() {
   return (
     <Screen>
       <View style={styles.head}>
-        <Text style={styles.title}>Progress</Text>
-        <Text style={styles.sub}>Trend over weeks, not any single day.</Text>
+        <Text style={styles.title}>{t("progress.title")}</Text>
+        <Text style={styles.sub}>{t("progress.sub")}</Text>
       </View>
 
       {adherence && (
         <View style={styles.adherenceCard}>
-          <Text style={styles.adherenceKicker}>LAST 7 DAYS</Text>
+          <Text style={styles.adherenceKicker}>{t("progress.adherence_kicker")}</Text>
           <View style={styles.adherenceRow}>
             <Text style={styles.adherenceNum}>{adherence.days_logged}</Text>
-            <Text style={styles.adherenceOf}>of 7</Text>
+            <Text style={styles.adherenceOf}>{t("progress.adherence_of")}</Text>
             <Text style={styles.adherencePct}>· {adherence.percentage}%</Text>
           </View>
           <Text style={styles.adherenceCompare}>{adherence.comparison}.</Text>
@@ -111,7 +113,7 @@ export default function Progress() {
 
       <View style={styles.card}>
         <View style={styles.cardHead}>
-          <Text style={styles.cardTitle}>Weight trend</Text>
+          <Text style={styles.cardTitle}>{t("progress.weight_trend")}</Text>
           <View style={styles.rangeRow}>
             {RANGES.map((r) => (
               <Pressable
@@ -139,13 +141,13 @@ export default function Progress() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Log a weigh-in</Text>
+        <Text style={styles.cardTitle}>{t("progress.log_weighin")}</Text>
         <Text style={styles.cardSub}>
-          The trend re-tunes your targets automatically as you log.
+          {t("progress.log_weighin_sub")}
         </Text>
         <View style={styles.formRow}>
           <View style={{ flex: 2 }}>
-            <Text style={styles.label}>WEIGHT (KG)</Text>
+            <Text style={styles.label}>{t("progress.weight_label")}</Text>
             <TextInput
               value={weight}
               onChangeText={setWeight}
@@ -156,7 +158,7 @@ export default function Progress() {
             />
           </View>
           <View style={{ flex: 2 }}>
-            <Text style={styles.label}>BODY FAT % (OPTIONAL)</Text>
+            <Text style={styles.label}>{t("progress.bf_label")}</Text>
             <TextInput
               value={bf}
               onChangeText={setBf}
@@ -169,7 +171,7 @@ export default function Progress() {
         </View>
         {!!logErr && <Text style={styles.err}>{logErr}</Text>}
         <Btn
-          label={logging ? "Logging…" : "Log weigh-in"}
+          label={logging ? t("progress.logging") : t("progress.log_weighin_cta")}
           onPress={logWeight}
           loading={logging}
           disabled={!weight || Number(weight) <= 0}
@@ -181,10 +183,10 @@ export default function Progress() {
         style={styles.linkCard}
       >
         <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.coral }]}>BODY SCAN</Text>
-          <Text style={styles.linkTitle}>Read your composition</Text>
+          <Text style={[styles.kicker, { color: colors.coral }]}>{t("progress.body_scan_kicker")}</Text>
+          <Text style={styles.linkTitle}>{t("progress.body_scan_title")}</Text>
           <Text style={styles.linkSub}>
-            Honest body-fat range + weeks-to-goal. Photo not stored.
+            {t("progress.body_scan_sub")}
           </Text>
         </View>
         <Text style={[styles.linkArrow, { color: colors.coral }]}>→</Text>
@@ -195,10 +197,10 @@ export default function Progress() {
         style={styles.linkCard}
       >
         <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.gold }]}>CALENDAR</Text>
-          <Text style={styles.linkTitle}>Day-by-day history</Text>
+          <Text style={[styles.kicker, { color: colors.gold }]}>{t("progress.calendar_kicker")}</Text>
+          <Text style={styles.linkTitle}>{t("progress.calendar_title")}</Text>
           <Text style={styles.linkSub}>
-            Every meal, workout, weigh-in, and water log in a month view.
+            {t("progress.calendar_sub")}
           </Text>
         </View>
         <Text style={[styles.linkArrow, { color: colors.gold }]}>→</Text>

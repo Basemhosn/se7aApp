@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "@/components/Screen";
@@ -19,6 +20,7 @@ import type {
 type Phase = "idle" | "analyzing" | "result" | "saving";
 
 export default function MenuScan() {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function MenuScan() {
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission denied", "Enable access in Settings to scan.");
+      Alert.alert(t("scan.common.permission_denied"), t("scan.common.permission_denied_body"));
       return;
     }
     const r =
@@ -71,7 +73,7 @@ export default function MenuScan() {
       setSelected(new Set());
       setPhase("result");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't read the menu.");
+      setErr((e as Error).message || t("scan.menu.couldnt_read"));
       setPhase("idle");
     }
   };
@@ -125,7 +127,7 @@ export default function MenuScan() {
       });
       router.replace("/");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't save — try again.");
+      setErr((e as Error).message || t("scan.menu.couldnt_save"));
       setPhase("result");
     }
   };
@@ -156,7 +158,7 @@ export default function MenuScan() {
               style={[styles.chip, slot === s && styles.chipOn]}
             >
               <Text style={[styles.chipText, slot === s && styles.chipTextOn]}>
-                {s}
+                {t(`common.meal_slot.${s}`)}
               </Text>
             </Pressable>
           ))}
@@ -164,17 +166,22 @@ export default function MenuScan() {
         <Btn
           label={
             phase === "saving"
-              ? "Saving…"
+              ? t("common.saving")
               : selected.size === 0
-                ? "Pick a dish to log"
-                : `Log ${selected.size} to ${slot} · ${totals.kcal_low}–${totals.kcal_high} kcal`
+                ? t("scan.menu.cta_pick_dish")
+                : t("scan.menu.cta_log_to", {
+                    count: selected.size,
+                    slot: t(`common.meal_slot.${slot}`),
+                    low: totals.kcal_low,
+                    high: totals.kcal_high,
+                  })
           }
           onPress={save}
           loading={phase === "saving"}
           disabled={selected.size === 0}
         />
         <Btn
-          label="Scan another"
+          label={t("scan.menu.cta_scan_another")}
           variant="ghost"
           onPress={reset}
           disabled={phase === "saving"}
@@ -187,18 +194,17 @@ export default function MenuScan() {
       <View style={styles.head}>
         <BackButton />
       </View>
-      <Text style={styles.kicker}>MENU SCAN</Text>
-      <Text style={styles.h1}>What should you order?</Text>
+      <Text style={styles.kicker}>{t("scan.menu.kicker")}</Text>
+      <Text style={styles.h1}>{t("scan.menu.title")}</Text>
       <Text style={styles.sub}>
-        Photograph the menu. SE7A reads it, checks what you have left
-        for today, and ranks dishes by fit.
+        {t("scan.menu.sub")}
       </Text>
 
       {phase === "idle" && (
         <View style={styles.uploadCard}>
-          <Btn label="Photograph the menu" onPress={() => pickAndAnalyze("camera")} />
+          <Btn label={t("scan.common.photo_menu")} onPress={() => pickAndAnalyze("camera")} />
           <View style={{ height: spacing.sm }} />
-          <Btn label="Pick from library" variant="ghost" onPress={() => pickAndAnalyze("library")} />
+          <Btn label={t("scan.common.pick_from_library")} variant="ghost" onPress={() => pickAndAnalyze("library")} />
           {previewUri && <Image source={{ uri: previewUri }} style={styles.preview} />}
           {!!err && <Text style={styles.err}>{err}</Text>}
         </View>
@@ -207,7 +213,7 @@ export default function MenuScan() {
       {phase === "analyzing" && (
         <View style={styles.uploadCard}>
           {previewUri && <Image source={{ uri: previewUri }} style={styles.preview} />}
-          <Text style={styles.busy}>Reading the menu…</Text>
+          <Text style={styles.busy}>{t("scan.menu.reading")}</Text>
         </View>
       )}
 
@@ -227,10 +233,10 @@ export default function MenuScan() {
 
           <View style={styles.budget}>
             <Text style={styles.kicker}>
-              {targetsKnown ? "YOUR REMAINING BUDGET" : "USING DEFAULT BUDGET"}
+              {targetsKnown ? t("scan.menu.your_budget") : t("scan.menu.default_budget")}
             </Text>
             <Text style={styles.budgetMain}>
-              {Math.round(budget.kcal_low)}–{Math.round(budget.kcal_high)} kcal
+              {Math.round(budget.kcal_low)}–{Math.round(budget.kcal_high)} {t("common.kcal")}
             </Text>
             <Text style={styles.budgetMacros}>
               P {Math.round(budget.protein_g_low)}–{Math.round(budget.protein_g_high)} · C {Math.round(budget.carb_g_low)}–{Math.round(budget.carb_g_high)} · F {Math.round(budget.fat_g_low)}–{Math.round(budget.fat_g_high)}
@@ -238,21 +244,21 @@ export default function MenuScan() {
           </View>
 
           <DishSection
-            title="Order"
+            title={t("scan.menu.verdict_order")}
             tint={colors.mint}
             rows={orders}
             selected={selected}
             onToggle={toggle}
           />
           <DishSection
-            title="Consider"
+            title={t("scan.menu.verdict_consider")}
             tint={colors.gold}
             rows={considers}
             selected={selected}
             onToggle={toggle}
           />
           <DishSection
-            title="Skip"
+            title={t("scan.menu.verdict_skip")}
             tint={colors.dim}
             rows={skips}
             selected={selected}
@@ -280,6 +286,7 @@ function DishSection({
   onToggle: (i: number) => void;
   skipped?: boolean;
 }) {
+  const { t } = useTranslation();
   if (rows.length === 0) return null;
   return (
     <View style={{ gap: spacing.sm }}>
@@ -307,7 +314,7 @@ function DishSection({
               <Text style={styles.dishName}>{d.name}</Text>
               <Text style={styles.dishKcal}>
                 {d.kcal_low}–{d.kcal_high}
-                <Text style={styles.dishKcalUnit}> kcal</Text>
+                <Text style={styles.dishKcalUnit}> {t("common.kcal")}</Text>
               </Text>
               <Text style={styles.dishReason}>{d.reason}</Text>
               <Text style={styles.dishMacros}>

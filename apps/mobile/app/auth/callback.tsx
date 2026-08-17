@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as Sentry from "@sentry/react-native";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +14,7 @@ import { colors, font, spacing } from "@/lib/theme";
  * profile state.
  */
 export default function AuthCallback() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ code?: string }>();
   const [err, setErr] = useState<string | null>(null);
 
@@ -23,7 +25,7 @@ export default function AuthCallback() {
         typeof params.code === "string" ? params.code : extractCodeFromInitialUrl();
       const codeStr = await code;
       if (!codeStr) {
-        if (!cancelled) setErr("Missing sign-in code.");
+        if (!cancelled) setErr(t("auth.callback.missing_code"));
         return;
       }
       try {
@@ -60,7 +62,7 @@ export default function AuthCallback() {
       }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setErr("Sign-in succeeded but no user — try again.");
+        setErr(t("auth.callback.no_user"));
         return;
       }
       const { data: profile } = await supabase
@@ -73,13 +75,13 @@ export default function AuthCallback() {
     return () => {
       cancelled = true;
     };
-  }, [params.code]);
+  }, [params.code, t]);
 
   return (
     <View style={styles.center}>
       <ActivityIndicator color={colors.gold} />
       <Text style={styles.text}>
-        {err ? err : "Signing you in…"}
+        {err ? err : t("auth.callback.signing_in")}
       </Text>
     </View>
   );

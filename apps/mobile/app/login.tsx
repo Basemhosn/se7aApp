@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
@@ -8,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 export default function Login() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -16,7 +18,7 @@ export default function Login() {
   const send = async () => {
     const clean = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
-      setMsg("That doesn't look like an email.");
+      setMsg(t("auth.login.invalid_email"));
       return;
     }
     setBusy(true);
@@ -33,7 +35,7 @@ export default function Login() {
       return;
     }
     setSent(true);
-    setMsg(`Check ${clean} — tap the link to sign in.`);
+    setMsg(t("auth.login.sent_msg", { email: clean }));
   };
 
   return (
@@ -41,17 +43,17 @@ export default function Login() {
       <View style={styles.head}>
         <Wordmark size={26} />
       </View>
-      <Text style={styles.h1}>Sign in</Text>
+      <Text style={styles.h1}>{t("auth.login.h1")}</Text>
       <Text style={styles.sub}>
-        We&apos;ll email you a one-tap link. No password to remember.
+        {t("auth.login.sub")}
       </Text>
 
       <View style={styles.field}>
-        <Text style={styles.label}>EMAIL</Text>
+        <Text style={styles.label}>{t("auth.login.email_label")}</Text>
         <TextInput
           value={email}
           onChangeText={setEmail}
-          placeholder="you@example.com"
+          placeholder={t("auth.login.email_placeholder")}
           placeholderTextColor={colors.dim}
           keyboardType="email-address"
           autoCapitalize="none"
@@ -62,7 +64,7 @@ export default function Login() {
       </View>
 
       <Btn
-        label={sent ? "✓ Sent" : "Email me a link"}
+        label={sent ? t("auth.login.sent") : t("auth.login.send")}
         onPress={send}
         loading={busy}
         disabled={sent}

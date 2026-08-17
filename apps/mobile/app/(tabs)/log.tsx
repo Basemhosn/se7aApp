@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
 import type { LedgerTodayResponse } from "@/types";
@@ -46,6 +47,7 @@ function slotForNow(): "breakfast" | "lunch" | "dinner" | "snack" {
 }
 
 export default function Log() {
+  const { t } = useTranslation();
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,7 @@ export default function Log() {
       });
       await load();
     } catch (e) {
-      Alert.alert("Couldn't log", (e as Error).message);
+      Alert.alert(t("log.couldnt_log"), (e as Error).message);
     }
     setRelogBusy(null);
   };
@@ -108,29 +110,29 @@ export default function Log() {
   return (
     <Screen>
       <View style={styles.head}>
-        <Text style={styles.title}>Log</Text>
-        <Text style={styles.sub}>Capture what you ate.</Text>
+        <Text style={styles.title}>{t("log.title")}</Text>
+        <Text style={styles.sub}>{t("log.sub")}</Text>
       </View>
 
       <View style={styles.ctaCol}>
         <CTA
-          kicker="AFTER YOU EAT"
-          title="Scan a plate"
-          subtitle="Snap your meal. Honest ranges, logged to today."
+          kicker={t("log.cta_plate_kicker")}
+          title={t("log.cta_plate_title")}
+          subtitle={t("log.cta_plate_sub")}
           onPress={() => router.push("/scan/plate")}
           tint={colors.gold}
         />
         <CTA
-          kicker="BEFORE YOU ORDER"
-          title="Scan a menu"
-          subtitle="We rank dishes against your remaining budget."
+          kicker={t("log.cta_menu_kicker")}
+          title={t("log.cta_menu_title")}
+          subtitle={t("log.cta_menu_sub")}
           onPress={() => router.push("/scan/menu")}
           tint={colors.mint}
         />
         <CTA
-          kicker="TYPE IT IN"
-          title="Add manually"
-          subtitle="Foods you know cold — name, kcal, macros."
+          kicker={t("log.cta_manual_kicker")}
+          title={t("log.cta_manual_title")}
+          subtitle={t("log.cta_manual_sub")}
           onPress={() => router.push("/manual-meal")}
           tint={colors.ink}
         />
@@ -138,10 +140,8 @@ export default function Log() {
 
       {recent.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Recent</Text>
-          <Text style={styles.cardSub}>
-            One tap to re-log something you eat often.
-          </Text>
+          <Text style={styles.cardTitle}>{t("log.recent_title")}</Text>
+          <Text style={styles.cardSub}>{t("log.recent_sub")}</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -166,7 +166,7 @@ export default function Log() {
                     </Text>
                     {it.times_logged > 1 && (
                       <Text style={styles.recentTimes}>
-                        {it.times_logged}× logged
+                        {t("log.recent_times", { count: it.times_logged })}
                       </Text>
                     )}
                   </>
@@ -183,10 +183,13 @@ export default function Log() {
         </View>
       ) : ledger && ledger.totals.items.length > 0 ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Today{"’"}s log</Text>
+          <Text style={styles.cardTitle}>{t("log.todays_log_title")}</Text>
           <Text style={styles.cardSub}>
-            {ledger.totals.items.length} items · {ledger.totals.kcal.low}–
-            {ledger.totals.kcal.high} kcal
+            {t("log.todays_log_sub", {
+              items: ledger.totals.items.length,
+              low: ledger.totals.kcal.low,
+              high: ledger.totals.kcal.high,
+            })}
           </Text>
           {ledger.totals.items.map((it) => (
             <View key={it.id} style={styles.row}>
@@ -207,17 +210,15 @@ export default function Log() {
                 </Text>
               </View>
               <Text style={styles.rowKcal}>
-                {it.kcal_low}–{it.kcal_high} kcal
+                {it.kcal_low}–{it.kcal_high} {t("common.kcal")}
               </Text>
             </View>
           ))}
         </View>
       ) : (
         <View style={styles.card}>
-          <Text style={styles.emptyTitle}>Nothing logged yet today.</Text>
-          <Text style={styles.emptyBody}>
-            Tap one of the buttons above to add your first meal.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("log.empty_title")}</Text>
+          <Text style={styles.emptyBody}>{t("log.empty_body")}</Text>
         </View>
       )}
     </Screen>

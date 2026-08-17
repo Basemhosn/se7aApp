@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "@/components/Screen";
@@ -18,6 +19,7 @@ import type {
 type Phase = "idle" | "analyzing" | "review" | "saving";
 
 export default function PlateScan() {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function PlateScan() {
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission denied", "Enable access in Settings to scan.");
+      Alert.alert(t("scan.common.permission_denied"), t("scan.common.permission_denied_body"));
       return;
     }
     const r =
@@ -71,7 +73,7 @@ export default function PlateScan() {
       setSelected(new Set(body.result.items.map((_, i) => i)));
       setPhase("review");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't analyze the photo.");
+      setErr((e as Error).message || t("scan.plate.couldnt_analyze"));
       setPhase("idle");
     }
   };
@@ -113,7 +115,7 @@ export default function PlateScan() {
     if (!scanId) return;
     const picked = items.filter((_, i) => selected.has(i));
     if (picked.length === 0) {
-      setErr("Pick at least one item to log.");
+      setErr(t("scan.plate.pick_at_least_one_err"));
       return;
     }
     setPhase("saving");
@@ -130,7 +132,7 @@ export default function PlateScan() {
       });
       router.replace("/");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't save — try again.");
+      setErr((e as Error).message || t("scan.plate.couldnt_save"));
       setPhase("review");
     }
   };
@@ -157,7 +159,7 @@ export default function PlateScan() {
               style={[styles.chip, slot === s && styles.chipOn]}
             >
               <Text style={[styles.chipText, slot === s && styles.chipTextOn]}>
-                {s}
+                {t(`common.meal_slot.${s}`)}
               </Text>
             </Pressable>
           ))}
@@ -165,17 +167,17 @@ export default function PlateScan() {
         <Btn
           label={
             phase === "saving"
-              ? "Saving…"
+              ? t("common.saving")
               : selected.size === 0
-                ? "Pick at least one item"
-                : `Add to ${slot}`
+                ? t("scan.common.pick_at_least_one")
+                : t("scan.common.add_to_slot", { slot: t(`common.meal_slot.${slot}`) })
           }
           onPress={save}
           loading={phase === "saving"}
           disabled={selected.size === 0}
         />
         <Btn
-          label="Discard"
+          label={t("scan.common.discard")}
           variant="ghost"
           onPress={reset}
           disabled={phase === "saving"}
@@ -188,18 +190,17 @@ export default function PlateScan() {
       <View style={styles.head}>
         <BackButton />
       </View>
-      <Text style={styles.kicker}>PLATE SCAN</Text>
-      <Text style={styles.h1}>What did you eat?</Text>
+      <Text style={styles.kicker}>{t("scan.plate.kicker")}</Text>
+      <Text style={styles.h1}>{t("scan.plate.title")}</Text>
       <Text style={styles.sub}>
-        Snap a photo of your meal. Honest ranges for calories and macros —
-        not point values.
+        {t("scan.plate.sub")}
       </Text>
 
       {phase === "idle" && (
         <View style={styles.uploadCard}>
-          <Btn label="Take a photo" onPress={() => pickAndAnalyze("camera")} />
+          <Btn label={t("scan.common.take_photo")} onPress={() => pickAndAnalyze("camera")} />
           <View style={{ height: spacing.sm }} />
-          <Btn label="Pick from library" variant="ghost" onPress={() => pickAndAnalyze("library")} />
+          <Btn label={t("scan.common.pick_from_library")} variant="ghost" onPress={() => pickAndAnalyze("library")} />
           {previewUri && <Image source={{ uri: previewUri }} style={styles.preview} />}
           {!!err && <Text style={styles.err}>{err}</Text>}
         </View>
@@ -208,7 +209,7 @@ export default function PlateScan() {
       {phase === "analyzing" && (
         <View style={styles.uploadCard}>
           {previewUri && <Image source={{ uri: previewUri }} style={styles.preview} />}
-          <Text style={styles.busy}>Analyzing your plate…</Text>
+          <Text style={styles.busy}>{t("scan.plate.analyzing")}</Text>
         </View>
       )}
 
@@ -220,10 +221,9 @@ export default function PlateScan() {
             )}
             <ConfidencePill level={confidence} />
           </View>
-          <Text style={styles.sectionTitle}>What we see</Text>
+          <Text style={styles.sectionTitle}>{t("scan.plate.what_we_see")}</Text>
           <Text style={styles.sub}>
-            Uncheck anything you didn{"’"}t eat. Ranges are honest; high
-            end is the cap.
+            {t("scan.plate.what_we_see_hint")}
           </Text>
           {items.map((it, i) => {
             const on = selected.has(i);
@@ -243,7 +243,7 @@ export default function PlateScan() {
                   )}
                   <Text style={styles.itemKcal}>
                     {it.kcal_low}–{it.kcal_high}
-                    <Text style={styles.itemKcalUnit}> kcal</Text>
+                    <Text style={styles.itemKcalUnit}> {t("common.kcal")}</Text>
                   </Text>
                   <Text style={styles.itemMacros}>
                     P {fmt(it.protein_g_low)}–{fmt(it.protein_g_high)} · C{" "}
@@ -258,14 +258,14 @@ export default function PlateScan() {
           {selected.size > 0 && (
             <View style={styles.total}>
               <Text style={styles.totalKicker}>
-                PLATE TOTAL
+                {t("scan.plate.plate_total")}
                 {selected.size < items.length
-                  ? ` · ${selected.size} OF ${items.length}`
+                  ? t("scan.plate.n_of_m", { n: selected.size, m: items.length })
                   : ""}
               </Text>
               <Text style={styles.totalKcal}>
                 {totals.kcal_low}–{totals.kcal_high}
-                <Text style={styles.totalKcalUnit}> kcal</Text>
+                <Text style={styles.totalKcalUnit}> {t("common.kcal")}</Text>
               </Text>
               <Text style={styles.totalMacros}>
                 P {fmt(totals.protein_g_low)}–{fmt(totals.protein_g_high)} · C{" "}
@@ -277,7 +277,7 @@ export default function PlateScan() {
 
           {invisible.length > 0 && (
             <View style={styles.invisible}>
-              <Text style={styles.kicker}>HIDDEN COSTS ACCOUNTED FOR</Text>
+              <Text style={styles.kicker}>{t("scan.plate.hidden_costs")}</Text>
               {invisible.map((c, i) => (
                 <Text key={i} style={styles.invisibleItem}>
                   · {c}

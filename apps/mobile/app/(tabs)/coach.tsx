@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -26,6 +27,7 @@ interface HistoryResponse {
 }
 
 export default function Coach() {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export default function Coach() {
       const res = await api<HistoryResponse>("/api/chat/history?limit=50");
       setMessages(res.messages);
     } catch (e) {
-      setErr((e as Error).message || "Couldn't load history.");
+      setErr((e as Error).message || t("coach.error_load"));
     }
     setLoading(false);
   }, []);
@@ -83,7 +85,7 @@ export default function Coach() {
         },
       ]);
     } catch (e) {
-      setErr((e as Error).message || "Coach couldn't respond. Try again.");
+      setErr((e as Error).message || t("coach.error_send"));
     }
     setBusy(false);
   };
@@ -91,8 +93,8 @@ export default function Coach() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.head}>
-        <Text style={styles.title}>Coach</Text>
-        <Text style={styles.sub}>Knows your goals + macros. Ask anything.</Text>
+        <Text style={styles.title}>{t("coach.title")}</Text>
+        <Text style={styles.sub}>{t("coach.sub")}</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -110,11 +112,9 @@ export default function Coach() {
             <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.xl }} />
           ) : messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Ask me anything.</Text>
+              <Text style={styles.emptyTitle}>{t("coach.empty_title")}</Text>
               <Text style={styles.emptyBody}>
-                What&apos;s a good pre-workout meal? Is shawarma OK tonight?
-                How do I train around a knee issue? I know your profile —
-                I&apos;ll factor it in.
+                {t("coach.empty_body")}
               </Text>
             </View>
           ) : (
@@ -132,7 +132,7 @@ export default function Coach() {
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask the coach…"
+            placeholder={t("coach.input_placeholder")}
             placeholderTextColor={colors.dim}
             style={styles.input}
             multiline
@@ -147,7 +147,7 @@ export default function Coach() {
               (!input.trim() || busy) && styles.sendBtnDisabled,
             ]}
           >
-            <Text style={styles.sendLabel}>Send</Text>
+            <Text style={styles.sendLabel}>{t("coach.send")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

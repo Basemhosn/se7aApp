@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { Wordmark } from "@/components/Wordmark";
@@ -43,6 +44,7 @@ type Step = (typeof STEPS)[number];
 
 export default function Onboarding() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>("welcome");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -176,7 +178,7 @@ export default function Onboarding() {
         setRanked(scored);
         setPickedProgram(scored[0]?.program ?? null);
       } catch (e) {
-        setErr((e as Error).message || "Couldn't compute your plan — try again.");
+        setErr((e as Error).message || t("onboarding.couldnt_compute"));
         setBusy(false);
         return;
       }
@@ -199,7 +201,7 @@ export default function Onboarding() {
       // AHA moment. Returning users (redoing plan) go back to Home.
       router.replace(returning ? "/" : "/scan/plate");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't save your plan — try again.");
+      setErr((e as Error).message || t("onboarding.couldnt_save_plan"));
       setBusy(false);
     }
   };
@@ -210,13 +212,13 @@ export default function Onboarding() {
       <View style={styles.footerRow}>
         {stepIndex > 0 && step !== "reveal" ? (
           <View style={{ flex: 1 }}>
-            <Btn label="Back" variant="ghost" onPress={back} disabled={busy} />
+            <Btn label={t("common.back")} variant="ghost" onPress={back} disabled={busy} />
           </View>
         ) : null}
         <View style={{ flex: 2 }}>
           {step === "reveal" ? (
             <Btn
-              label={busy ? "Saving…" : "Start this plan"}
+              label={busy ? t("common.saving") : t("onboarding.cta_start_plan")}
               onPress={finish}
               loading={busy}
               disabled={!canAdvance}
@@ -225,12 +227,12 @@ export default function Onboarding() {
             <Btn
               label={
                 busy
-                  ? "Building your plan…"
+                  ? t("onboarding.cta_building")
                   : step === "welcome"
-                    ? "Let's build it"
+                    ? t("onboarding.welcome_cta_new")
                     : step === "injuries"
-                      ? "Show me my plan"
-                      : "Continue"
+                      ? t("onboarding.cta_show_plan")
+                      : t("onboarding.cta_continue")
               }
               onPress={advance}
               loading={busy}
@@ -260,14 +262,14 @@ export default function Onboarding() {
 
       {step === "sex" && (
         <StepBody
-          kicker="ABOUT YOU · 1 OF 11"
-          h1="What's your sex assigned at birth?"
-          hint="Used only for BMR math — SE7A doesn't care about identity here, it cares about metabolic rate."
+          kicker={t("onboarding.sex.kicker")}
+          h1={t("onboarding.sex.title")}
+          hint={t("onboarding.sex.hint")}
         >
           <BigChoice
             options={[
-              { v: "male", label: "Male" },
-              { v: "female", label: "Female" },
+              { v: "male", label: t("onboarding.sex.male") },
+              { v: "female", label: t("onboarding.sex.female") },
             ]}
             value={sex}
             onChange={(v) => setSex(v as Sex)}
@@ -277,9 +279,9 @@ export default function Onboarding() {
 
       {step === "birthdate" && (
         <StepBody
-          kicker="ABOUT YOU · 2 OF 11"
-          h1="Your birthdate?"
-          hint="Metabolism shifts with age. Format: YYYY-MM-DD. You must be 16+."
+          kicker={t("onboarding.birthdate.kicker")}
+          h1={t("onboarding.birthdate.title")}
+          hint={t("onboarding.birthdate.hint")}
         >
           <TextInput
             value={birthdate}
@@ -293,7 +295,7 @@ export default function Onboarding() {
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder={`Display name (optional) — ${user?.email?.split("@")[0] ?? ""}`}
+            placeholder={t("onboarding.birthdate.name_placeholder", { email: user?.email?.split("@")[0] ?? "" })}
             placeholderTextColor={colors.dim}
             style={styles.input}
           />
@@ -302,13 +304,13 @@ export default function Onboarding() {
 
       {step === "size" && (
         <StepBody
-          kicker="ABOUT YOU · 3 OF 11"
-          h1="Height and weight."
-          hint="In centimeters and kilograms. Whatever the scale says today — we'll recalibrate as it changes."
+          kicker={t("onboarding.size.kicker")}
+          h1={t("onboarding.size.title")}
+          hint={t("onboarding.size.hint")}
         >
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>HEIGHT (CM)</Text>
+              <Text style={styles.label}>{t("onboarding.size.height_label")}</Text>
               <TextInput
                 value={height}
                 onChangeText={setHeight}
@@ -319,7 +321,7 @@ export default function Onboarding() {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>WEIGHT (KG)</Text>
+              <Text style={styles.label}>{t("onboarding.size.weight_label")}</Text>
               <TextInput
                 value={weight}
                 onChangeText={setWeight}
@@ -335,17 +337,17 @@ export default function Onboarding() {
 
       {step === "activity" && (
         <StepBody
-          kicker="ABOUT YOU · 4 OF 11"
-          h1="How active are you day-to-day?"
-          hint="Not counting workouts. Just your regular life — desk vs on-feet vs manual labor."
+          kicker={t("onboarding.activity.kicker")}
+          h1={t("onboarding.activity.title")}
+          hint={t("onboarding.activity.hint")}
         >
           <BigChoice
             options={[
-              { v: "sedentary", label: "Sedentary", sub: "Desk work, little walking" },
-              { v: "light", label: "Light", sub: "Some walking, standing job" },
-              { v: "moderate", label: "Moderate", sub: "On feet most of the day" },
-              { v: "active", label: "Active", sub: "Physical job, always moving" },
-              { v: "very_active", label: "Very active", sub: "Manual labor, athlete" },
+              { v: "sedentary", label: t("onboarding.activity.sedentary"), sub: t("onboarding.activity.sedentary_sub") },
+              { v: "light", label: t("onboarding.activity.light"), sub: t("onboarding.activity.light_sub") },
+              { v: "moderate", label: t("onboarding.activity.moderate"), sub: t("onboarding.activity.moderate_sub") },
+              { v: "active", label: t("onboarding.activity.active"), sub: t("onboarding.activity.active_sub") },
+              { v: "very_active", label: t("onboarding.activity.very_active"), sub: t("onboarding.activity.very_active_sub") },
             ]}
             value={activity}
             onChange={(v) => setActivity(v as ActivityLevel)}
@@ -355,16 +357,16 @@ export default function Onboarding() {
 
       {step === "goal" && (
         <StepBody
-          kicker="YOUR GOAL · 5 OF 11"
-          h1="What are we chasing?"
-          hint="You can change this any time. Body composition shifts happen over months, not weeks."
+          kicker={t("onboarding.goal.kicker")}
+          h1={t("onboarding.goal.title")}
+          hint={t("onboarding.goal.hint")}
         >
           <BigChoice
             options={[
-              { v: "cut", label: "Cut", sub: "Lose fat, keep muscle" },
-              { v: "recomp", label: "Recomp", sub: "Slow lean gain / slow loss" },
-              { v: "maintain", label: "Maintain", sub: "Hold current composition" },
-              { v: "bulk", label: "Bulk", sub: "Add muscle, accept some fat" },
+              { v: "cut", label: t("onboarding.goal.cut"), sub: t("onboarding.goal.cut_sub") },
+              { v: "recomp", label: t("onboarding.goal.recomp"), sub: t("onboarding.goal.recomp_sub") },
+              { v: "maintain", label: t("onboarding.goal.maintain"), sub: t("onboarding.goal.maintain_sub") },
+              { v: "bulk", label: t("onboarding.goal.bulk"), sub: t("onboarding.goal.bulk_sub") },
             ]}
             value={goal}
             onChange={(v) => {
@@ -378,12 +380,12 @@ export default function Onboarding() {
 
       {step === "rate" && (
         <StepBody
-          kicker="YOUR GOAL · 6 OF 11"
-          h1="How fast?"
-          hint="Aggressive rates work short-term. Sustainable rates work long-term. Negative = losing, positive = gaining."
+          kicker={t("onboarding.rate.kicker")}
+          h1={t("onboarding.rate.title")}
+          hint={t("onboarding.rate.hint")}
         >
           <View style={styles.chipRow}>
-            {rateOptions(goal ?? "maintain").map((r) => (
+            {rateOptions(goal ?? "maintain", t).map((r) => (
               <Pressable
                 key={r.v}
                 onPress={() => setRate(r.v)}
@@ -401,22 +403,22 @@ export default function Onboarding() {
             ))}
           </View>
           <Text style={styles.sub}>
-            {rateDescription(rate)}
+            {rateDescription(rate, t)}
           </Text>
         </StepBody>
       )}
 
       {step === "experience" && (
         <StepBody
-          kicker="YOUR TRAINING · 7 OF 11"
-          h1="How much lifting experience?"
-          hint="Be honest — if you overestimate, we'll prescribe volume that grinds you down. Underestimate is easier to correct."
+          kicker={t("onboarding.experience.kicker")}
+          h1={t("onboarding.experience.title")}
+          hint={t("onboarding.experience.hint")}
         >
           <BigChoice
             options={[
-              { v: "beginner", label: "Beginner", sub: "Less than a year of consistent training" },
-              { v: "intermediate", label: "Intermediate", sub: "1–3 years, know the main lifts" },
-              { v: "advanced", label: "Advanced", sub: "3+ years, chasing PRs and specificity" },
+              { v: "beginner", label: t("onboarding.experience.beginner"), sub: t("onboarding.experience.beginner_sub") },
+              { v: "intermediate", label: t("onboarding.experience.intermediate"), sub: t("onboarding.experience.intermediate_sub") },
+              { v: "advanced", label: t("onboarding.experience.advanced"), sub: t("onboarding.experience.advanced_sub") },
             ]}
             value={experience}
             onChange={(v) => setExperience(v as Experience)}
@@ -426,16 +428,16 @@ export default function Onboarding() {
 
       {step === "equipment" && (
         <StepBody
-          kicker="YOUR TRAINING · 8 OF 11"
-          h1="What do you have access to?"
-          hint="Programs are picked to match. Home + gym works for a lot of people."
+          kicker={t("onboarding.equipment.kicker")}
+          h1={t("onboarding.equipment.title")}
+          hint={t("onboarding.equipment.hint")}
         >
           <BigChoice
             options={[
-              { v: "gym", label: "Full gym", sub: "Barbells, racks, machines" },
-              { v: "home", label: "Home setup", sub: "Dumbbells, bands, maybe a bench" },
-              { v: "bodyweight", label: "Bodyweight only", sub: "You + gravity + maybe a pull-up bar" },
-              { v: "both", label: "Both", sub: "Gym some days, home others" },
+              { v: "gym", label: t("onboarding.equipment.gym"), sub: t("onboarding.equipment.gym_sub") },
+              { v: "home", label: t("onboarding.equipment.home"), sub: t("onboarding.equipment.home_sub") },
+              { v: "bodyweight", label: t("onboarding.equipment.bodyweight"), sub: t("onboarding.equipment.bodyweight_sub") },
+              { v: "both", label: t("onboarding.equipment.both"), sub: t("onboarding.equipment.both_sub") },
             ]}
             value={equipment}
             onChange={(v) => setEquipment(v as Equipment)}
@@ -445,9 +447,9 @@ export default function Onboarding() {
 
       {step === "days" && (
         <StepBody
-          kicker="YOUR TRAINING · 9 OF 11"
-          h1="Days per week you can realistically commit?"
-          hint="Consistency > intensity. A 3-day plan you actually do beats a 6-day plan you don't."
+          kicker={t("onboarding.days.kicker")}
+          h1={t("onboarding.days.title")}
+          hint={t("onboarding.days.hint")}
         >
           <View style={styles.chipRow}>
             {[2, 3, 4, 5, 6].map((n) => (
@@ -472,16 +474,16 @@ export default function Onboarding() {
 
       {step === "rest_day" && (
         <StepBody
-          kicker="YOUR TRAINING · 10 OF 11"
-          h1="Rest days different?"
-          hint="On days without a workout, eat less. Common for cutting — helps you land the weekly deficit without under-eating on training days. Skip if you'd rather keep it simple."
+          kicker={t("onboarding.rest_day.kicker")}
+          h1={t("onboarding.rest_day.title")}
+          hint={t("onboarding.rest_day.hint")}
         >
           <BigChoice
             options={[
-              { v: "0", label: "Same as lift days", sub: "No cycling. Simplest." },
-              { v: "-200", label: "-200 kcal", sub: "Small adjustment." },
-              { v: "-300", label: "-300 kcal", sub: "Common for a cut." },
-              { v: "-500", label: "-500 kcal", sub: "Aggressive. Only for lean-outs." },
+              { v: "0", label: t("onboarding.rest_day.same"), sub: t("onboarding.rest_day.same_sub") },
+              { v: "-200", label: t("onboarding.rest_day.minus_200"), sub: t("onboarding.rest_day.minus_200_sub") },
+              { v: "-300", label: t("onboarding.rest_day.minus_300"), sub: t("onboarding.rest_day.minus_300_sub") },
+              { v: "-500", label: t("onboarding.rest_day.minus_500"), sub: t("onboarding.rest_day.minus_500_sub") },
             ]}
             value={String(restDayDelta)}
             onChange={(v) => setRestDayDelta(Number(v))}
@@ -491,14 +493,14 @@ export default function Onboarding() {
 
       {step === "injuries" && (
         <StepBody
-          kicker="YOUR TRAINING · 11 OF 11"
-          h1="Anything to work around?"
-          hint="Comma-separated. Examples: lower back, right shoulder, knees. Leave blank if nothing."
+          kicker={t("onboarding.injuries.kicker")}
+          h1={t("onboarding.injuries.title")}
+          hint={t("onboarding.injuries.hint")}
         >
           <TextInput
             value={injuryText}
             onChangeText={setInjuryText}
-            placeholder="lower back, right knee"
+            placeholder={t("onboarding.injuries.placeholder")}
             placeholderTextColor={colors.dim}
             autoCapitalize="none"
             style={styles.input}
@@ -513,6 +515,7 @@ export default function Onboarding() {
           picked={pickedProgram}
           onPick={setPickedProgram}
           goal={goal!}
+          t={t}
         />
       )}
     </Screen>
@@ -613,34 +616,39 @@ function PlanReveal({
   picked,
   onPick,
   goal,
+  t,
 }: {
   ranked: Scored[];
   picked: Program;
   onPick: (p: Program) => void;
   goal: Goal;
+  t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const others = ranked.slice(1, 3).map((r) => r.program);
   return (
     <View style={{ gap: spacing.md }}>
-      <Text style={styles.kicker}>YOUR PLAN</Text>
-      <Text style={styles.h1}>Here&apos;s where we start.</Text>
+      <Text style={styles.kicker}>{t("onboarding.reveal.kicker")}</Text>
+      <Text style={styles.h1}>{t("onboarding.reveal.title")}</Text>
       <Text style={styles.sub}>
-        Based on your goal ({goal}), experience, equipment, and days per
-        week. You can switch plans any time from your dashboard.
+        {t("onboarding.reveal.sub", { goal })}
       </Text>
 
       <View style={styles.pickCard}>
-        <Text style={styles.pickKicker}>RECOMMENDED</Text>
+        <Text style={styles.pickKicker}>{t("onboarding.reveal.recommended")}</Text>
         <Text style={styles.pickName}>{picked.name}</Text>
         <Text style={styles.pickMeta}>
-          {picked.days_per_week} days / week · {picked.target_experience} · {picked.target_equipment}
+          {t("onboarding.reveal.meta", {
+            days: picked.days_per_week,
+            exp: picked.target_experience,
+            eq: picked.target_equipment,
+          })}
         </Text>
         <Text style={styles.pickDesc}>{picked.description}</Text>
       </View>
 
       {others.length > 0 && (
         <>
-          <Text style={styles.kicker}>OR PICK ANOTHER</Text>
+          <Text style={styles.kicker}>{t("onboarding.reveal.or_pick_another")}</Text>
           {others.map((p) => {
             const on = p.id === picked.id;
             return (
@@ -655,7 +663,7 @@ function PlanReveal({
                     {p.days_per_week} d/w · {p.target_experience}
                   </Text>
                 </View>
-                {on && <Text style={styles.altOn}>✓ picked</Text>}
+                {on && <Text style={styles.altOn}>{t("onboarding.reveal.picked")}</Text>}
               </Pressable>
             );
           })}
@@ -665,39 +673,44 @@ function PlanReveal({
   );
 }
 
-function rateOptions(g: Goal): { v: number; label: string }[] {
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function rateOptions(g: Goal, t: TFn): { v: number; label: string }[] {
   if (g === "cut") {
     return [
-      { v: -0.25, label: "Slow (0.25 kg/wk)" },
-      { v: -0.5, label: "Standard (0.5)" },
-      { v: -0.75, label: "Aggressive (0.75)" },
-      { v: -1.0, label: "Very fast (1.0)" },
+      { v: -0.25, label: t("onboarding.rate.cut_slow") },
+      { v: -0.5, label: t("onboarding.rate.cut_standard") },
+      { v: -0.75, label: t("onboarding.rate.cut_aggressive") },
+      { v: -1.0, label: t("onboarding.rate.cut_very_fast") },
     ];
   }
   if (g === "bulk") {
     return [
-      { v: 0.15, label: "Slow (0.15)" },
-      { v: 0.25, label: "Standard (0.25)" },
-      { v: 0.4, label: "Fast (0.4)" },
+      { v: 0.15, label: t("onboarding.rate.bulk_slow") },
+      { v: 0.25, label: t("onboarding.rate.bulk_standard") },
+      { v: 0.4, label: t("onboarding.rate.bulk_fast") },
     ];
   }
   if (g === "recomp") {
     return [
-      { v: -0.15, label: "Slight deficit" },
-      { v: -0.25, label: "Small cut" },
-      { v: 0, label: "True recomp" },
+      { v: -0.15, label: t("onboarding.rate.recomp_slight_def") },
+      { v: -0.25, label: t("onboarding.rate.recomp_small_cut") },
+      { v: 0, label: t("onboarding.rate.recomp_true") },
     ];
   }
-  return [{ v: 0, label: "0 (maintenance)" }];
+  return [{ v: 0, label: t("onboarding.rate.maintain_zero") }];
 }
 
-function rateDescription(rate: number): string {
+function rateDescription(rate: number, t: TFn): string {
   const abs = Math.abs(rate);
-  if (abs === 0) return "Maintenance calories. Body composition holds.";
-  if (abs <= 0.25) return `Slow ${rate < 0 ? "loss" : "gain"}. Easiest to sustain, minimal muscle risk / minimal fat gain.`;
-  if (abs <= 0.5) return `Standard rate. Recommended for most people.`;
-  if (abs <= 0.75) return `Aggressive. Works short-term; harder to sustain past 8 weeks.`;
-  return `Very fast. Only appropriate for short cuts with lots of fat to lose. Not recommended long-term.`;
+  if (abs === 0) return t("onboarding.rate.desc_maintenance");
+  if (abs <= 0.25)
+    return t("onboarding.rate.desc_slow", {
+      dir: t(rate < 0 ? "onboarding.rate.loss" : "onboarding.rate.gain"),
+    });
+  if (abs <= 0.5) return t("onboarding.rate.desc_standard");
+  if (abs <= 0.75) return t("onboarding.rate.desc_aggressive");
+  return t("onboarding.rate.desc_very_fast");
 }
 
 const styles = StyleSheet.create({
