@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "build:preview": "eas build --profile preview --platform ios",
     "build:production": "eas build --profile production --platform ios",
-    "submit": "eas submit --platform ios"
+    "submit": "eas submit --platform ios",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-mono": "^0.4.0",
@@ -52,6 +53,7 @@
     "@babel/core": "^7.25.0",
     "@bacons/apple-targets": "^5.0.0",
     "@types/react": "~18.3.12",
+    "patch-package": "^8.0.1",
     "typescript": "^5.7.2"
   }
 }
