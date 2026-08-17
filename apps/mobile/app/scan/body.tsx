@@ -7,7 +7,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
-import { apiUpload } from "@/lib/api";
+import { apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { BodyProjection, BodyScanResponse, BodyScanResult } from "@/types";
 
@@ -57,6 +57,12 @@ export default function BodyScan() {
       setProjection(body.projection);
       setPhase("result");
     } catch (e) {
+      if (e instanceof RateLimitedError) {
+        const { title, body } = rateLimitMessage(e);
+        Alert.alert(title, body);
+        setPhase("idle");
+        return;
+      }
       setErr((e as Error).message || t("scan.body.couldnt_analyze"));
       setPhase("idle");
     }

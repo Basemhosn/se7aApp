@@ -22,7 +22,9 @@ import {
   IBMPlexSansArabic_700Bold,
 } from "@expo-google-fonts/ibm-plex-sans-arabic";
 import { AuthProvider } from "@/auth/AuthContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { hydrateLocaleFromStorage } from "@/lib/i18n";
+import { initAnalytics, track } from "@/lib/analytics";
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -47,6 +49,8 @@ function RootLayout() {
 
   useEffect(() => {
     hydrateLocaleFromStorage();
+    initAnalytics();
+    track("app_opened");
   }, []);
 
   useEffect(() => {
@@ -56,16 +60,18 @@ function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: "#0b0d0b" },
-          animation: "slide_from_right",
-        }}
-      />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "#0b0d0b" },
+            animation: "slide_from_right",
+          }}
+        />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

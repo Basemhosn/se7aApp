@@ -8,6 +8,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
+import { identify, track } from "@/lib/analytics";
 import type { ActivityLevel, Goal, Sex } from "@/types";
 import {
   rankPrograms,
@@ -201,6 +202,14 @@ export default function Onboarding() {
       await api("/api/workouts/pick", {
         method: "POST",
         body: JSON.stringify({ program_id: pickedProgram.id }),
+      });
+      if (user?.id) identify(user.id, { goal, sex, experience });
+      track(returning ? "program_changed" : "onboarding_completed", {
+        goal,
+        experience,
+        equipment,
+        days_per_week: days,
+        program_id: pickedProgram.id,
       });
       // First-time users get pushed straight into a plate scan for the
       // AHA moment. Returning users (redoing plan) go back to Home.

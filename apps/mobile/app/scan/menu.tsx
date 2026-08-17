@@ -8,7 +8,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
-import { api, apiUpload } from "@/lib/api";
+import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -73,6 +73,12 @@ export default function MenuScan() {
       setSelected(new Set());
       setPhase("result");
     } catch (e) {
+      if (e instanceof RateLimitedError) {
+        const { title, body } = rateLimitMessage(e);
+        Alert.alert(title, body);
+        setPhase("idle");
+        return;
+      }
       setErr((e as Error).message || t("scan.menu.couldnt_read"));
       setPhase("idle");
     }

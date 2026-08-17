@@ -24,6 +24,43 @@ export class ApiError extends Error {
   }
 }
 
+export class RateLimitedError extends ApiError {
+  retryAfterSec: number;
+  kind: "burst" | "daily" | "unknown";
+  constructor(details: {
+    message: string;
+    retry_after_sec?: number;
+    limit?: number;
+    kind?: "burst" | "daily";
+    raw?: unknown;
+  }) {
+    super(429, details.message, details.raw);
+    this.retryAfterSec = details.retry_after_sec ?? 60;
+    this.kind = details.kind ?? "unknown";
+  }
+}
+
+/** Human-friendly rate-limit copy the caller can drop into an Alert. */
+export function rateLimitMessage(err: RateLimitedError): {
+  title: string;
+  body: string;
+} {
+  if (err.kind === "daily") {
+    return {
+      title: "Daily scan limit reached",
+      body: "You've hit today's scan limit. Resets at midnight — or add manually via the Log tab.",
+    };
+  }
+  const min = Math.ceil(err.retryAfterSec / 60);
+  return {
+    title: "Slow down a moment",
+    body:
+      min <= 1
+        ? "Too many scans in a row — try again in about a minute."
+        : `Too many scans in a row — try again in about ${min} minutes.`,
+  };
+}
+
 async function parseOrThrow<T>(res: Response): Promise<T> {
   let body: unknown = null;
   try {
@@ -36,6 +73,21 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
       (body && typeof body === "object" && "error" in body
         ? String((body as { error: unknown }).error)
         : null) || `HTTP ${res.status}`;
+    if (res.status === 429 && body && typeof body === "object") {
+      const b = body as {
+        details?: string;
+        retry_after_sec?: number;
+        limit?: number;
+      };
+      const isDaily = /day|daily|24/i.test(b.details ?? "");
+      throw new RateLimitedError({
+        message: b.details ?? err,
+        retry_after_sec: b.retry_after_sec,
+        limit: b.limit,
+        kind: isDaily ? "daily" : "burst",
+        raw: body,
+      });
+    }
     throw new ApiError(res.status, err, body);
   }
   return body as T;
