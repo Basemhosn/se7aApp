@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { useHealthSync } from "@/lib/useHealthSync";
+import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerTodayResponse, Profile } from "@/types";
 import type { Program, Session } from "@/lib/programs";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -51,6 +52,7 @@ export default function Home() {
   const { t } = useTranslation();
   usePushRegistration();
   useHealthSync(user?.id);
+  useWidgetToken(user?.id);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
