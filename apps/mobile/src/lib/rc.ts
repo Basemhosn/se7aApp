@@ -44,14 +44,20 @@ export function configureRc(appUserId: string | null) {
     }
     return;
   }
-  Purchases.setLogLevel(
-    __DEV__ ? LOG_LEVEL.WARN : LOG_LEVEL.ERROR
-  );
-  Purchases.configure({
-    apiKey: key,
-    appUserID: appUserId ?? undefined,
-  });
-  configured = true;
+  // Wrap the whole init — a malformed key, missing RC dashboard config,
+  // or bundle-id mismatch can throw synchronously and take down the app.
+  // We'd rather ship without IAP than crash on launch.
+  try {
+    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.WARN : LOG_LEVEL.ERROR);
+    Purchases.configure({
+      apiKey: key,
+      appUserID: appUserId ?? undefined,
+    });
+    configured = true;
+  } catch {
+    // Leave `configured` false so subsequent calls no-op; the paywall
+    // will show its empty-offering state instead of crashing.
+  }
 }
 
 export async function identifyRc(appUserId: string) {

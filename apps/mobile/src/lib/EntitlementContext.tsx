@@ -59,7 +59,11 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    configureRc(user?.id ?? null);
+    try {
+      configureRc(user?.id ?? null);
+    } catch {
+      /* RC init failure must never crash the app */
+    }
     if (user?.id) {
       identifyRc(user.id).catch(() => {});
     } else {
