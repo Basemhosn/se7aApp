@@ -60,7 +60,15 @@
           "color": "#f6b73c"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "react-native-health",
+        {
+          "isClinicalDataEnabled": false,
+          "healthSharePermission": "SE7A reads your weight and workout history from Apple Health to keep your progress in sync.",
+          "healthUpdatePermission": "SE7A saves the weight check-ins you log so they show up in Apple Health."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
