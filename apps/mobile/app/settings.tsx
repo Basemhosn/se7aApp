@@ -3,10 +3,12 @@ import {
   Alert,
   Linking,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -14,6 +16,7 @@ import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
+import { useReferral } from "@/lib/useReferral";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 const WEB_BASE = "https://se7a.vercel.app";
@@ -25,6 +28,27 @@ export default function Settings() {
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
   const [deleting, setDeleting] = useState<Deleting>("idle");
+  const { stats: referral } = useReferral(user?.id);
+
+  const shareLink = async () => {
+    if (!referral?.link) return;
+    try {
+      await Share.share({
+        message: isArabic
+          ? `انضم إلى SE7A — مدرب غذائي ولياقة بالذكاء الاصطناعي. ${referral.link}`
+          : `Try SE7A — AI food + fitness coach for the Gulf. ${referral.link}`,
+        url: referral.link,
+      });
+    } catch {
+      /* user cancelled */
+    }
+  };
+
+  const copyLink = async () => {
+    if (!referral?.link) return;
+    await Clipboard.setStringAsync(referral.link);
+    Alert.alert(isArabic ? "تم النسخ" : "Copied", referral.link);
+  };
 
   const openTerms = () => Linking.openURL(`${WEB_BASE}/terms`);
   const openPrivacy = () => Linking.openURL(`${WEB_BASE}/privacy`);
@@ -83,6 +107,41 @@ export default function Settings() {
           onPress={() => router.push("/language")}
         />
       </Section>
+
+      {referral && (
+        <Section title={isArabic ? "ادعُ صديقًا" : "Invite a friend"}>
+          <View style={styles.inviteBody}>
+            <Text style={styles.inviteCount}>
+              {referral.referred_count === 0
+                ? isArabic
+                  ? "لم ينضم أحد بعد."
+                  : "No one has joined yet."
+                : isArabic
+                  ? `انضم ${referral.referred_count} عبر رابطك`
+                  : `${referral.referred_count} joined via your link`}
+            </Text>
+            <Text style={styles.inviteLink}>{referral.link}</Text>
+            <View style={styles.inviteRow}>
+              <Pressable onPress={shareLink} style={styles.invitePrimary}>
+                <Ionicons name="share-outline" size={16} color={colors.bg} />
+                <Text style={styles.invitePrimaryLabel}>
+                  {isArabic ? "شارك" : "Share"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={copyLink} style={styles.inviteSecondary}>
+                <Ionicons
+                  name="copy-outline"
+                  size={16}
+                  color={colors.ink}
+                />
+                <Text style={styles.inviteSecondaryLabel}>
+                  {isArabic ? "انسخ" : "Copy"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Section>
+      )}
 
       <Section title={isArabic ? "قانوني" : "Legal"}>
         <RowLink
@@ -238,5 +297,54 @@ const styles = StyleSheet.create({
     color: colors.dim,
     textAlign: "center",
     marginTop: spacing.xl,
+  },
+  inviteBody: {
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  inviteCount: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+  },
+  inviteLink: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.gold,
+  },
+  inviteRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  invitePrimary: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+  },
+  invitePrimaryLabel: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.bg,
+  },
+  inviteSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+  },
+  inviteSecondaryLabel: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
   },
 });
