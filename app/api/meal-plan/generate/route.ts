@@ -8,6 +8,7 @@ import {
 } from "@/lib/schemas/mealPlan";
 import { MEAL_PLAN_SYSTEM_PROMPT } from "@/lib/prompts/mealPlan.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { requirePro } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -23,6 +24,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  const gated = await requirePro(supabase, user.id, "meal_plan");
+  if (gated) return gated;
 
   const rl = await checkScanLimits(user.id);
   if (!rl.ok) return rateLimitedResponse(rl);

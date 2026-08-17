@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -48,6 +48,20 @@ export async function GET(request: Request) {
     );
   }
 
+  // Respect the per-user weekly_recap toggle.
+  const tokenUserIds = [...new Set((tokens ?? []).map((t) => t.user_id))];
+  const { data: prefsRows } = await admin
+    .from("profiles")
+    .select("user_id, notification_prefs")
+    .in("user_id", tokenUserIds);
+  const optedOut = new Set<string>();
+  for (const p of (prefsRows ?? []) as {
+    user_id: string;
+    notification_prefs: { weekly_recap?: boolean } | null;
+  }[]) {
+    if (p.notification_prefs?.weekly_recap === false) optedOut.add(p.user_id);
+  }
+
   const weekAgo = new Date();
   weekAgo.setHours(0, 0, 0, 0);
   weekAgo.setDate(weekAgo.getDate() - 7);
@@ -60,7 +74,7 @@ export async function GET(request: Request) {
     sound: "default";
   }[] = [];
 
-  const userIds = [...new Set((tokens ?? []).map((t) => t.user_id))];
+  const userIds = tokenUserIds.filter((id) => !optedOut.has(id));
 
   for (const userId of userIds) {
     const [mealsRes, weightsRes, workoutsRes] = await Promise.all([
@@ -91,7 +105,16 @@ export async function GET(request: Request) {
     const weightDelta =
       weights.length >= 2 ? weights[weights.length - 1]! - weights[0]! : null;
 
-    const body = composeRecap(daysLogged.size, workoutCount, weightDelta);
+    // Count PRs set this past week: heaviest set for each exercise in the
+    // week that beats every prior heaviest-set for that exercise.
+    const prsThisWeek = await countPrsThisWeek(admin, userId, weekAgoIso);
+
+    const body = composeRecap(
+      daysLogged.size,
+      workoutCount,
+      weightDelta,
+      prsThisWeek
+    );
 
     // Send one message per token owned by this user (multiple devices).
     for (const tok of (tokens ?? []).filter((t) => t.user_id === userId)) {
@@ -131,21 +154,80 @@ export async function GET(request: Request) {
 function composeRecap(
   daysLogged: number,
   workoutCount: number,
-  weightDelta: number | null
+  weightDelta: number | null,
+  prsThisWeek: number
 ): string {
   const parts: string[] = [];
   parts.push(`${daysLogged}/7 days logged`);
   if (workoutCount > 0) parts.push(`${workoutCount} workout${workoutCount === 1 ? "" : "s"}`);
+  if (prsThisWeek > 0) {
+    parts.push(`${prsThisWeek} PR${prsThisWeek === 1 ? "" : "s"}`);
+  }
   if (weightDelta !== null) {
     const sign = weightDelta > 0 ? "+" : "";
     parts.push(`${sign}${weightDelta.toFixed(1)} kg`);
   }
   const stats = parts.join(" · ");
   const bonus =
-    daysLogged >= 5
-      ? "Above the ~4-day median. That's the win."
-      : daysLogged >= 3
-        ? "Push to 5+ next week."
-        : "Small step this week is fine. Try one scan a day.";
+    prsThisWeek > 0
+      ? "Real progress on the bar."
+      : daysLogged >= 5
+        ? "Above the ~4-day median. That's the win."
+        : daysLogged >= 3
+          ? "Push to 5+ next week."
+          : "Small step this week is fine. Try one scan a day.";
   return `${stats}. ${bonus}`;
+}
+
+async function countPrsThisWeek(
+  admin: SupabaseClient,
+  userId: string,
+  weekAgoIso: string
+): Promise<number> {
+  // Load this week's sessions + prior sessions to compute each exercise's
+  // pre-week best. If a set this week beats that pre-week best on weight,
+  // count one PR.
+  const thisWeek = await admin
+    .from("workout_sessions")
+    .select("completed_at, exercises")
+    .eq("user_id", userId)
+    .gte("completed_at", weekAgoIso);
+
+  if (thisWeek.error || !thisWeek.data || thisWeek.data.length === 0) return 0;
+
+  const priorRes = await admin
+    .from("workout_sessions")
+    .select("completed_at, exercises")
+    .eq("user_id", userId)
+    .order("completed_at", { ascending: false })
+    .limit(500);
+
+  const priorBest = new Map<string, number>();
+  for (const s of priorRes.data ?? []) {
+    if (s.completed_at >= weekAgoIso) continue;
+    for (const ex of (s.exercises as { name?: string; sets?: { weight_kg?: number }[] }[]) ?? []) {
+      const name = ex.name?.trim();
+      if (!name) continue;
+      for (const set of ex.sets ?? []) {
+        const w = Number(set.weight_kg);
+        if (!Number.isFinite(w) || w <= 0) continue;
+        priorBest.set(name, Math.max(priorBest.get(name) ?? 0, w));
+      }
+    }
+  }
+
+  const brokenThisWeek = new Set<string>();
+  for (const s of thisWeek.data) {
+    for (const ex of (s.exercises as { name?: string; sets?: { weight_kg?: number }[] }[]) ?? []) {
+      const name = ex.name?.trim();
+      if (!name) continue;
+      for (const set of ex.sets ?? []) {
+        const w = Number(set.weight_kg);
+        if (!Number.isFinite(w) || w <= 0) continue;
+        const prior = priorBest.get(name) ?? 0;
+        if (w > prior) brokenThisWeek.add(name);
+      }
+    }
+  }
+  return brokenThisWeek.size;
 }

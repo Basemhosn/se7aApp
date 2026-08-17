@@ -47,6 +47,13 @@ interface FastingActiveResponse {
   active: { id: number; started_at: string; target_hours: number } | null;
 }
 
+interface StreakResponse {
+  current_days: number;
+  longest_days: number;
+  days_this_week: number;
+  todays_status: "logged" | "not_yet";
+}
+
 export default function Home() {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -60,10 +67,12 @@ export default function Home() {
   const [water, setWater] = useState<WaterTodayResponse | null>(null);
   const [dayStatus, setDayStatus] = useState<DayStatusResponse | null>(null);
   const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
+  const [streak, setStreak] = useState<StreakResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!user) return;
+    const tzOffsetMin = -new Date().getTimezoneOffset();
     const [
       { data: profileData },
       ledgerRes,
@@ -71,6 +80,7 @@ export default function Home() {
       waterRes,
       dayRes,
       fastingRes,
+      streakRes,
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -90,6 +100,9 @@ export default function Home() {
       api<FastingActiveResponse>("/api/fasting/current").catch(() => ({
         active: null,
       })),
+      api<StreakResponse>(
+        `/api/streaks?tz_offset_min=${tzOffsetMin}`
+      ).catch(() => null),
     ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
@@ -101,6 +114,7 @@ export default function Home() {
     setWater(waterRes);
     setDayStatus(dayRes);
     setFasting(fastingRes);
+    setStreak(streakRes);
     setLoading(false);
   }, [user]);
 
@@ -177,6 +191,41 @@ export default function Home() {
         <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
+      {streak && (streak.current_days > 0 || streak.days_this_week > 0) && (
+        <View
+          style={[
+            styles.streakCard,
+            streak.current_days >= 7 && styles.streakCardHot,
+          ]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.streakKicker}>
+              {streak.todays_status === "logged"
+                ? "STREAK · TODAY LOGGED"
+                : "STREAK · LOG TODAY TO KEEP IT"}
+            </Text>
+            <View style={styles.streakNumRow}>
+              <Text style={styles.streakFlame}>
+                {streak.current_days === 0
+                  ? "•"
+                  : streak.current_days >= 7
+                    ? "🔥"
+                    : "✦"}
+              </Text>
+              <Text style={styles.streakNum}>{streak.current_days}</Text>
+              <Text style={styles.streakUnit}>
+                {streak.current_days === 1 ? "day" : "days"}
+              </Text>
+            </View>
+            <Text style={styles.streakSub}>
+              {streak.days_this_week}/7 this week
+              {streak.longest_days > streak.current_days &&
+                ` · best ${streak.longest_days}`}
+            </Text>
+          </View>
+        </View>
+      )}
+
       <Pressable
         onPress={() => router.push("/meals-suggest")}
         style={styles.suggestCard}
@@ -191,6 +240,22 @@ export default function Home() {
           </Text>
         </View>
         <Text style={styles.suggestArrow}>→</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => router.push("/meal-plan")}
+        style={styles.planCard}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.kicker, { color: colors.mint }]}>
+            PLAN YOUR WEEK
+          </Text>
+          <Text style={styles.suggestTitle}>7-day meal plan</Text>
+          <Text style={styles.suggestSub}>
+            Hits your macros. Auto-shopping list included.
+          </Text>
+        </View>
+        <Text style={[styles.suggestArrow, { color: colors.mint }]}>→</Text>
       </Pressable>
 
       {fasting?.active ? (
@@ -504,6 +569,61 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.gold,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  streakCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  streakCardHot: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.05)",
+  },
+  streakKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
+  },
+  streakNumRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginTop: 4,
+    gap: 6,
+  },
+  streakFlame: {
+    fontSize: 22,
+  },
+  streakNum: {
+    fontFamily: font.displayBold,
+    fontSize: 32,
+    color: colors.ink,
+  },
+  streakUnit: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    marginLeft: 2,
+  },
+  streakSub: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 4,
+  },
+  planCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.mint,
     borderRadius: radius.lg,
     padding: spacing.md,
   },

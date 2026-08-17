@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Switch } from "react-native";
 import {
   Alert,
   Linking,
+  Platform,
   Pressable,
   Share,
   StyleSheet,
@@ -17,18 +19,54 @@ import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { useReferral } from "@/lib/useReferral";
+import { useEntitlement } from "@/lib/EntitlementContext";
+import { restorePurchases, hasProEntitlement } from "@/lib/rc";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 const WEB_BASE = "https://se7a.vercel.app";
 
 type Deleting = "idle" | "confirming" | "typing" | "deleting";
 
+interface NotificationPrefs {
+  streak_at_risk?: boolean;
+  lunch_nudge?: boolean;
+  weigh_in?: boolean;
+  pr_celebration?: boolean;
+  plan_your_week?: boolean;
+  weekly_recap?: boolean;
+}
+
 export default function Settings() {
   const { user, signOut } = useAuth();
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
   const [deleting, setDeleting] = useState<Deleting>("idle");
+  const [restoring, setRestoring] = useState(false);
   const { stats: referral } = useReferral(user?.id);
+  const { ent, refresh: refreshEnt } = useEntitlement();
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+
+  useEffect(() => {
+    api<{ notification_prefs: NotificationPrefs }>("/api/profile/prefs")
+      .then((r) => setPrefs(r.notification_prefs ?? {}))
+      .catch(() => setPrefs({}));
+  }, []);
+
+  const togglePref = useCallback(
+    async (key: keyof NotificationPrefs, value: boolean) => {
+      setPrefs((prev) => ({ ...(prev ?? {}), [key]: value }));
+      try {
+        await api("/api/profile/prefs", {
+          method: "POST",
+          body: JSON.stringify({ notification_prefs: { [key]: value } }),
+        });
+      } catch {
+        // Revert on failure.
+        setPrefs((prev) => ({ ...(prev ?? {}), [key]: !value }));
+      }
+    },
+    []
+  );
 
   const shareLink = async () => {
     if (!referral?.link) return;
@@ -48,6 +86,34 @@ export default function Settings() {
     if (!referral?.link) return;
     await Clipboard.setStringAsync(referral.link);
     Alert.alert(isArabic ? "تم النسخ" : "Copied", referral.link);
+  };
+
+  const doRestore = async () => {
+    setRestoring(true);
+    const info = await restorePurchases();
+    setRestoring(false);
+    if (hasProEntitlement(info)) {
+      await refreshEnt();
+      Alert.alert(
+        isArabic ? "تم" : "Restored",
+        isArabic ? "أنت على Pro." : "You're on Pro."
+      );
+    } else {
+      Alert.alert(
+        isArabic ? "لا شيء لاسترجاعه" : "Nothing to restore",
+        isArabic
+          ? "لم نجد اشتراكاً نشطاً لحسابك."
+          : "No active subscription found for this account."
+      );
+    }
+  };
+
+  const manageSubscription = () => {
+    Linking.openURL(
+      Platform.OS === "ios"
+        ? "https://apps.apple.com/account/subscriptions"
+        : "https://play.google.com/store/account/subscriptions"
+    );
   };
 
   const openTerms = () => Linking.openURL(`${WEB_BASE}/terms`);
@@ -107,6 +173,131 @@ export default function Settings() {
           onPress={() => router.push("/language")}
         />
       </Section>
+
+      <Section title={isArabic ? "الاشتراك" : "Subscription"}>
+        {ent.is_pro ? (
+          <>
+            <Info
+              label={isArabic ? "الخطة" : "Plan"}
+              value={
+                ent.product_id?.includes("annual")
+                  ? isArabic
+                    ? "Pro سنوي"
+                    : "Pro Annual"
+                  : ent.product_id?.includes("monthly")
+                    ? isArabic
+                      ? "Pro شهري"
+                      : "Pro Monthly"
+                    : "Pro"
+              }
+            />
+            <Info
+              label={isArabic ? "الحالة" : "Status"}
+              value={ent.status}
+            />
+            {ent.expires_at && (
+              <Info
+                label={
+                  ent.will_renew
+                    ? isArabic
+                      ? "يتجدد"
+                      : "Renews"
+                    : isArabic
+                      ? "ينتهي"
+                      : "Expires"
+                }
+                value={shortDate(ent.expires_at)}
+              />
+            )}
+            <RowLink
+              label={isArabic ? "إدارة الاشتراك" : "Manage subscription"}
+              onPress={manageSubscription}
+              external
+            />
+          </>
+        ) : (
+          <>
+            <View style={styles.proHero}>
+              <Text style={styles.proKicker}>SE7A · PRO</Text>
+              <Text style={styles.proBody}>
+                {isArabic
+                  ? "افتح خطط الوجبات، مسح القوائم، تحليل الجسم، وكوتش الذكاء الاصطناعي."
+                  : "Unlock meal plans, menu scans, body composition, and AI coach."}
+              </Text>
+              <Pressable
+                onPress={() => router.push("/paywall")}
+                style={styles.proBtn}
+              >
+                <Text style={styles.proBtnLabel}>
+                  {isArabic ? "افتح Pro" : "Unlock Pro"}
+                </Text>
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={doRestore}
+              disabled={restoring}
+              style={styles.row}
+            >
+              <Text style={styles.rowLabel}>
+                {restoring
+                  ? isArabic
+                    ? "جارٍ الاسترجاع…"
+                    : "Restoring…"
+                  : isArabic
+                    ? "استرجع مشترياتي"
+                    : "Restore purchases"}
+              </Text>
+              <Ionicons
+                name="refresh"
+                size={16}
+                color={colors.dim}
+              />
+            </Pressable>
+          </>
+        )}
+      </Section>
+
+      {prefs && (
+        <Section title={isArabic ? "الإشعارات" : "Notifications"}>
+          <PrefRow
+            label={isArabic ? "خطر انكسار السلسلة" : "Streak at risk"}
+            hint={isArabic ? "٨ مساءً إذا لم تسجل شيء" : "8 pm if you haven't logged"}
+            value={prefs.streak_at_risk !== false}
+            onChange={(v) => togglePref("streak_at_risk", v)}
+          />
+          <PrefRow
+            label={isArabic ? "تنبيه الغداء" : "Lunch nudge"}
+            hint={isArabic ? "١ ظهراً" : "1 pm reminder"}
+            value={prefs.lunch_nudge !== false}
+            onChange={(v) => togglePref("lunch_nudge", v)}
+          />
+          <PrefRow
+            label={isArabic ? "الوزن الأسبوعي" : "Weekly weigh-in"}
+            hint={isArabic ? "صباح الاثنين" : "Monday morning"}
+            value={prefs.weigh_in !== false}
+            onChange={(v) => togglePref("weigh_in", v)}
+          />
+          <PrefRow
+            label={isArabic ? "احتفال PR" : "PR celebration"}
+            hint={isArabic ? "بعد التمرين مباشرة" : "Right after a workout"}
+            value={prefs.pr_celebration !== false}
+            onChange={(v) => togglePref("pr_celebration", v)}
+          />
+          <PrefRow
+            label={isArabic ? "خطة الأسبوع (Pro)" : "Plan your week (Pro)"}
+            hint={isArabic ? "صباح الأحد" : "Sunday morning"}
+            value={prefs.plan_your_week !== false}
+            onChange={(v) => togglePref("plan_your_week", v)}
+          />
+          <PrefRow
+            label={isArabic ? "التلخيص الأسبوعي" : "Weekly recap"}
+            hint={isArabic ? "صباح الأحد" : "Sunday morning"}
+            value={prefs.weekly_recap !== false}
+            onChange={(v) => togglePref("weekly_recap", v)}
+            last
+          />
+        </Section>
+      )}
 
       {referral && (
         <Section title={isArabic ? "ادعُ صديقًا" : "Invite a friend"}>
@@ -224,6 +415,40 @@ function Info({ label, value }: { label: string; value: string }) {
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
+}
+
+function PrefRow({
+  label,
+  hint,
+  value,
+  onChange,
+  last,
+}: {
+  label: string;
+  hint: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  last?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.row,
+        last && { borderBottomWidth: 0 },
+      ]}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowValue}>{hint}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ true: colors.gold, false: colors.line }}
+        thumbColor={colors.ink}
+      />
     </View>
   );
 }
@@ -380,4 +605,41 @@ const styles = StyleSheet.create({
     color: colors.dim,
     lineHeight: 19,
   },
+  proHero: {
+    padding: spacing.md,
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  proKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  proBody: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 19,
+  },
+  proBtn: {
+    marginTop: spacing.sm,
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold,
+  },
+  proBtnLabel: {
+    fontFamily: font.displayBold,
+    fontSize: 13,
+    color: colors.bg,
+    letterSpacing: 0.5,
+  },
 });
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}

@@ -8,7 +8,13 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
-import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
+import {
+  api,
+  apiUpload,
+  ProRequiredError,
+  RateLimitedError,
+  rateLimitMessage,
+} from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -73,6 +79,14 @@ export default function MenuScan() {
       setSelected(new Set());
       setPhase("result");
     } catch (e) {
+      if (e instanceof ProRequiredError) {
+        router.push({
+          pathname: "/paywall",
+          params: { feature: "menu_scan" },
+        });
+        setPhase("idle");
+        return;
+      }
       if (e instanceof RateLimitedError) {
         const { title, body } = rateLimitMessage(e);
         Alert.alert(title, body);

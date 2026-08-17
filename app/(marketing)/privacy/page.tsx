@@ -33,8 +33,10 @@ export default function Privacy() {
           </li>
           <li>
             <strong>Photos you choose to submit:</strong> menu photos and food photos for
-            analysis. Physique photos, if you provide one for plan personalization, are
-            processed and <strong>not stored</strong>.
+            analysis. Physique photos used for AI body-composition analysis are processed and{" "}
+            <strong>not stored</strong>. Progress photos you save yourself to track change
+            over time are stored privately in your account, visible only to you via
+            short-lived signed links, and deletable at any time.
           </li>
           <li><strong>Waitlist:</strong> email address only, used to invite you to the beta.</li>
         </ul>
@@ -52,7 +54,11 @@ export default function Privacy() {
         <ul>
           <li>We do not sell or rent your personal data.</li>
           <li>We do not run third-party advertising or tracking in the app.</li>
-          <li>We do not store physique photos in version 1 of the product.</li>
+          <li>
+            We do not store physique photos used for AI body-composition analysis.
+            Only progress photos you explicitly save to your own timeline are stored,
+            and you can delete them at any time.
+          </li>
         </ul>
 
         <h2>Storage &amp; security</h2>

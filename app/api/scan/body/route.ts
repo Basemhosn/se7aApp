@@ -10,6 +10,7 @@ import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { project, type BodyProjection } from "@/lib/body";
 import type { Goal, Sex } from "@/lib/macros";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { getEntitlement } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -27,7 +28,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const rl = await checkScanLimits(user.id);
+  // Body scan: 1 free per lifetime for free users, unlimited for Pro.
+  // Rationale — the free scan is the "taste it" moment; conversion to
+  // Pro is the second scan onward.
+  const ent = await getEntitlement(supabase, user.id);
+  if (!ent.is_pro) {
+    const { count } = await supabase
+      .from("scans")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("kind", "body");
+    const used = count ?? 0;
+    if (used >= 1) {
+      return NextResponse.json(
+        {
+          error: "pro_required",
+          details:
+            "You've used your free body-composition scan. Upgrade to Pro for unlimited scans.",
+          feature: "body_scan",
+          current_tier: ent.tier,
+          free_used: used,
+        },
+        { status: 402 }
+      );
+    }
+  }
+
+  const rl = await checkScanLimits(user.id, { isPro: ent.is_pro });
   if (!rl.ok) return rateLimitedResponse(rl);
 
   const form = await request.formData().catch(() => null);

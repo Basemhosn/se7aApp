@@ -24,6 +24,18 @@ export class ApiError extends Error {
   }
 }
 
+export class ProRequiredError extends ApiError {
+  feature: string;
+  constructor(details: {
+    message: string;
+    feature: string;
+    raw?: unknown;
+  }) {
+    super(402, details.message, details.raw);
+    this.feature = details.feature;
+  }
+}
+
 export class RateLimitedError extends ApiError {
   retryAfterSec: number;
   kind: "burst" | "daily" | "unknown";
@@ -73,6 +85,14 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
       (body && typeof body === "object" && "error" in body
         ? String((body as { error: unknown }).error)
         : null) || `HTTP ${res.status}`;
+    if (res.status === 402 && body && typeof body === "object") {
+      const b = body as { details?: string; feature?: string };
+      throw new ProRequiredError({
+        message: b.details ?? err,
+        feature: b.feature ?? "unknown",
+        raw: body,
+      });
+    }
     if (res.status === 429 && body && typeof body === "object") {
       const b = body as {
         details?: string;

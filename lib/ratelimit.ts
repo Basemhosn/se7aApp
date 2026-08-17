@@ -23,6 +23,13 @@ const scanDaily = new Ratelimit({
   analytics: true,
 });
 
+const scanDailyPro = new Ratelimit({
+  redis,
+  limiter: Ratelimit.fixedWindow(200, "24 h"),
+  prefix: "rl:scan:daily:pro",
+  analytics: true,
+});
+
 export type ScanLimitResult =
   | { ok: true }
   | {
@@ -32,10 +39,14 @@ export type ScanLimitResult =
       limit: number;
     };
 
-export async function checkScanLimits(userId: string): Promise<ScanLimitResult> {
+export async function checkScanLimits(
+  userId: string,
+  opts: { isPro?: boolean } = {}
+): Promise<ScanLimitResult> {
+  const dailyLimiter = opts.isPro ? scanDailyPro : scanDaily;
   const [burst, daily] = await Promise.all([
     scanBurst.limit(userId),
-    scanDaily.limit(userId),
+    dailyLimiter.limit(userId),
   ]);
 
   if (!burst.success) {
@@ -52,6 +63,30 @@ export async function checkScanLimits(userId: string): Promise<ScanLimitResult> 
       kind: "daily",
       retryAfterSec: Math.max(1, Math.ceil((daily.reset - Date.now()) / 1000)),
       limit: daily.limit,
+    };
+  }
+  return { ok: true };
+}
+
+// Barcode lookups are cheap (OFF is free, cached) but we still throttle
+// against enumeration / scraping abuse. Generous limits vs plate scan.
+const barcodeBurst = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, "60 s"),
+  prefix: "rl:barcode:burst",
+  analytics: true,
+});
+
+export async function checkBarcodeLimits(
+  userId: string
+): Promise<ScanLimitResult> {
+  const burst = await barcodeBurst.limit(userId);
+  if (!burst.success) {
+    return {
+      ok: false,
+      kind: "burst",
+      retryAfterSec: Math.max(1, Math.ceil((burst.reset - Date.now()) / 1000)),
+      limit: burst.limit,
     };
   }
   return { ok: true };

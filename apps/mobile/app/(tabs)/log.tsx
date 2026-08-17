@@ -13,6 +13,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import type { LedgerTodayResponse } from "@/types";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -48,6 +49,7 @@ function slotForNow(): "breakfast" | "lunch" | "dinner" | "snack" {
 
 export default function Log() {
   const { t } = useTranslation();
+  const { ent } = useEntitlement();
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +130,14 @@ export default function Log() {
           subtitle={t("log.cta_menu_sub")}
           onPress={() => router.push("/scan/menu")}
           tint={colors.mint}
+          proBadge={!ent.is_pro}
+        />
+        <CTA
+          kicker="PACKAGED FOOD"
+          title="Scan a barcode"
+          subtitle="Instant macros from a 3M+ product database."
+          onPress={() => router.push("/scan/barcode")}
+          tint={colors.gold}
         />
         <CTA
           kicker={t("log.cta_manual_kicker")}
@@ -149,6 +159,14 @@ export default function Log() {
           subtitle="Machboos, kabsa, shawarma — with macros. Tap to log."
           onPress={() => router.push("/recipes")}
           tint={colors.mint}
+        />
+        <CTA
+          kicker="PLAN THE WEEK"
+          title="7-day meal plan"
+          subtitle="AI builds the week + a shopping list you can check off."
+          onPress={() => router.push("/meal-plan")}
+          tint={colors.gold}
+          proBadge={!ent.is_pro}
         />
       </View>
 
@@ -245,12 +263,14 @@ function CTA({
   subtitle,
   onPress,
   tint,
+  proBadge,
 }: {
   kicker: string;
   title: string;
   subtitle: string;
   onPress: () => void;
   tint: string;
+  proBadge?: boolean;
 }) {
   return (
     <Pressable onPress={onPress} style={styles.cta}>
@@ -258,6 +278,11 @@ function CTA({
       <Text style={styles.ctaTitle}>{title}</Text>
       <Text style={styles.ctaSub}>{subtitle}</Text>
       <Text style={[styles.ctaArrow, { color: tint }]}>→</Text>
+      {proBadge && (
+        <View style={styles.proBadge}>
+          <Text style={styles.proBadgeText}>PRO</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -308,6 +333,21 @@ const styles = StyleSheet.create({
     bottom: spacing.md,
     fontFamily: font.displayBold,
     fontSize: 22,
+  },
+  proBadge: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold,
+  },
+  proBadgeText: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.bg,
+    letterSpacing: 1.2,
   },
   card: {
     backgroundColor: colors.panel,

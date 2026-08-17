@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const buckets = ["plate-scans", "menu-scans"];
+  const buckets = ["plate-scans", "menu-scans", "progress-photos"];
   for (const bucket of buckets) {
     const { data: files, error: listErr } = await supabase.storage
       .from(bucket)

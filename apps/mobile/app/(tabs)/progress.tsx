@@ -31,6 +31,21 @@ interface AdherenceResponse {
   comparison: string;
 }
 
+interface Pr {
+  exercise: string;
+  best_weight_kg: number;
+  best_reps: number;
+  est_1rm_kg: number;
+  achieved_at: string;
+  set_count_ever: number;
+}
+
+interface PrsResponse {
+  period: "all" | "month" | "week";
+  count: number;
+  prs: Pr[];
+}
+
 const RANGES = [
   { days: 30, label: "30D" },
   { days: 60, label: "60D" },
@@ -41,6 +56,7 @@ export default function Progress() {
   const { t } = useTranslation();
   const [trend, setTrend] = useState<TrendResponse | null>(null);
   const [adherence, setAdherence] = useState<AdherenceResponse | null>(null);
+  const [prs, setPrs] = useState<PrsResponse | null>(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
 
@@ -52,12 +68,14 @@ export default function Progress() {
   const load = useCallback(async (d: number) => {
     setLoading(true);
     try {
-      const [tr, adh] = await Promise.all([
+      const [tr, adh, prRes] = await Promise.all([
         api<TrendResponse>(`/api/weight/trend?days=${d}`),
         api<AdherenceResponse>("/api/progress/adherence?days=7").catch(() => null),
+        api<PrsResponse>("/api/workouts/prs?period=all").catch(() => null),
       ]);
       setTrend(tr);
       setAdherence(adh);
+      setPrs(prRes);
     } catch {
       /* empty */
     }
@@ -108,6 +126,28 @@ export default function Progress() {
             <Text style={styles.adherencePct}>· {adherence.percentage}%</Text>
           </View>
           <Text style={styles.adherenceCompare}>{adherence.comparison}.</Text>
+        </View>
+      )}
+
+      {prs && prs.prs.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.prKicker}>YOUR PRs</Text>
+          <Text style={styles.cardTitle}>Personal records</Text>
+          <Text style={styles.cardSub}>
+            Top {Math.min(5, prs.prs.length)} of {prs.count} tracked lifts.
+          </Text>
+          {prs.prs.slice(0, 5).map((pr) => (
+            <View key={pr.exercise} style={styles.prRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.prName}>{pr.exercise}</Text>
+                <Text style={styles.prMeta}>
+                  {pr.best_weight_kg} kg × {pr.best_reps}
+                  {"  ·  "}est. 1RM {pr.est_1rm_kg} kg
+                </Text>
+              </View>
+              <Text style={styles.prDate}>{shortDate(pr.achieved_at)}</Text>
+            </View>
+          ))}
         </View>
       )}
 
@@ -177,6 +217,38 @@ export default function Progress() {
           disabled={!weight || Number(weight) <= 0}
         />
       </View>
+
+      <Pressable
+        onPress={() => router.push("/progress-photos")}
+        style={styles.linkCard}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.kicker, { color: colors.gold }]}>
+            PROGRESS PHOTOS
+          </Text>
+          <Text style={styles.linkTitle}>Watch yourself change</Text>
+          <Text style={styles.linkSub}>
+            Weekly front/side/back photos, private, side-by-side compare.
+          </Text>
+        </View>
+        <Text style={[styles.linkArrow, { color: colors.gold }]}>→</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => router.push("/measurements")}
+        style={styles.linkCard}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.kicker, { color: colors.mint }]}>
+            TAPE MEASURE
+          </Text>
+          <Text style={styles.linkTitle}>Measurements</Text>
+          <Text style={styles.linkSub}>
+            Waist / hip / arm / chest / thigh / neck. Deltas vs your first entry.
+          </Text>
+        </View>
+        <Text style={[styles.linkArrow, { color: colors.mint }]}>→</Text>
+      </Pressable>
 
       <Pressable
         onPress={() => router.push("/scan/body")}
@@ -356,4 +428,39 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 8,
   },
+  prKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  prRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    gap: spacing.sm,
+  },
+  prName: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  prMeta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  prDate: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+  },
 });
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}

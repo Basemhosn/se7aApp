@@ -46,6 +46,16 @@ export function usePushRegistration() {
             platform: Platform.OS === "ios" ? "ios" : "android",
           }),
         });
+
+        // Also record the device's current UTC offset so the hourly
+        // notification cron fires at the right *local* hour for this
+        // user. Offset is minutes east of UTC (Dubai = +240).
+        await api("/api/profile/prefs", {
+          method: "POST",
+          body: JSON.stringify({
+            tz_offset_min: -new Date().getTimezoneOffset(),
+          }),
+        }).catch(() => {});
       } catch {
         // Non-critical — user just won't get push. Sentry will log it if it's
         // catastrophic; otherwise silent is fine.

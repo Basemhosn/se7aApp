@@ -22,6 +22,7 @@ import {
   IBMPlexSansArabic_700Bold,
 } from "@expo-google-fonts/ibm-plex-sans-arabic";
 import { AuthProvider } from "@/auth/AuthContext";
+import { EntitlementProvider } from "@/lib/EntitlementContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { hydrateLocaleFromStorage } from "@/lib/i18n";
 import { initAnalytics, track } from "@/lib/analytics";
@@ -62,14 +63,16 @@ function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: "#0b0d0b" },
-            animation: "slide_from_right",
-          }}
-        />
+        <EntitlementProvider>
+          <StatusBar style="light" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: "#0b0d0b" },
+              animation: "slide_from_right",
+            }}
+          />
+        </EntitlementProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

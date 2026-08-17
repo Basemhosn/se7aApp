@@ -9,6 +9,7 @@ import {
 import { MENU_SYSTEM_PROMPT, menuUserPrompt } from "@/lib/prompts/menu.v1";
 import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { requirePro } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -25,7 +26,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const rl = await checkScanLimits(user.id);
+  const gated = await requirePro(supabase, user.id, "menu_scan");
+  if (gated) return gated;
+
+  const rl = await checkScanLimits(user.id, { isPro: true });
   if (!rl.ok) return rateLimitedResponse(rl);
 
   const form = await request.formData().catch(() => null);

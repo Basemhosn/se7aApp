@@ -10,9 +10,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { api } from "@/lib/api";
+import { api, ProRequiredError } from "@/lib/api";
+import { Btn } from "@/components/Btn";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Message {
@@ -27,7 +30,9 @@ interface HistoryResponse {
 }
 
 export default function Coach() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === "ar";
+  const { ent, loading: entLoading } = useEntitlement();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -85,10 +90,46 @@ export default function Coach() {
         },
       ]);
     } catch (e) {
-      setErr((e as Error).message || t("coach.error_send"));
+      if (e instanceof ProRequiredError) {
+        router.push({ pathname: "/paywall", params: { feature: "ai_coach" } });
+      } else {
+        setErr((e as Error).message || t("coach.error_send"));
+      }
     }
     setBusy(false);
   };
+
+  if (!entLoading && !ent.is_pro) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={styles.head}>
+          <Text style={styles.title}>{t("coach.title")}</Text>
+          <Text style={styles.sub}>{t("coach.sub")}</Text>
+        </View>
+        <View style={styles.gate}>
+          <Text style={styles.gateKicker}>SE7A · PRO</Text>
+          <Text style={styles.gateH}>
+            {isArabic ? "الكوتش على Pro" : "Coach is a Pro feature"}
+          </Text>
+          <Text style={styles.gateBody}>
+            {isArabic
+              ? "دردشة مع كوتش يعرف سجلك، أهدافك، وPR اللي كسرتها هالأسبوع."
+              : "Chat with an AI dietitian that knows your logs, goals, and the PRs you broke this week."}
+          </Text>
+          <View style={{ height: spacing.md }} />
+          <Btn
+            label={isArabic ? "افتح Pro" : "Unlock Pro"}
+            onPress={() =>
+              router.push({
+                pathname: "/paywall",
+                params: { feature: "ai_coach" },
+              })
+            }
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -191,6 +232,31 @@ const styles = StyleSheet.create({
     fontFamily: font.body,
     fontSize: 13,
     color: colors.dim,
+  },
+  gate: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+    gap: spacing.xs,
+    justifyContent: "center",
+  },
+  gateKicker: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  gateH: {
+    fontFamily: font.displayBold,
+    fontSize: 28,
+    color: colors.ink,
+  },
+  gateBody: {
+    fontFamily: font.body,
+    fontSize: 15,
+    color: colors.dim,
+    lineHeight: 22,
+    marginTop: 4,
   },
   transcript: { flex: 1 },
   transcriptContent: {
