@@ -23,9 +23,6 @@
       "associatedDomains": [
         "applinks:se7a.app"
       ],
-      "entitlements": {
-        "com.apple.security.application-groups": ["group.app.se7a.mobile"]
-      },
       "infoPlist": {
         "NSCameraUsageDescription": "SE7A uses the camera to scan plates, menus, and physique photos for nutrition and body-composition estimates.",
         "NSPhotoLibraryUsageDescription": "SE7A reads photos from your library to analyze plates and menus.",
@@ -72,8 +69,7 @@
           "healthSharePermission": "SE7A reads your weight and workout history from Apple Health to keep your progress in sync.",
           "healthUpdatePermission": "SE7A saves the weight check-ins you log so they show up in Apple Health."
         }
-      ],
-      "@bacons/apple-targets"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
