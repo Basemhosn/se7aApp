@@ -20,13 +20,31 @@ export const PRO_ENTITLEMENT = "pro";
 let configured = false;
 
 function apiKey(): string | null {
-  if (Platform.OS === "ios") {
-    return process.env.EXPO_PUBLIC_RC_IOS_KEY ?? null;
+  const raw =
+    Platform.OS === "ios"
+      ? process.env.EXPO_PUBLIC_RC_IOS_KEY
+      : Platform.OS === "android"
+        ? process.env.EXPO_PUBLIC_RC_ANDROID_KEY
+        : null;
+  if (!raw) return null;
+  // RC public keys are `appl_...` (iOS) or `goog_...` (Android). Anything
+  // else — like the `test_` demo string from the RC signup wizard — will
+  // make the native SDK throw an NSException on configure(), which
+  // crashes the app before any JS try/catch can help. Refuse to init
+  // rather than crash; the paywall will show its empty-offering state.
+  const isValidShape =
+    (Platform.OS === "ios" && raw.startsWith("appl_")) ||
+    (Platform.OS === "android" && raw.startsWith("goog_"));
+  if (!isValidShape) {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[rc] EXPO_PUBLIC_RC_${Platform.OS.toUpperCase()}_KEY doesn't look like a real RC key (expected appl_/goog_ prefix). Skipping IAP init.`
+      );
+    }
+    return null;
   }
-  if (Platform.OS === "android") {
-    return process.env.EXPO_PUBLIC_RC_ANDROID_KEY ?? null;
-  }
-  return null;
+  return raw;
 }
 
 /**
