@@ -27,11 +27,18 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { hydrateLocaleFromStorage } from "@/lib/i18n";
 import { initAnalytics, track } from "@/lib/analytics";
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  tracesSampleRate: 0,
-  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
-});
+// Sentry.init runs at module-load time. Any throw here (invalid DSN,
+// missing native side, transient linker issue) crashes the whole bundle
+// before RN can render an error. Wrap defensively.
+try {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    tracesSampleRate: 0,
+    enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+  });
+} catch {
+  /* leave Sentry disabled rather than crash on launch */
+}
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

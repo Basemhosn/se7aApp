@@ -1,9 +1,18 @@
-import PostHog from "posthog-react-native";
+// posthog-react-native's import runs native-module registration at
+// bundle load. If anything there throws (e.g. on New Architecture,
+// missing linked framework), the whole bundle fatals before RN
+// renders. Import lazily via require() from inside initAnalytics so
+// nothing runs unless we actually need analytics.
+type PostHogInstance = {
+  capture: (event: string, props?: Record<string, unknown>) => void;
+  identify: (id: string, props?: Record<string, unknown>) => void;
+  reset: () => void;
+};
 
 const API_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? "";
 const HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
 
-let ph: PostHog | null = null;
+let ph: PostHogInstance | null = null;
 
 /**
  * Initialize PostHog once at app boot. No-op if the env var isn't set —
@@ -11,12 +20,24 @@ let ph: PostHog | null = null;
  */
 export function initAnalytics() {
   if (!API_KEY || ph) return;
-  ph = new PostHog(API_KEY, {
-    host: HOST,
-    // We don't want session recording by default — user privacy first.
-    // Enable per-flag if needed later.
-    enableSessionReplay: false,
-  });
+  try {
+    // Lazy require so a bad native side of posthog-react-native can't
+    // crash the app on launch — worst case, analytics silently disabled.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { default: PostHog } = require("posthog-react-native") as {
+      default: new (
+        key: string,
+        opts: { host: string; enableSessionReplay: boolean }
+      ) => PostHogInstance;
+    };
+    ph = new PostHog(API_KEY, {
+      host: HOST,
+      // Session recording off by default — user privacy first.
+      enableSessionReplay: false,
+    });
+  } catch {
+    /* analytics offline; app continues */
+  }
 }
 
 /**
