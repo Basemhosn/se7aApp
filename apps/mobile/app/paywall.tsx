@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
-import type { PurchasesOffering, PurchasesPackage } from "react-native-purchases";
+import type { PurchasesOffering, PurchasesPackage } from "@/lib/rc";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
