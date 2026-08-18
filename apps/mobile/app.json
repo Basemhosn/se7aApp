@@ -51,7 +51,6 @@
           "cameraPermission": "SE7A needs camera access to scan plates, menus, and physique photos."
         }
       ],
-      "@sentry/react-native",
       "expo-asset",
       "./plugins/withFmtConstevalFix",
       [
@@ -61,7 +60,15 @@
           "color": "#f6b73c"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "se7a-mobile",
+          "organization": "se7a-app"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
