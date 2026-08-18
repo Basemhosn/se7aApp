@@ -1,25 +1,63 @@
+// posthog-react-native's import runs native-module registration at
+// bundle load. If anything there throws (e.g. on New Architecture,
+// missing linked framework), the whole bundle fatals before RN
+// renders. Import lazily via require() from inside initAnalytics so
+// nothing runs unless we actually need analytics.
+type PostHogInstance = {
+  capture: (event: string, props?: Record<string, unknown>) => void;
+  identify: (id: string, props?: Record<string, unknown>) => void;
+  reset: () => void;
+};
+
+const API_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? "";
+const HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
+
+let ph: PostHogInstance | null = null;
+
 /**
- * TEMPORARY STUB — posthog-react-native removed for TestFlight launch
- * bisect. All exports here are no-ops so callers don't need to change.
- * Restore this file to its git history state once we identify + patch
- * the crash cause and re-add PostHog.
+ * Initialize PostHog once at app boot. No-op if the env var isn't set —
+ * lets local dev + first-run states work without an analytics backend.
  */
+export function initAnalytics() {
+  if (!API_KEY || ph) return;
+  try {
+    // Lazy require so a bad native side of posthog-react-native can't
+    // crash the app on launch — worst case, analytics silently disabled.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { default: PostHog } = require("posthog-react-native") as {
+      default: new (
+        key: string,
+        opts: { host: string; enableSessionReplay: boolean }
+      ) => PostHogInstance;
+    };
+    ph = new PostHog(API_KEY, {
+      host: HOST,
+      // Session recording off by default — user privacy first.
+      enableSessionReplay: false,
+    });
+  } catch {
+    /* analytics offline; app continues */
+  }
+}
 
 type Props = Record<string, string | number | boolean | null>;
 
-export function initAnalytics() {
-  /* no-op */
-}
-export function identify(_userId: string, _props?: Props) {
-  /* no-op */
-}
-export function track(_event: EventName, _props?: Props) {
-  /* no-op */
-}
-export function resetAnalytics() {
-  /* no-op */
+export function identify(userId: string, props?: Props) {
+  ph?.identify(userId, props);
 }
 
+export function track(event: EventName, props?: Props) {
+  ph?.capture(event, props);
+}
+
+export function resetAnalytics() {
+  ph?.reset();
+}
+
+/**
+ * Enumerated event names — keeps taxonomy from drifting via typos.
+ * When you need a new event, add it here first.
+ */
 export type EventName =
   | "app_opened"
   | "signup_completed"
