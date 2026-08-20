@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
@@ -114,22 +114,90 @@ export default function Calendar() {
 
   const grid = useMemo(() => buildMonthGrid(year, month), [year, month]);
   const todayKey = fmtDate(today);
+  const isThisMonth =
+    year === today.getFullYear() && month === today.getMonth() + 1;
+
+  // Month-level derived stats from the loaded summaries.
+  const monthStats = useMemo(() => {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let logged = 0;
+    let workouts = 0;
+    const weights: { at: string; kg: number }[] = [];
+    for (const [dateStr, s] of byDate) {
+      if (!dateStr.startsWith(`${year}-${String(month).padStart(2, "0")}`))
+        continue;
+      if ((s.meals ?? 0) > 0) logged += 1;
+      if (s.workout) workouts += 1;
+      if (s.weight_kg != null) weights.push({ at: dateStr, kg: Number(s.weight_kg) });
+    }
+    weights.sort((a, b) => a.at.localeCompare(b.at));
+    const weightDelta =
+      weights.length >= 2
+        ? Math.round((weights[weights.length - 1]!.kg - weights[0]!.kg) * 10) / 10
+        : null;
+    return { daysInMonth, logged, workouts, weightDelta };
+  }, [byDate, year, month]);
 
   return (
     <Screen>
       <View style={styles.monthRow}>
         <Pressable onPress={prev} style={styles.navBtn}>
-          <Text style={styles.navText}>‹</Text>
+          <Ionicons name="chevron-back" size={20} color={colors.ink} />
         </Pressable>
-        <Pressable onPress={jumpToday} style={{ flex: 1, alignItems: "center" }}>
+        <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={styles.kicker}>{t("calendar.title_prefix")}</Text>
           <Text style={styles.h1}>
             {MONTHS[month - 1]} {year}
           </Text>
-        </Pressable>
+        </View>
         <Pressable onPress={next} style={styles.navBtn}>
-          <Text style={styles.navText}>›</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.ink} />
         </Pressable>
+      </View>
+
+      {!isThisMonth && (
+        <Pressable onPress={jumpToday} style={styles.todayPill}>
+          <Ionicons name="return-up-back" size={14} color={colors.gold} />
+          <Text style={styles.todayPillLabel}>Jump to today</Text>
+        </Pressable>
+      )}
+
+      <View style={styles.statsStrip}>
+        <StatCell
+          icon="checkmark-circle"
+          tint={colors.mint}
+          value={`${monthStats.logged}`}
+          unit={`/ ${monthStats.daysInMonth} days`}
+          label="LOGGED"
+        />
+        <View style={styles.statDivider} />
+        <StatCell
+          icon="barbell"
+          tint={colors.gold}
+          value={`${monthStats.workouts}`}
+          unit={monthStats.workouts === 1 ? "workout" : "workouts"}
+          label="LIFTED"
+        />
+        <View style={styles.statDivider} />
+        <StatCell
+          icon="fitness"
+          tint={
+            monthStats.weightDelta == null
+              ? colors.dim
+              : monthStats.weightDelta < 0
+                ? colors.mint
+                : monthStats.weightDelta > 0
+                  ? colors.coral
+                  : colors.dim
+          }
+          value={
+            monthStats.weightDelta == null
+              ? "—"
+              : `${monthStats.weightDelta > 0 ? "+" : ""}${monthStats.weightDelta}`
+          }
+          unit="kg"
+          label="WEIGHT Δ"
+        />
       </View>
 
       <View style={styles.weekdayRow}>
@@ -153,23 +221,40 @@ export default function Calendar() {
             const dateStr = fmtDateFrom(year, month, cell);
             const summary = byDate.get(dateStr);
             const isToday = dateStr === todayKey;
+            const hasMeals = !!summary?.meals;
+            const hasWorkout = !!summary?.workout;
+            const hasWeight = summary?.weight_kg != null;
             return (
               <Pressable
                 key={i}
                 onPress={() => openDay(dateStr)}
-                style={[styles.cell, isToday && styles.cellToday]}
+                style={styles.cell}
               >
-                <Text style={[styles.dayNum, isToday && styles.dayNumToday]}>
-                  {cell}
-                </Text>
+                <View
+                  style={[
+                    styles.dayCircle,
+                    isToday && styles.dayCircleToday,
+                    hasMeals && !isToday && styles.dayCircleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dayNum,
+                      isToday && styles.dayNumToday,
+                      hasMeals && !isToday && styles.dayNumActive,
+                    ]}
+                  >
+                    {cell}
+                  </Text>
+                </View>
                 <View style={styles.dots}>
-                  {summary?.meals ? (
+                  {hasMeals ? (
                     <View style={[styles.dot, { backgroundColor: colors.gold }]} />
                   ) : null}
-                  {summary?.workout ? (
+                  {hasWorkout ? (
                     <View style={[styles.dot, { backgroundColor: colors.mint }]} />
                   ) : null}
-                  {summary?.weight_kg != null ? (
+                  {hasWeight ? (
                     <View style={[styles.dot, { backgroundColor: colors.coral }]} />
                   ) : null}
                 </View>
@@ -191,12 +276,20 @@ export default function Calendar() {
         transparent
         onRequestClose={() => setPickedDate(null)}
       >
-        <View style={styles.modalBg}>
-          <View style={styles.modalCard}>
+        <Pressable
+          style={styles.modalBg}
+          onPress={() => setPickedDate(null)}
+        >
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.dragHandle} />
             <View style={styles.modalHead}>
               <Text style={styles.modalDate}>{pickedDate && niceDate(pickedDate)}</Text>
-              <Pressable onPress={() => setPickedDate(null)}>
-                <Text style={styles.close}>✕</Text>
+              <Pressable
+                onPress={() => setPickedDate(null)}
+                hitSlop={12}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close" size={18} color={colors.dim} />
               </Pressable>
             </View>
             {detailLoading ? (
@@ -206,8 +299,8 @@ export default function Calendar() {
             ) : (
               <Text style={styles.emptyDay}>{t("calendar.empty_day")}</Text>
             )}
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </Screen>
   );
@@ -290,6 +383,33 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
   );
 }
 
+function StatCell({
+  icon,
+  tint,
+  value,
+  unit,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  value: string;
+  unit: string;
+  label: string;
+}) {
+  return (
+    <View style={styles.statCell}>
+      <View style={styles.statIconRow}>
+        <Ionicons name={icon} size={12} color={tint} />
+        <Text style={[styles.statLabel, { color: tint }]}>{label}</Text>
+      </View>
+      <Text style={styles.statValue}>
+        {value}
+        <Text style={styles.statUnit}> {unit}</Text>
+      </Text>
+    </View>
+  );
+}
+
 function Legend({ color, label }: { color: string; label: string }) {
   return (
     <View style={styles.legendRow}>
@@ -351,6 +471,93 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.ink,
   },
+  todayPill: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.08)",
+  },
+  todayPillLabel: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 0.6,
+  },
+  statsStrip: {
+    flexDirection: "row",
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  statCell: { flex: 1, gap: 2 },
+  statIconRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+  statValue: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  statUnit: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+  },
+  statDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    marginVertical: 2,
+    marginHorizontal: spacing.sm,
+    backgroundColor: colors.line,
+  },
+  dayCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayCircleToday: {
+    backgroundColor: colors.gold,
+  },
+  dayCircleActive: {
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  dayNumActive: {
+    fontFamily: font.displayBold,
+  },
+  dragHandle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.line,
+    marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   kicker: {
     fontFamily: font.mono,
     fontSize: 10,
@@ -387,17 +594,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 6,
   },
-  cellToday: {
-    backgroundColor: "rgba(246,183,60,0.10)",
-    borderRadius: 8,
-  },
   dayNum: {
     fontFamily: font.body,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.ink,
   },
   dayNumToday: {
-    color: colors.gold,
+    color: colors.bg,
     fontFamily: font.displayBold,
   },
   dots: {
