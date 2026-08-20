@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import type {
+  PurchasesOffering,
+  PurchasesPackage,
+} from "@/lib/rc";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { Wordmark } from "@/components/Wordmark";
+import { useEntitlement } from "@/lib/EntitlementContext";
+import { fetchOffering, purchasePackage } from "@/lib/rc";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
@@ -41,6 +54,7 @@ const STEPS = [
   "rest_day",
   "injuries",
   "reveal",
+  "trial_offer",
 ] as const;
 type Step = (typeof STEPS)[number];
 
@@ -64,6 +78,10 @@ export default function Onboarding() {
   const [days, setDays] = useState<number | null>(null);
   const [restDayDelta, setRestDayDelta] = useState<number>(0);
   const [injuryText, setInjuryText] = useState("");
+
+  const { ent, optimisticProFromRc } = useEntitlement();
+  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+  const [trialBusy, setTrialBusy] = useState(false);
 
   const [ranked, setRanked] = useState<Scored[] | null>(null);
   const [pickedProgram, setPickedProgram] = useState<Program | null>(null);
@@ -125,14 +143,68 @@ export default function Onboarding() {
       case "rest_day": return true; // always advances — default 0
       case "injuries": return true; // optional
       case "reveal": return !!pickedProgram;
+      case "trial_offer": return true; // both actions live on this step
       default: return false;
     }
   })();
+
+  // Fetch the RC offering once we're on (or about to be on) the trial
+  // step so the two package prices land before the user glances at them.
+  useEffect(() => {
+    if (step !== "trial_offer" || offering) return;
+    let cancelled = false;
+    (async () => {
+      const off = await fetchOffering();
+      if (!cancelled) setOffering(off);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, offering]);
 
   const back = () => {
     setErr("");
     const i = STEPS.indexOf(step);
     if (i > 0) setStep(STEPS[i - 1]!);
+  };
+
+  // Reveal step's CTA normally advances to the trial_offer step. For
+  // users who are already Pro (reopening onboarding to redo their plan),
+  // we skip the paywall step and finish immediately.
+  const revealCta = () => {
+    if (ent.is_pro) {
+      finish();
+    } else {
+      setStep("trial_offer");
+    }
+  };
+
+  const startTrial = async () => {
+    if (!offering) return;
+    // Prefer annual (that's where the trial typically lives), fall back
+    // to monthly if the RC dashboard only configured a monthly trial.
+    const pkg =
+      offering.availablePackages.find((p) =>
+        p.product.identifier.toLowerCase().includes("annual")
+      ) ??
+      offering.availablePackages.find((p) => p.packageType === "ANNUAL") ??
+      offering.availablePackages[0];
+    if (!pkg) return;
+    setTrialBusy(true);
+    setErr("");
+    const res = await purchasePackage(pkg as PurchasesPackage);
+    setTrialBusy(false);
+    if (res.cancelled) return; // stay on the trial step
+    if (res.info === null) {
+      setErr(res.error || "Couldn't start trial — try again.");
+      return;
+    }
+    await optimisticProFromRc();
+    await finish();
+  };
+
+  const skipTrial = async () => {
+    await finish();
   };
 
   const advance = async () => {
@@ -221,7 +293,31 @@ export default function Onboarding() {
     }
   };
 
-  const footer = (
+  const footer = step === "trial_offer" ? (
+    <>
+      {!!err && <Text style={styles.err}>{err}</Text>}
+      <Btn
+        label={
+          trialBusy
+            ? "Working…"
+            : offering
+              ? "Start 7-day free trial"
+              : "Loading…"
+        }
+        onPress={startTrial}
+        loading={trialBusy || busy}
+        disabled={!offering}
+      />
+      <Pressable
+        onPress={skipTrial}
+        disabled={busy || trialBusy}
+        hitSlop={8}
+        style={styles.skipLink}
+      >
+        <Text style={styles.skipLinkText}>Continue on free</Text>
+      </Pressable>
+    </>
+  ) : (
     <>
       {!!err && <Text style={styles.err}>{err}</Text>}
       <View style={styles.footerRow}>
@@ -234,7 +330,7 @@ export default function Onboarding() {
           {step === "reveal" ? (
             <Btn
               label={busy ? t("common.saving") : t("onboarding.cta_start_plan")}
-              onPress={finish}
+              onPress={revealCta}
               loading={busy}
               disabled={!canAdvance}
             />
@@ -578,7 +674,111 @@ export default function Onboarding() {
           />
         </>
       )}
+
+      {step === "trial_offer" && (
+        <TrialOfferStep offering={offering} />
+      )}
     </Screen>
+  );
+}
+
+function TrialOfferStep({ offering }: { offering: PurchasesOffering | null }) {
+  const annual =
+    offering?.availablePackages.find((p) =>
+      p.product.identifier.toLowerCase().includes("annual")
+    ) ??
+    offering?.availablePackages.find((p) => p.packageType === "ANNUAL");
+  const monthly =
+    offering?.availablePackages.find((p) =>
+      p.product.identifier.toLowerCase().includes("monthly")
+    ) ??
+    offering?.availablePackages.find((p) => p.packageType === "MONTHLY");
+
+  return (
+    <View style={{ gap: spacing.md, paddingTop: spacing.xl }}>
+      <View style={styles.trialAvatar}>
+        <Ionicons name="sparkles" size={40} color={colors.gold} />
+      </View>
+      <Text style={styles.kicker}>SE7A · PRO</Text>
+      <Text style={styles.hero}>Try Pro free for 7 days.</Text>
+      <Text style={styles.heroSub}>
+        Meal plans, AI coach, unlimited scans. Cancel anytime — no charge
+        during the trial.
+      </Text>
+
+      <View style={styles.trialBenefits}>
+        <TrialBenefit
+          icon="restaurant-outline"
+          title="Weekly meal plans"
+          body="7-day plan + auto shopping list."
+        />
+        <TrialBenefit
+          icon="chatbubbles-outline"
+          title="AI coach chat"
+          body="Answers about your logs, macros, PRs."
+        />
+        <TrialBenefit
+          icon="scan-outline"
+          title="Menu + body scans"
+          body="Snap a menu, get macros. Body-fat range from a photo."
+        />
+      </View>
+
+      {offering ? (
+        <View style={styles.priceCard}>
+          {annual ? (
+            <>
+              <Text style={styles.priceKicker}>ANNUAL · 7 DAYS FREE</Text>
+              <Text style={styles.priceValue}>
+                {annual.product.priceString}
+                <Text style={styles.pricePer}> / year after trial</Text>
+              </Text>
+            </>
+          ) : monthly ? (
+            <>
+              <Text style={styles.priceKicker}>MONTHLY</Text>
+              <Text style={styles.priceValue}>
+                {monthly.product.priceString}
+                <Text style={styles.pricePer}> / month</Text>
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.priceValue}>Pricing unavailable</Text>
+          )}
+        </View>
+      ) : (
+        <View style={styles.priceCard}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      )}
+
+      <Text style={styles.trialLegal}>
+        Subscription auto-renews at the end of the trial. Cancel any time
+        in Apple ID Settings before the trial ends to avoid charges.
+      </Text>
+    </View>
+  );
+}
+
+function TrialBenefit({
+  icon,
+  title,
+  body,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+}) {
+  return (
+    <View style={styles.trialBenefitRow}>
+      <View style={styles.trialBenefitIcon}>
+        <Ionicons name={icon} size={18} color={colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.trialBenefitTitle}>{title}</Text>
+        <Text style={styles.trialBenefitBody}>{body}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -1127,6 +1327,94 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
+  trialAvatar: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "rgba(246,183,60,0.08)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+  },
+  trialBenefits: {
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  trialBenefitRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "flex-start",
+  },
+  trialBenefitIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  trialBenefitTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  trialBenefitBody: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 19,
+    marginTop: 2,
+  },
+  priceCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    alignItems: "center",
+    gap: 4,
+  },
+  priceKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  priceValue: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  pricePer: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+  },
+  trialLegal: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    lineHeight: 15,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  skipLink: {
+    alignSelf: "center",
+    paddingVertical: spacing.sm,
+  },
+  skipLinkText: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.dim,
+    textDecorationLine: "underline",
+  },
   warnCard: {
     borderWidth: 1,
     borderColor: colors.coral,
