@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -95,18 +98,59 @@ export default function Calendar() {
     setDetailLoading(false);
   };
 
-  const prev = () => {
+  const prev = useCallback(() => {
     if (month === 1) {
       setYear((y) => y - 1);
       setMonth(12);
     } else setMonth((m) => m - 1);
-  };
-  const next = () => {
+  }, [month]);
+  const next = useCallback(() => {
     if (month === 12) {
       setYear((y) => y + 1);
       setMonth(1);
     } else setMonth((m) => m + 1);
-  };
+  }, [month]);
+
+  // Swipe-to-navigate. Uses PanResponder so it composes with the parent
+  // vertical ScrollView — only claims a gesture when horizontal motion
+  // clearly dominates. Grid follows the finger up to ±60 px for feedback,
+  // then snaps back to 0 (either into a new month or back to where it was).
+  const translateX = useRef(new Animated.Value(0)).current;
+  const SWIPE_THRESHOLD_PX = 60;
+  const SWIPE_VELOCITY = 0.35;
+  const snapBack = useCallback(() => {
+    Animated.timing(translateX, {
+      toValue: 0,
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [translateX]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > Math.abs(g.dy) * 1.2 && Math.abs(g.dx) > 5,
+        onPanResponderMove: (_, g) => {
+          const damped = Math.max(-80, Math.min(80, g.dx * 0.55));
+          translateX.setValue(damped);
+        },
+        onPanResponderRelease: (_, g) => {
+          const goPrev = g.dx > SWIPE_THRESHOLD_PX || g.vx > SWIPE_VELOCITY;
+          const goNext = g.dx < -SWIPE_THRESHOLD_PX || g.vx < -SWIPE_VELOCITY;
+          if (goPrev) {
+            prev();
+          } else if (goNext) {
+            next();
+          }
+          snapBack();
+        },
+        onPanResponderTerminate: () => snapBack(),
+      }),
+    [prev, next, snapBack, translateX]
+  );
   const jumpToday = () => {
     setYear(today.getFullYear());
     setMonth(today.getMonth() + 1);
@@ -200,20 +244,24 @@ export default function Calendar() {
         />
       </View>
 
-      <View style={styles.weekdayRow}>
-        {weekdayHead.map((d, i) => (
-          <Text key={i} style={styles.weekdayText}>
-            {d}
-          </Text>
-        ))}
-      </View>
-
-      {loading ? (
-        <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
-          <ActivityIndicator color={colors.gold} />
+      <Animated.View
+        style={[styles.swipeWrap, { transform: [{ translateX }] }]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.weekdayRow}>
+          {weekdayHead.map((d, i) => (
+            <Text key={i} style={styles.weekdayText}>
+              {d}
+            </Text>
+          ))}
         </View>
-      ) : (
-        <View style={styles.grid}>
+
+        {loading ? (
+          <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
+            <ActivityIndicator color={colors.gold} />
+          </View>
+        ) : (
+          <View style={styles.grid}>
           {grid.map((cell, i) => {
             if (!cell) {
               return <View key={i} style={styles.cell} />;
@@ -262,7 +310,8 @@ export default function Calendar() {
             );
           })}
         </View>
-      )}
+        )}
+      </Animated.View>
 
       <View style={styles.legend}>
         <Legend color={colors.gold} label={t("calendar.legend_meals")} />
@@ -568,6 +617,9 @@ const styles = StyleSheet.create({
     fontFamily: font.displayBold,
     fontSize: 22,
     color: colors.ink,
+  },
+  swipeWrap: {
+    gap: spacing.xs,
   },
   weekdayRow: {
     flexDirection: "row",
