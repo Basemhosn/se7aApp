@@ -17,6 +17,7 @@ import { Btn } from "@/components/Btn";
 import { TrendChart } from "@/components/TrendChart";
 import { AdherenceRing } from "@/components/AdherenceRing";
 import { api } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface TrendResponse {
@@ -154,6 +155,7 @@ export default function Progress() {
           body_fat_pct: bf ? Number(bf) : undefined,
         }),
       });
+      markDayDirty();
       setWeight("");
       setBf("");
       await load(days);

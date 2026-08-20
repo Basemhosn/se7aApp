@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import type { LedgerTodayResponse } from "@/types";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -103,6 +104,7 @@ export default function Log() {
           ],
         }),
       });
+      markDayDirty();
       await load();
     } catch (e) {
       Alert.alert(t("log.couldnt_log"), (e as Error).message);

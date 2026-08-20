@@ -15,6 +15,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { PlanTabs } from "@/components/PlanTabs";
+import { markDayDirty } from "@/lib/calendarCache";
 import { useFoodImage } from "@/lib/useFoodImage";
 import {
   api,
@@ -166,6 +167,7 @@ export default function MealPlan() {
           slot,
         }),
       });
+      markDayDirty();
       await load();
     } catch (e) {
       Alert.alert(

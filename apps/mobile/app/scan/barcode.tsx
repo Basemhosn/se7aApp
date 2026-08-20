@@ -21,6 +21,7 @@ import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
 
@@ -180,6 +181,7 @@ export default function BarcodeScan() {
           ],
         }),
       });
+      markDayDirty();
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't log — try again.");

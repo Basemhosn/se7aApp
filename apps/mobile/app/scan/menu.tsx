@@ -15,6 +15,7 @@ import {
   RateLimitedError,
   rateLimitMessage,
 } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -145,6 +146,7 @@ export default function MenuScan() {
           })),
         }),
       });
+      markDayDirty();
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("scan.menu.couldnt_save"));

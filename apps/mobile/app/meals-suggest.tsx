@@ -13,6 +13,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -119,6 +120,7 @@ export default function MealsSuggest() {
           ],
         }),
       });
+      markDayDirty();
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't log — try again.");

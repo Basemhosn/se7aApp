@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
+import { consumeDirtyMonths } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface DaySummary {
@@ -122,13 +123,21 @@ export default function Calendar() {
     };
   }, [year, month, loadMonth, fetchedMonths]);
 
-  // Re-fetch the current month whenever the tab regains focus, so if
-  // the user logs a meal from another tab and comes back, dots update.
-  // Adjacent months keep their cache to avoid a network storm.
+  // On tab focus: invalidate every month that some mutation elsewhere
+  // marked dirty, then re-fetch each. Falls back to invalidating just
+  // the current visible month if nothing was signaled — safety net for
+  // any mutation site we forgot to instrument.
   useFocusEffect(
     useCallback(() => {
-      fetchedMonths.delete(monthKey(year, month));
-      loadMonth(year, month);
+      const dirtyMonths = consumeDirtyMonths();
+      const currentKey = monthKey(year, month);
+      const toInvalidate = new Set<string>(dirtyMonths);
+      toInvalidate.add(currentKey);
+      for (const key of toInvalidate) {
+        fetchedMonths.delete(key);
+        const [y, m] = key.split("-").map(Number) as [number, number];
+        loadMonth(y, m);
+      }
     }, [year, month, loadMonth, fetchedMonths])
   );
 

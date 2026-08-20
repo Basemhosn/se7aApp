@@ -14,6 +14,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import type { ExerciseSpec, Program, Session } from "@/lib/programs";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -168,6 +169,7 @@ export default function Workout() {
           notes: notes.trim() || null,
         }),
       });
+      markDayDirty();
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("workout.couldnt_save"));

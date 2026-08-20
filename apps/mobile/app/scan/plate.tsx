@@ -9,6 +9,7 @@ import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -136,6 +137,7 @@ export default function PlateScan() {
           items: picked.map((it) => ({ ...it, confidence })),
         }),
       });
+      markDayDirty();
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("scan.plate.couldnt_save"));

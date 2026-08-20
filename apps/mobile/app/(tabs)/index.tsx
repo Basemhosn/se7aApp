@@ -15,6 +15,7 @@ import { WaterRing } from "@/components/WaterRing";
 import { CalorieRing } from "@/components/CalorieRing";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
+import { markDayDirty } from "@/lib/calendarCache";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
@@ -128,6 +129,7 @@ export default function Home() {
         method: "POST",
         body: JSON.stringify({ ml }),
       });
+      markDayDirty();
     } catch {
       setWater(water);
     }
