@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { api, ProRequiredError } from "@/lib/api";
 import { Btn } from "@/components/Btn";
@@ -28,6 +30,35 @@ interface Message {
 interface HistoryResponse {
   messages: Message[];
 }
+
+interface Suggestion {
+  icon: keyof typeof Ionicons.glyphMap;
+  en: string;
+  ar: string;
+}
+
+const SUGGESTIONS: Suggestion[] = [
+  {
+    icon: "restaurant-outline",
+    en: "What should I eat right now?",
+    ar: "شنو آكل هالحين؟",
+  },
+  {
+    icon: "trending-up-outline",
+    en: "How's my week going?",
+    ar: "كيف أسبوعي؟",
+  },
+  {
+    icon: "fitness-outline",
+    en: "How do I hit my next PR?",
+    ar: "كيف أكسر الPR القادم؟",
+  },
+  {
+    icon: "flame-outline",
+    en: "Am I eating enough protein?",
+    ar: "أكل بروتين كافي؟",
+  },
+];
 
 export default function Coach() {
   const { t, i18n } = useTranslation();
@@ -48,7 +79,7 @@ export default function Coach() {
       setErr((e as Error).message || t("coach.error_load"));
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -62,15 +93,15 @@ export default function Coach() {
     }
   }, [messages]);
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || busy) return;
+  const sendMessage = async (text: string) => {
+    const clean = text.trim();
+    if (!clean || busy) return;
     setInput("");
     setErr("");
     const optimistic: Message = {
       id: Date.now(),
       role: "user",
-      content: text,
+      content: clean,
       created_at: new Date().toISOString(),
     };
     setMessages((m) => [...m, optimistic]);
@@ -78,7 +109,7 @@ export default function Coach() {
     try {
       const res = await api<{ reply: string }>("/api/chat/send", {
         method: "POST",
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: clean }),
       });
       setMessages((m) => [
         ...m,
@@ -103,8 +134,13 @@ export default function Coach() {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.head}>
-          <Text style={styles.title}>{t("coach.title")}</Text>
-          <Text style={styles.sub}>{t("coach.sub")}</Text>
+          <View style={styles.avatar}>
+            <Ionicons name="sparkles" size={20} color={colors.gold} />
+          </View>
+          <View>
+            <Text style={styles.title}>SE7A Coach</Text>
+            <Text style={styles.sub}>{t("coach.sub")}</Text>
+          </View>
         </View>
         <View style={styles.gate}>
           <Text style={styles.gateKicker}>SE7A · PRO</Text>
@@ -131,11 +167,26 @@ export default function Coach() {
     );
   }
 
+  const canSend = !!input.trim() && !busy;
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.head}>
-        <Text style={styles.title}>{t("coach.title")}</Text>
-        <Text style={styles.sub}>{t("coach.sub")}</Text>
+        <View style={styles.avatar}>
+          <Ionicons name="sparkles" size={20} color={colors.gold} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>SE7A Coach</Text>
+          <Text style={styles.sub}>
+            {busy
+              ? isArabic
+                ? "يفكر…"
+                : "Thinking…"
+              : isArabic
+                ? "كوتشك الشخصي"
+                : "Your AI dietitian"}
+          </Text>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -150,64 +201,170 @@ export default function Coach() {
           keyboardShouldPersistTaps="handled"
         >
           {loading ? (
-            <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.xl }} />
+            <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
+              <TypingDots />
+            </View>
           ) : messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>{t("coach.empty_title")}</Text>
-              <Text style={styles.emptyBody}>
-                {t("coach.empty_body")}
+              <View style={styles.emptyAvatar}>
+                <Ionicons name="sparkles" size={40} color={colors.gold} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {isArabic ? "أهلاً — أنا كوتشك." : "Hey — I'm your coach."}
               </Text>
+              <Text style={styles.emptyBody}>
+                {isArabic
+                  ? "اسألني عن الأكل، التمرين، أو تقدمك. أعرف سجلك."
+                  : "Ask about your food, workouts, or progress. I've got your logs."}
+              </Text>
+              <View style={styles.suggestGrid}>
+                {SUGGESTIONS.map((s) => {
+                  const text = isArabic ? s.ar : s.en;
+                  return (
+                    <Pressable
+                      key={s.en}
+                      onPress={() => sendMessage(text)}
+                      style={styles.suggestChip}
+                    >
+                      <Ionicons name={s.icon} size={14} color={colors.gold} />
+                      <Text style={styles.suggestText}>{text}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           ) : (
-            messages.map((m) => <Bubble key={m.id} msg={m} />)
+            messages.map((m, i) => {
+              const prev = messages[i - 1];
+              const groupWithPrev = prev && prev.role === m.role;
+              return <Bubble key={m.id} msg={m} groupWithPrev={groupWithPrev} />;
+            })
           )}
           {busy && (
-            <View style={[styles.bubble, styles.bubbleAssistant]}>
-              <ActivityIndicator color={colors.gold} />
+            <View style={[styles.bubble, styles.bubbleAssistant, styles.typingBubble]}>
+              <TypingDots />
             </View>
           )}
           {!!err && <Text style={styles.err}>{err}</Text>}
         </ScrollView>
 
-        <View style={styles.inputRow}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder={t("coach.input_placeholder")}
-            placeholderTextColor={colors.dim}
-            style={styles.input}
-            multiline
-            maxLength={2000}
-            editable={!busy}
-          />
-          <Pressable
-            onPress={send}
-            disabled={!input.trim() || busy}
-            style={[
-              styles.sendBtn,
-              (!input.trim() || busy) && styles.sendBtnDisabled,
-            ]}
-          >
-            <Text style={styles.sendLabel}>{t("coach.send")}</Text>
-          </Pressable>
+        <View style={styles.inputBar}>
+          <View style={[styles.inputPill, busy && { opacity: 0.6 }]}>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder={
+                isArabic ? "اكتب رسالتك…" : "Message SE7A Coach…"
+              }
+              placeholderTextColor={colors.dim}
+              style={styles.input}
+              multiline
+              maxLength={2000}
+              editable={!busy}
+            />
+            <Pressable
+              onPress={() => sendMessage(input)}
+              disabled={!canSend}
+              style={[
+                styles.sendBtn,
+                !canSend && styles.sendBtnDisabled,
+              ]}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={20}
+                color={canSend ? colors.bg : colors.dim}
+              />
+            </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function Bubble({ msg }: { msg: Message }) {
+function Bubble({
+  msg,
+  groupWithPrev,
+}: {
+  msg: Message;
+  groupWithPrev?: boolean;
+}) {
   const isUser = msg.role === "user";
   return (
     <View
       style={[
         styles.bubble,
         isUser ? styles.bubbleUser : styles.bubbleAssistant,
+        groupWithPrev && { marginTop: 2 },
+        // Sharpen the tail-side corner when it's the first of a group.
+        !groupWithPrev &&
+          (isUser
+            ? { borderBottomRightRadius: 4 }
+            : { borderBottomLeftRadius: 4 }),
       ]}
     >
       <Text style={isUser ? styles.userText : styles.assistantText}>
         {msg.content}
       </Text>
+    </View>
+  );
+}
+
+function TypingDots() {
+  const [a] = useState(new Animated.Value(0));
+  const [b] = useState(new Animated.Value(0));
+  const [c] = useState(new Animated.Value(0));
+
+  useEffect(() => {
+    const cycle = (v: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(v, {
+            toValue: 1,
+            duration: 320,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(v, {
+            toValue: 0,
+            duration: 320,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    const A = cycle(a, 0);
+    const B = cycle(b, 150);
+    const C = cycle(c, 300);
+    A.start();
+    B.start();
+    C.start();
+    return () => {
+      A.stop();
+      B.stop();
+      C.stop();
+    };
+  }, [a, b, c]);
+
+  const dotStyle = (v: Animated.Value) => ({
+    opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+    transform: [
+      {
+        translateY: v.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -3],
+        }),
+      },
+    ],
+  });
+
+  return (
+    <View style={styles.dotsRow}>
+      <Animated.View style={[styles.dot, dotStyle(a)]} />
+      <Animated.View style={[styles.dot, dotStyle(b)]} />
+      <Animated.View style={[styles.dot, dotStyle(c)]} />
     </View>
   );
 }
@@ -219,19 +376,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
-    gap: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(246,183,60,0.15)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: {
     fontFamily: font.displayBold,
-    fontSize: 24,
+    fontSize: 18,
     color: colors.ink,
   },
   sub: {
-    fontFamily: font.body,
-    fontSize: 13,
+    fontFamily: font.mono,
+    fontSize: 11,
     color: colors.dim,
+    marginTop: 1,
+    letterSpacing: 0.5,
   },
   gate: {
     flex: 1,
@@ -266,18 +437,55 @@ const styles = StyleSheet.create({
   },
   empty: {
     marginTop: spacing.xl,
+    alignItems: "center",
     gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  emptyAvatar: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "rgba(246,183,60,0.08)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
   },
   emptyTitle: {
     fontFamily: font.displayBold,
-    fontSize: 22,
+    fontSize: 24,
     color: colors.ink,
+    textAlign: "center",
   },
   emptyBody: {
     fontFamily: font.body,
     fontSize: 14,
     color: colors.dim,
     lineHeight: 21,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  suggestGrid: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+    alignItems: "center",
+  },
+  suggestChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+  },
+  suggestText: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.ink,
   },
   bubble: {
     padding: spacing.md,
@@ -294,6 +502,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
+  typingBubble: {
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+  },
   userText: {
     fontFamily: font.body,
     fontSize: 15,
@@ -306,48 +518,63 @@ const styles = StyleSheet.create({
     color: colors.ink,
     lineHeight: 22,
   },
-  inputRow: {
+  dotsRow: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: 6,
+    alignItems: "center",
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.gold,
+  },
+  inputBar: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.line,
-    alignItems: "flex-end",
     backgroundColor: colors.bg,
   },
-  input: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
+  inputPill: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.sm,
     backgroundColor: colors.panel2,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radius.md,
+    borderRadius: 26,
+    paddingLeft: spacing.md,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+  input: {
+    flex: 1,
+    minHeight: 32,
+    maxHeight: 120,
     color: colors.ink,
     fontFamily: font.body,
     fontSize: 15,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    paddingHorizontal: 0,
   },
   sendBtn: {
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
   },
-  sendBtnDisabled: { opacity: 0.4 },
-  sendLabel: {
-    fontFamily: font.displayBold,
-    fontSize: 14,
-    color: colors.bg,
+  sendBtnDisabled: {
+    backgroundColor: colors.line,
   },
   err: {
     color: colors.coral,
     fontFamily: font.body,
     fontSize: 13,
+    textAlign: "center",
     marginTop: spacing.sm,
   },
 });
