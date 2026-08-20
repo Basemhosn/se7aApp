@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
@@ -116,59 +117,64 @@ export default function Log() {
         <Text style={styles.sub}>{t("log.sub")}</Text>
       </View>
 
-      <View style={styles.ctaCol}>
-        <CTA
-          kicker={t("log.cta_plate_kicker")}
-          title={t("log.cta_plate_title")}
-          subtitle={t("log.cta_plate_sub")}
-          onPress={() => router.push("/scan/plate")}
-          tint={colors.gold}
-        />
-        <CTA
-          kicker={t("log.cta_menu_kicker")}
-          title={t("log.cta_menu_title")}
-          subtitle={t("log.cta_menu_sub")}
+      <HeroCta
+        icon="camera"
+        title={t("log.cta_plate_title")}
+        subtitle={t("log.cta_plate_sub")}
+        onPress={() => router.push("/scan/plate")}
+      />
+
+      <Text style={styles.sectionKicker}>QUICK LOG</Text>
+      <View style={styles.rowGrid}>
+        <TileCta
+          icon="restaurant-outline"
+          label="Menu"
+          tint={colors.mint}
+          proBadge={!ent.is_pro}
           onPress={() => router.push("/scan/menu")}
-          tint={colors.mint}
-          proBadge={!ent.is_pro}
         />
-        <CTA
-          kicker="PACKAGED FOOD"
-          title="Scan a barcode"
-          subtitle="Instant macros from a 3M+ product database."
+        <TileCta
+          icon="barcode-outline"
+          label="Barcode"
+          tint={colors.gold}
           onPress={() => router.push("/scan/barcode")}
-          tint={colors.gold}
         />
-        <CTA
-          kicker={t("log.cta_manual_kicker")}
-          title={t("log.cta_manual_title")}
-          subtitle={t("log.cta_manual_sub")}
-          onPress={() => router.push("/manual-meal")}
+        <TileCta
+          icon="create-outline"
+          label="Manual"
           tint={colors.ink}
-        />
-        <CTA
-          kicker="DON'T KNOW WHAT TO EAT?"
-          title="Ask SE7A"
-          subtitle="AI picks 3 dishes that fit what you have left today."
-          onPress={() => router.push("/meals-suggest")}
-          tint={colors.gold}
-        />
-        <CTA
-          kicker="BROWSE GULF DISHES"
-          title="Recipes"
-          subtitle="Machboos, kabsa, shawarma — with macros. Tap to log."
-          onPress={() => router.push("/recipes")}
-          tint={colors.mint}
-        />
-        <CTA
-          kicker="PLAN THE WEEK"
-          title="7-day meal plan"
-          subtitle="AI builds the week + a shopping list you can check off."
-          onPress={() => router.push("/meal-plan")}
-          tint={colors.gold}
-          proBadge={!ent.is_pro}
+          onPress={() => router.push("/manual-meal")}
         />
       </View>
+
+      <Text style={styles.sectionKicker}>ASK SE7A</Text>
+      <View style={styles.pairGrid}>
+        <PairCta
+          icon="sparkles"
+          kicker="WHAT TO EAT?"
+          title="Suggest a meal"
+          subtitle="3 dishes that fit your day."
+          tint={colors.gold}
+          onPress={() => router.push("/meals-suggest")}
+        />
+        <PairCta
+          icon="calendar"
+          kicker="PLAN THE WEEK"
+          title="7-day plan"
+          subtitle="Auto shopping list."
+          tint={colors.gold}
+          proBadge={!ent.is_pro}
+          onPress={() => router.push("/meal-plan")}
+        />
+      </View>
+
+      <Text style={styles.sectionKicker}>BROWSE</Text>
+      <BrowseCta
+        icon="book-outline"
+        title="Gulf recipes"
+        subtitle="Machboos, kabsa, shawarma — with macros. Tap to log."
+        onPress={() => router.push("/recipes")}
+      />
 
       {recent.length > 0 && (
         <View style={styles.card}>
@@ -190,6 +196,20 @@ export default function Log() {
                   <ActivityIndicator color={colors.gold} />
                 ) : (
                   <>
+                    {it.photo_url ? (
+                      <Image
+                        source={{ uri: it.photo_url }}
+                        style={styles.recentImg}
+                      />
+                    ) : (
+                      <View style={[styles.recentImg, styles.recentImgPh]}>
+                        <Ionicons
+                          name="restaurant-outline"
+                          size={20}
+                          color={colors.dim}
+                        />
+                      </View>
+                    )}
                     <Text style={styles.recentName} numberOfLines={1}>
                       {it.name}
                     </Text>
@@ -257,32 +277,115 @@ export default function Log() {
   );
 }
 
-function CTA({
-  kicker,
+function HeroCta({
+  icon,
   title,
   subtitle,
   onPress,
-  tint,
-  proBadge,
 }: {
-  kicker: string;
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   onPress: () => void;
-  tint: string;
-  proBadge?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.cta}>
-      <Text style={[styles.kicker, { color: tint }]}>{kicker}</Text>
-      <Text style={styles.ctaTitle}>{title}</Text>
-      <Text style={styles.ctaSub}>{subtitle}</Text>
-      <Text style={[styles.ctaArrow, { color: tint }]}>→</Text>
+    <Pressable onPress={onPress} style={styles.hero}>
+      <View style={styles.heroIcon}>
+        <Ionicons name={icon} size={30} color={colors.bg} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.heroKicker}>SNAP A PLATE</Text>
+        <Text style={styles.heroTitle}>{title}</Text>
+        <Text style={styles.heroSub}>{subtitle}</Text>
+      </View>
+      <Text style={styles.heroArrow}>→</Text>
+    </Pressable>
+  );
+}
+
+function TileCta({
+  icon,
+  label,
+  tint,
+  proBadge,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  tint: string;
+  proBadge?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.tile}>
+      <View style={[styles.tileIcon, { borderColor: tint }]}>
+        <Ionicons name={icon} size={22} color={tint} />
+      </View>
+      <Text style={styles.tileLabel}>{label}</Text>
       {proBadge && (
-        <View style={styles.proBadge}>
+        <View style={styles.tileProBadge}>
           <Text style={styles.proBadgeText}>PRO</Text>
         </View>
       )}
+    </Pressable>
+  );
+}
+
+function PairCta({
+  icon,
+  kicker,
+  title,
+  subtitle,
+  tint,
+  proBadge,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  kicker: string;
+  title: string;
+  subtitle: string;
+  tint: string;
+  proBadge?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.pair}>
+      <View style={styles.pairIconRow}>
+        <Ionicons name={icon} size={20} color={tint} />
+        <Text style={[styles.pairKicker, { color: tint }]}>{kicker}</Text>
+      </View>
+      <Text style={styles.pairTitle}>{title}</Text>
+      <Text style={styles.pairSub}>{subtitle}</Text>
+      {proBadge && (
+        <View style={styles.tileProBadge}>
+          <Text style={styles.proBadgeText}>PRO</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function BrowseCta({
+  icon,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.browse}>
+      <View style={styles.browseIcon}>
+        <Ionicons name={icon} size={22} color={colors.mint} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.browseTitle}>{title}</Text>
+        <Text style={styles.browseSub}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.dim} />
     </Pressable>
   );
 }
@@ -304,6 +407,171 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.gold,
     letterSpacing: 1.4,
+  },
+  sectionKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
+    marginTop: spacing.md,
+    marginBottom: 2,
+  },
+  hero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.gold,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  heroKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  heroTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  heroSub: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    marginTop: 2,
+    lineHeight: 19,
+  },
+  heroArrow: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    color: colors.gold,
+  },
+  rowGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  tile: {
+    flex: 1,
+    aspectRatio: 1,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.sm,
+    gap: 8,
+    position: "relative",
+  },
+  tileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.panel2,
+  },
+  tileLabel: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.ink,
+    letterSpacing: 0.3,
+  },
+  tileProBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold,
+  },
+  pairGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  pair: {
+    flex: 1,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 2,
+    position: "relative",
+  },
+  pairIconRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  pairKicker: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    letterSpacing: 1.4,
+  },
+  pairTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 16,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  pairSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  browse: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  browseIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.mint,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  browseTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  browseSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
+    lineHeight: 17,
   },
   ctaCol: { gap: spacing.sm },
   cta: {
@@ -410,13 +678,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   recentChip: {
-    minWidth: 130,
+    width: 140,
     padding: spacing.sm,
     backgroundColor: colors.panel2,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
-    gap: 2,
+    gap: 4,
+  },
+  recentImg: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    borderRadius: radius.sm,
+    backgroundColor: colors.panel,
+    marginBottom: 2,
+  },
+  recentImgPh: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   recentName: {
     fontFamily: font.body,
