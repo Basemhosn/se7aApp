@@ -379,7 +379,7 @@ export default function Home() {
             label: "Log weight",
             icon: "speedometer-outline",
             tint: colors.coral,
-            onPress: () => router.push("/(tabs)/progress"),
+            onPress: () => router.push("/progress"),
           },
         ]}
       />

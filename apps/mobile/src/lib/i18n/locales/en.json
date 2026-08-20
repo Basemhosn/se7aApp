@@ -3,6 +3,7 @@
     "home": "HOME",
     "log": "LOG",
     "progress": "PROGRESS",
+    "calendar": "CALENDAR",
     "coach": "COACH"
   },
   "common": {

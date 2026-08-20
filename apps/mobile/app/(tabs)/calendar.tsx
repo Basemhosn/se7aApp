@@ -11,7 +11,6 @@ import {
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
-import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -118,10 +117,6 @@ export default function Calendar() {
 
   return (
     <Screen>
-      <View style={styles.head}>
-        <BackButton />
-      </View>
-
       <View style={styles.monthRow}>
         <Pressable onPress={prev} style={styles.navBtn}>
           <Text style={styles.navText}>‹</Text>

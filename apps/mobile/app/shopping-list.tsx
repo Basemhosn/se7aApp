@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
 import { PlanTabs } from "@/components/PlanTabs";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Item {
@@ -68,6 +68,7 @@ export default function ShoppingList() {
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [noPlan, setNoPlan] = useState(false);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
@@ -78,16 +79,22 @@ export default function ShoppingList() {
     }
     setLoading(true);
     setErr("");
+    setNoPlan(false);
     try {
       const res = await api<Response>(
         `/api/meal-plan/shopping-list?week_start=${week_start}`
       );
       setData(res);
     } catch (e) {
-      setErr(
-        (e as Error).message ||
-          (isArabic ? "تعذّر التحميل" : "Couldn't load the list.")
-      );
+      // 404 = plan not yet generated. Not an error — a real empty state.
+      if (e instanceof ApiError && e.status === 404) {
+        setNoPlan(true);
+      } else {
+        setErr(
+          (e as Error).message ||
+            (isArabic ? "تعذّر التحميل" : "Couldn't load the list.")
+        );
+      }
     }
     setLoading(false);
   }, [week_start, isArabic]);
@@ -129,6 +136,31 @@ export default function ShoppingList() {
         <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
           <ActivityIndicator color={colors.gold} />
         </View>
+      ) : noPlan ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyH}>
+            {isArabic ? "لا خطة بعد" : "No plan yet"}
+          </Text>
+          <Text style={styles.emptyBody}>
+            {isArabic
+              ? "أنشئ خطة أسبوعية أولاً — ستظهر قائمة التسوق هنا تلقائياً."
+              : "Generate a weekly meal plan first — the shopping list builds itself from those ingredients."}
+          </Text>
+          <View style={{ height: spacing.md }} />
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/meal-plan",
+                params: { week_start },
+              })
+            }
+            style={styles.goPlanBtn}
+          >
+            <Text style={styles.goPlanBtnLabel}>
+              {isArabic ? "افتح مخطط الوجبات" : "Open Meal Planner"}
+            </Text>
+          </Pressable>
+        </View>
       ) : err ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyH}>
@@ -143,8 +175,8 @@ export default function ShoppingList() {
           </Text>
           <Text style={styles.emptyBody}>
             {isArabic
-              ? "أنشئ خطة أسبوعية أولاً وستظهر مكوناتها هنا."
-              : "Generate a weekly meal plan first — ingredients will show up here."}
+              ? "خطتك لا تحتوي على مكونات لعرضها."
+              : "Your plan doesn't have any ingredients to show."}
           </Text>
         </View>
       ) : (
@@ -260,6 +292,20 @@ const styles = StyleSheet.create({
     color: colors.dim,
     lineHeight: 21,
     textAlign: "center",
+  },
+  goPlanBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  goPlanBtnLabel: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.gold,
+    letterSpacing: 0.5,
   },
   summaryCard: {
     backgroundColor: colors.panel2,
