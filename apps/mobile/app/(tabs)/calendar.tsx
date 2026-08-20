@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Easing,
   Modal,
   PanResponder,
@@ -111,13 +112,22 @@ export default function Calendar() {
     } else setMonth((m) => m + 1);
   }, [month]);
 
-  // Swipe-to-navigate. Uses PanResponder so it composes with the parent
-  // vertical ScrollView — only claims a gesture when horizontal motion
-  // clearly dominates. Grid follows the finger up to ±60 px for feedback,
-  // then snaps back to 0 (either into a new month or back to where it was).
+  // Swipe-to-navigate with a full page-turn animation:
+  //   drag → grid follows the finger 1:1
+  //   release past threshold → grid slides fully off in the swipe
+  //     direction, month state swaps, grid re-enters from the opposite
+  //     side and animates back to center
+  //   release before threshold → grid springs back to center
+  //
+  // PanResponder composes with the parent ScrollView — only claims the
+  // gesture when horizontal motion clearly dominates, so vertical
+  // scrolling still works untouched.
   const translateX = useRef(new Animated.Value(0)).current;
+  const isAnimating = useRef(false);
+  const SCREEN_WIDTH = Dimensions.get("window").width;
   const SWIPE_THRESHOLD_PX = 60;
   const SWIPE_VELOCITY = 0.35;
+
   const snapBack = useCallback(() => {
     Animated.timing(translateX, {
       toValue: 0,
@@ -127,29 +137,61 @@ export default function Calendar() {
     }).start();
   }, [translateX]);
 
+  const commitSwipe = useCallback(
+    (direction: 1 | -1) => {
+      // direction: +1 = prev (swipe right), -1 = next (swipe left)
+      if (isAnimating.current) return;
+      isAnimating.current = true;
+      Animated.timing(translateX, {
+        toValue: direction * SCREEN_WIDTH,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => {
+        if (direction === 1) prev();
+        else next();
+        // Grid state now belongs to the next month, but we're off-screen
+        // on the wrong side. Jump instantly to the opposite side...
+        translateX.setValue(-direction * SCREEN_WIDTH);
+        // ...and animate back to the center.
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(() => {
+          isAnimating.current = false;
+        });
+      });
+    },
+    [prev, next, translateX, SCREEN_WIDTH]
+  );
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, g) =>
-          Math.abs(g.dx) > Math.abs(g.dy) * 1.2 && Math.abs(g.dx) > 5,
+          !isAnimating.current &&
+          Math.abs(g.dx) > Math.abs(g.dy) * 1.2 &&
+          Math.abs(g.dx) > 5,
         onPanResponderMove: (_, g) => {
-          const damped = Math.max(-80, Math.min(80, g.dx * 0.55));
-          translateX.setValue(damped);
+          // 1:1 follow, capped at ±SCREEN_WIDTH so the user can never
+          // drag past the point where the commit animation starts.
+          translateX.setValue(
+            Math.max(-SCREEN_WIDTH, Math.min(SCREEN_WIDTH, g.dx))
+          );
         },
         onPanResponderRelease: (_, g) => {
           const goPrev = g.dx > SWIPE_THRESHOLD_PX || g.vx > SWIPE_VELOCITY;
           const goNext = g.dx < -SWIPE_THRESHOLD_PX || g.vx < -SWIPE_VELOCITY;
-          if (goPrev) {
-            prev();
-          } else if (goNext) {
-            next();
-          }
-          snapBack();
+          if (goPrev) commitSwipe(1);
+          else if (goNext) commitSwipe(-1);
+          else snapBack();
         },
         onPanResponderTerminate: () => snapBack(),
       }),
-    [prev, next, snapBack, translateX]
+    [commitSwipe, snapBack, translateX, SCREEN_WIDTH]
   );
   const jumpToday = () => {
     setYear(today.getFullYear());
@@ -256,7 +298,7 @@ export default function Calendar() {
           ))}
         </View>
 
-        {loading ? (
+        {loading && byDate.size === 0 ? (
           <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
             <ActivityIndicator color={colors.gold} />
           </View>
