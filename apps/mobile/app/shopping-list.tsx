@@ -6,10 +6,11 @@ import {
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
+import { PlanTabs } from "@/components/PlanTabs";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -106,13 +107,18 @@ export default function ShoppingList() {
     <Screen>
       <View style={styles.head}>
         <BackButton />
+        <Text style={styles.pageTitle}>{isArabic ? "الخطة" : "Plan"}</Text>
+        <View style={{ width: 30 }} />
       </View>
-      <Text style={styles.kicker}>
-        {isArabic ? "قائمة التسوق" : "SHOPPING LIST"}
-      </Text>
-      <Text style={styles.h1}>
-        {isArabic ? "أسبوعك بضغطة" : "Your week in one basket."}
-      </Text>
+      <PlanTabs
+        active="groceries"
+        onPlanner={() =>
+          router.push({
+            pathname: "/meal-plan",
+            params: week_start ? { week_start } : {},
+          })
+        }
+      />
       <Text style={styles.sub}>
         {isArabic
           ? "كل مكونات خطة الأسبوع، مرتبة حسب ممرات السوبرماركت."
@@ -206,7 +212,17 @@ export default function ShoppingList() {
 }
 
 const styles = StyleSheet.create({
-  head: { marginTop: spacing.sm },
+  head: {
+    marginTop: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pageTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.ink,
+  },
   kicker: {
     fontFamily: font.mono,
     fontSize: 11,
