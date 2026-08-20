@@ -1,17 +1,21 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { TrendChart } from "@/components/TrendChart";
+import { AdherenceRing } from "@/components/AdherenceRing";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -46,6 +50,40 @@ interface PrsResponse {
   prs: Pr[];
 }
 
+interface StreakResponse {
+  current_days: number;
+  longest_days: number;
+  days_this_week: number;
+  todays_status: "logged" | "not_yet";
+}
+
+interface ProgressPhoto {
+  id: number;
+  taken_at: string;
+  angle: "front" | "side" | "back";
+  url: string | null;
+}
+interface PhotosResponse {
+  photos: ProgressPhoto[];
+  count: number;
+}
+
+type MField = "waist_cm" | "hip_cm" | "chest_cm" | "arm_cm" | "thigh_cm" | "neck_cm";
+interface MeasurementsResponse {
+  measurements: {
+    id: number;
+    taken_at: string;
+    waist_cm: number | null;
+    hip_cm: number | null;
+    chest_cm: number | null;
+    arm_cm: number | null;
+    thigh_cm: number | null;
+    neck_cm: number | null;
+  }[];
+  count: number;
+  deltas: Record<MField, number | null> | null;
+}
+
 const RANGES = [
   { days: 30, label: "30D" },
   { days: 60, label: "60D" },
@@ -57,6 +95,9 @@ export default function Progress() {
   const [trend, setTrend] = useState<TrendResponse | null>(null);
   const [adherence, setAdherence] = useState<AdherenceResponse | null>(null);
   const [prs, setPrs] = useState<PrsResponse | null>(null);
+  const [streak, setStreak] = useState<StreakResponse | null>(null);
+  const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
+  const [measurements, setMeasurements] = useState<MeasurementsResponse | null>(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
 
@@ -68,14 +109,26 @@ export default function Progress() {
   const load = useCallback(async (d: number) => {
     setLoading(true);
     try {
-      const [tr, adh, prRes] = await Promise.all([
+      const tzOffsetMin = -new Date().getTimezoneOffset();
+      const [tr, adh, prRes, streakRes, photosRes, mRes] = await Promise.all([
         api<TrendResponse>(`/api/weight/trend?days=${d}`),
         api<AdherenceResponse>("/api/progress/adherence?days=7").catch(() => null),
         api<PrsResponse>("/api/workouts/prs?period=all").catch(() => null),
+        api<StreakResponse>(
+          `/api/streaks?tz_offset_min=${tzOffsetMin}`
+        ).catch(() => null),
+        api<PhotosResponse>("/api/progress/photos?limit=4").catch(() => ({
+          photos: [] as ProgressPhoto[],
+          count: 0,
+        })),
+        api<MeasurementsResponse>("/api/measurements?limit=10").catch(() => null),
       ]);
       setTrend(tr);
       setAdherence(adh);
       setPrs(prRes);
+      setStreak(streakRes);
+      setPhotos(photosRes.photos);
+      setMeasurements(mRes);
     } catch {
       /* empty */
     }
@@ -118,15 +171,48 @@ export default function Progress() {
       </View>
 
       {adherence && (
-        <View style={styles.adherenceCard}>
-          <Text style={styles.adherenceKicker}>{t("progress.adherence_kicker")}</Text>
-          <View style={styles.adherenceRow}>
-            <Text style={styles.adherenceNum}>{adherence.days_logged}</Text>
-            <Text style={styles.adherenceOf}>{t("progress.adherence_of")}</Text>
-            <Text style={styles.adherencePct}>· {adherence.percentage}%</Text>
+        <View style={styles.heroRow}>
+          <AdherenceRing
+            value={adherence.days_logged}
+            outOf={adherence.days_window}
+            kicker={t("progress.adherence_kicker")}
+            tint={colors.mint}
+            size={180}
+          />
+          <View style={styles.heroSide}>
+            <MiniStat
+              label="STREAK"
+              value={streak ? String(streak.current_days) : "—"}
+              unit={
+                streak && streak.current_days === 1 ? "day" : "days"
+              }
+              tint={colors.gold}
+              icon="flame"
+            />
+            <MiniStat
+              label={days === 30 ? "30-DAY Δ" : `${days}-DAY Δ`}
+              value={weightDelta(trend?.points)}
+              unit="kg"
+              tint={weightDeltaTint(trend?.points)}
+              icon="trending-down"
+            />
+            <MiniStat
+              label="LATEST"
+              value={
+                trend && trend.points.length > 0
+                  ? String(trend.points[trend.points.length - 1]!.weight_kg)
+                  : "—"
+              }
+              unit="kg"
+              tint={colors.ink}
+              icon="fitness"
+            />
           </View>
-          <Text style={styles.adherenceCompare}>{adherence.comparison}.</Text>
         </View>
+      )}
+
+      {adherence && (
+        <Text style={styles.compareLine}>{adherence.comparison}.</Text>
       )}
 
       {prs && prs.prs.length > 0 && (
@@ -220,34 +306,104 @@ export default function Progress() {
 
       <Pressable
         onPress={() => router.push("/progress-photos")}
-        style={styles.linkCard}
+        style={styles.previewCard}
       >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.gold }]}>
-            PROGRESS PHOTOS
-          </Text>
-          <Text style={styles.linkTitle}>Watch yourself change</Text>
+        <View style={styles.previewHeadRow}>
+          <View>
+            <Text style={[styles.kicker, { color: colors.gold }]}>
+              PROGRESS PHOTOS
+            </Text>
+            <Text style={styles.linkTitle}>
+              {photos.length === 0
+                ? "Watch yourself change"
+                : `${photos.length} photo${photos.length === 1 ? "" : "s"}`}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.gold} />
+        </View>
+        {photos.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: spacing.sm, paddingTop: 6 }}
+          >
+            {photos.map((p) =>
+              p.url ? (
+                <Image
+                  key={p.id}
+                  source={{ uri: p.url }}
+                  style={styles.previewThumb}
+                />
+              ) : null
+            )}
+          </ScrollView>
+        ) : (
           <Text style={styles.linkSub}>
             Weekly front/side/back photos, private, side-by-side compare.
           </Text>
-        </View>
-        <Text style={[styles.linkArrow, { color: colors.gold }]}>→</Text>
+        )}
       </Pressable>
 
       <Pressable
         onPress={() => router.push("/measurements")}
-        style={styles.linkCard}
+        style={styles.previewCard}
       >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.mint }]}>
-            TAPE MEASURE
-          </Text>
-          <Text style={styles.linkTitle}>Measurements</Text>
+        <View style={styles.previewHeadRow}>
+          <View>
+            <Text style={[styles.kicker, { color: colors.mint }]}>
+              TAPE MEASURE
+            </Text>
+            <Text style={styles.linkTitle}>
+              {measurements && measurements.count > 0
+                ? `${measurements.count} entr${measurements.count === 1 ? "y" : "ies"}`
+                : "Measurements"}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.mint} />
+        </View>
+        {measurements &&
+        measurements.deltas &&
+        Object.values(measurements.deltas).some((v) => v !== null) ? (
+          <View style={styles.deltaRow}>
+            {(
+              [
+                ["waist_cm", "Waist"],
+                ["hip_cm", "Hip"],
+                ["chest_cm", "Chest"],
+                ["arm_cm", "Arm"],
+              ] as const
+            ).map(([key, label]) => {
+              const delta = measurements.deltas?.[key];
+              if (delta === null || delta === undefined) return null;
+              return (
+                <View key={key} style={styles.deltaCell}>
+                  <Text style={styles.deltaLabel}>{label.toUpperCase()}</Text>
+                  <Text
+                    style={[
+                      styles.deltaValue,
+                      {
+                        color:
+                          delta < 0
+                            ? colors.mint
+                            : delta > 0
+                              ? colors.coral
+                              : colors.dim,
+                      },
+                    ]}
+                  >
+                    {delta > 0 ? "+" : ""}
+                    {delta}
+                    <Text style={styles.deltaUnit}> cm</Text>
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
           <Text style={styles.linkSub}>
             Waist / hip / arm / chest / thigh / neck. Deltas vs your first entry.
           </Text>
-        </View>
-        <Text style={[styles.linkArrow, { color: colors.mint }]}>→</Text>
+        )}
       </Pressable>
 
       <Pressable
@@ -281,6 +437,54 @@ export default function Progress() {
   );
 }
 
+function MiniStat({
+  label,
+  value,
+  unit,
+  tint,
+  icon,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  tint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}) {
+  return (
+    <View style={styles.miniStat}>
+      <View style={styles.miniIconRow}>
+        <Ionicons name={icon} size={14} color={tint} />
+        <Text style={[styles.miniLabel, { color: tint }]}>{label}</Text>
+      </View>
+      <Text style={styles.miniValue}>
+        {value}
+        <Text style={styles.miniUnit}> {unit}</Text>
+      </Text>
+    </View>
+  );
+}
+
+function weightDelta(
+  points: TrendResponse["points"] | undefined
+): string {
+  if (!points || points.length < 2) return "—";
+  const first = Number(points[0]!.weight_kg);
+  const last = Number(points[points.length - 1]!.weight_kg);
+  const d = Math.round((last - first) * 10) / 10;
+  return `${d > 0 ? "+" : ""}${d}`;
+}
+
+function weightDeltaTint(
+  points: TrendResponse["points"] | undefined
+): string {
+  if (!points || points.length < 2) return colors.dim;
+  const d =
+    Number(points[points.length - 1]!.weight_kg) - Number(points[0]!.weight_kg);
+  if (d < -0.05) return colors.mint;
+  if (d > 0.05) return colors.coral;
+  return colors.dim;
+}
+
 const styles = StyleSheet.create({
   head: { marginTop: spacing.sm, gap: 4 },
   title: {
@@ -297,6 +501,90 @@ const styles = StyleSheet.create({
     fontFamily: font.mono,
     fontSize: 11,
     letterSpacing: 1.4,
+  },
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  heroSide: {
+    flex: 1,
+    gap: spacing.sm,
+    paddingLeft: spacing.sm,
+  },
+  miniStat: { gap: 2 },
+  miniIconRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  miniLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+  miniValue: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  miniUnit: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+  },
+  compareLine: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    lineHeight: 18,
+    marginTop: -spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  previewCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  previewHeadRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  previewThumb: {
+    width: 76,
+    height: 100,
+    borderRadius: radius.sm,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  deltaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingTop: 4,
+  },
+  deltaCell: { minWidth: 60, gap: 2 },
+  deltaLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 1.2,
+  },
+  deltaValue: {
+    fontFamily: font.displayBold,
+    fontSize: 16,
+  },
+  deltaUnit: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
   },
   card: {
     backgroundColor: colors.panel,
