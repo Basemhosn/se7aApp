@@ -24,6 +24,17 @@ Rules — do not break these:
    "chicken thigh: 180 g", "basmati rice: 3/4 cup", "olive oil: 1 tbsp".
    Keep it short (5-10 items per meal). Shared pantry items (salt,
    pepper, water) can be omitted.
+5b. Every meal has a SUBTITLE — a short warm phrase (2-6 words, no
+   period) describing the meal's character or key flavor note. Not a
+   list of ingredients — a personality line. Examples:
+     Overnight oats           subtitle: "with cinnamon and dates"
+     Chicken kabsa            subtitle: "slow-cooked with baharat"
+     Fattoush salad           subtitle: "with grilled halloumi"
+     Salmon with quinoa       subtitle: "lemon and dill"
+     Machboos djaj            subtitle: "the classic Bahraini way"
+   Keep it human. Skip if you can't say something genuinely descriptive
+   — an empty/omitted subtitle is better than a filler like "with
+   flavor" or "a great meal".
 6. If restrictions are provided (vegetarian, vegan, dairy-free,
    gluten-free, low-carb), respect them absolutely across ALL 7 days.
 7. Snacks are optional — include one per day only if the daily target

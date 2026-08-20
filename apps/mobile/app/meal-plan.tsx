@@ -30,6 +30,7 @@ type Slot = "breakfast" | "lunch" | "dinner" | "snack";
 interface PlannedMeal {
   slot: Slot;
   name: string;
+  subtitle?: string;
   portion: string;
   kcal_low: number;
   kcal_high: number;
@@ -391,6 +392,9 @@ function MealCard({
           {isArabic ? meta.ar : meta.en}
         </Text>
         <Text style={styles.mealName}>{meal.name}</Text>
+        {meal.subtitle ? (
+          <Text style={styles.mealSubtitle}>{meal.subtitle}</Text>
+        ) : null}
         <Text style={styles.mealPortion}>{meal.portion}</Text>
         <Text style={styles.mealKcal}>
           {meal.kcal_low}–{meal.kcal_high}
@@ -566,10 +570,19 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginTop: 2,
   },
+  mealSubtitle: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.ink,
+    fontStyle: "italic",
+    marginTop: 1,
+    opacity: 0.75,
+  },
   mealPortion: {
     fontFamily: font.mono,
     fontSize: 11,
     color: colors.dim,
+    marginTop: 2,
   },
   mealKcal: {
     fontFamily: font.displayBold,

@@ -26,6 +26,7 @@ export const ingredientSchema = z.object({
 export const plannedMealSchema = z.object({
   slot: mealSlotEnum,
   name: z.string().min(1).max(80),
+  subtitle: z.string().max(80).optional(),
   portion: z.string().min(1).max(120),
   kcal_low: z.number().int().min(0).max(3000),
   kcal_high: z.number().int().min(0).max(3000),
