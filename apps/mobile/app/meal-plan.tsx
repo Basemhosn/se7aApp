@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { PlanTabs } from "@/components/PlanTabs";
+import { useFoodImage } from "@/lib/useFoodImage";
 import {
   api,
   ProRequiredError,
@@ -360,16 +362,28 @@ function MealCard({
   isArabic: boolean;
   onLog: () => void;
 }) {
+  const photoUrl = useFoodImage(meal.name);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = !!photoUrl && !photoFailed;
+
   return (
     <View style={[styles.mealCard, logged && styles.mealCardDone]}>
-      <View
-        style={[
-          styles.mealBadge,
-          { backgroundColor: withAlpha(meta.tint, 0.12) },
-        ]}
-      >
-        <Ionicons name={meta.icon} size={30} color={meta.tint} />
-      </View>
+      {showPhoto ? (
+        <Image
+          source={{ uri: photoUrl! }}
+          style={styles.mealPhoto}
+          onError={() => setPhotoFailed(true)}
+        />
+      ) : (
+        <View
+          style={[
+            styles.mealBadge,
+            { backgroundColor: withAlpha(meta.tint, 0.12) },
+          ]}
+        >
+          <Ionicons name={meta.icon} size={30} color={meta.tint} />
+        </View>
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[styles.mealSlot, { color: meta.tint }]}>
           {isArabic ? meta.ar : meta.en}
@@ -532,6 +546,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
+  },
+  mealPhoto: {
+    width: 68,
+    height: 68,
+    borderRadius: radius.md,
+    backgroundColor: colors.panel2,
   },
   mealSlot: {
     fontFamily: font.mono,
