@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
@@ -261,12 +262,44 @@ export default function Onboarding() {
   return (
     <Screen footer={footer}>
       <View style={styles.head}>
-        <Wordmark size={20} />
+        {step !== "welcome" && stepIndex > 0 ? (
+          <Pressable
+            onPress={back}
+            hitSlop={12}
+            disabled={busy}
+            style={styles.headBack}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.ink} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 30 }} />
+        )}
+        <Wordmark size={18} />
+        {step !== "welcome" ? (
+          <Text style={styles.stepCount}>
+            {stepIndex} / {STEPS.length - 1}
+          </Text>
+        ) : (
+          <View style={{ width: 30 }} />
+        )}
       </View>
 
       {step !== "welcome" && (
-        <View style={styles.progressWrap}>
-          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        <View style={styles.pillRow}>
+          {STEPS.slice(1).map((s, i) => {
+            const done = STEPS.indexOf(s) < stepIndex;
+            const current = STEPS.indexOf(s) === stepIndex;
+            return (
+              <View
+                key={s}
+                style={[
+                  styles.pillSeg,
+                  done && styles.pillSegDone,
+                  current && styles.pillSegCurrent,
+                ]}
+              />
+            );
+          })}
         </View>
       )}
 
@@ -282,8 +315,8 @@ export default function Onboarding() {
         >
           <BigChoice
             options={[
-              { v: "male", label: t("onboarding.sex.male") },
-              { v: "female", label: t("onboarding.sex.female") },
+              { v: "male", label: t("onboarding.sex.male"), icon: "male" },
+              { v: "female", label: t("onboarding.sex.female"), icon: "female" },
             ]}
             value={sex}
             onChange={(v) => setSex(v as Sex)}
@@ -357,11 +390,11 @@ export default function Onboarding() {
         >
           <BigChoice
             options={[
-              { v: "sedentary", label: t("onboarding.activity.sedentary"), sub: t("onboarding.activity.sedentary_sub") },
-              { v: "light", label: t("onboarding.activity.light"), sub: t("onboarding.activity.light_sub") },
-              { v: "moderate", label: t("onboarding.activity.moderate"), sub: t("onboarding.activity.moderate_sub") },
-              { v: "active", label: t("onboarding.activity.active"), sub: t("onboarding.activity.active_sub") },
-              { v: "very_active", label: t("onboarding.activity.very_active"), sub: t("onboarding.activity.very_active_sub") },
+              { v: "sedentary", label: t("onboarding.activity.sedentary"), sub: t("onboarding.activity.sedentary_sub"), icon: "bed-outline" },
+              { v: "light", label: t("onboarding.activity.light"), sub: t("onboarding.activity.light_sub"), icon: "walk-outline" },
+              { v: "moderate", label: t("onboarding.activity.moderate"), sub: t("onboarding.activity.moderate_sub"), icon: "footsteps-outline" },
+              { v: "active", label: t("onboarding.activity.active"), sub: t("onboarding.activity.active_sub"), icon: "bicycle-outline" },
+              { v: "very_active", label: t("onboarding.activity.very_active"), sub: t("onboarding.activity.very_active_sub"), icon: "barbell-outline" },
             ]}
             value={activity}
             onChange={(v) => setActivity(v as ActivityLevel)}
@@ -377,10 +410,10 @@ export default function Onboarding() {
         >
           <BigChoice
             options={[
-              { v: "cut", label: t("onboarding.goal.cut"), sub: t("onboarding.goal.cut_sub") },
-              { v: "recomp", label: t("onboarding.goal.recomp"), sub: t("onboarding.goal.recomp_sub") },
-              { v: "maintain", label: t("onboarding.goal.maintain"), sub: t("onboarding.goal.maintain_sub") },
-              { v: "bulk", label: t("onboarding.goal.bulk"), sub: t("onboarding.goal.bulk_sub") },
+              { v: "cut", label: t("onboarding.goal.cut"), sub: t("onboarding.goal.cut_sub"), icon: "trending-down-outline" },
+              { v: "recomp", label: t("onboarding.goal.recomp"), sub: t("onboarding.goal.recomp_sub"), icon: "swap-horizontal-outline" },
+              { v: "maintain", label: t("onboarding.goal.maintain"), sub: t("onboarding.goal.maintain_sub"), icon: "remove-outline" },
+              { v: "bulk", label: t("onboarding.goal.bulk"), sub: t("onboarding.goal.bulk_sub"), icon: "trending-up-outline" },
             ]}
             value={goal}
             onChange={(v) => {
@@ -430,9 +463,9 @@ export default function Onboarding() {
         >
           <BigChoice
             options={[
-              { v: "beginner", label: t("onboarding.experience.beginner"), sub: t("onboarding.experience.beginner_sub") },
-              { v: "intermediate", label: t("onboarding.experience.intermediate"), sub: t("onboarding.experience.intermediate_sub") },
-              { v: "advanced", label: t("onboarding.experience.advanced"), sub: t("onboarding.experience.advanced_sub") },
+              { v: "beginner", label: t("onboarding.experience.beginner"), sub: t("onboarding.experience.beginner_sub"), icon: "leaf-outline" },
+              { v: "intermediate", label: t("onboarding.experience.intermediate"), sub: t("onboarding.experience.intermediate_sub"), icon: "flame-outline" },
+              { v: "advanced", label: t("onboarding.experience.advanced"), sub: t("onboarding.experience.advanced_sub"), icon: "trophy-outline" },
             ]}
             value={experience}
             onChange={(v) => setExperience(v as Experience)}
@@ -448,10 +481,10 @@ export default function Onboarding() {
         >
           <BigChoice
             options={[
-              { v: "gym", label: t("onboarding.equipment.gym"), sub: t("onboarding.equipment.gym_sub") },
-              { v: "home", label: t("onboarding.equipment.home"), sub: t("onboarding.equipment.home_sub") },
-              { v: "bodyweight", label: t("onboarding.equipment.bodyweight"), sub: t("onboarding.equipment.bodyweight_sub") },
-              { v: "both", label: t("onboarding.equipment.both"), sub: t("onboarding.equipment.both_sub") },
+              { v: "gym", label: t("onboarding.equipment.gym"), sub: t("onboarding.equipment.gym_sub"), icon: "barbell-outline" },
+              { v: "home", label: t("onboarding.equipment.home"), sub: t("onboarding.equipment.home_sub"), icon: "home-outline" },
+              { v: "bodyweight", label: t("onboarding.equipment.bodyweight"), sub: t("onboarding.equipment.bodyweight_sub"), icon: "body-outline" },
+              { v: "both", label: t("onboarding.equipment.both"), sub: t("onboarding.equipment.both_sub"), icon: "shuffle-outline" },
             ]}
             value={equipment}
             onChange={(v) => setEquipment(v as Equipment)}
@@ -557,7 +590,10 @@ function WelcomeStep({
   returning: boolean;
 }) {
   return (
-    <View style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
+    <View style={{ gap: spacing.md, paddingTop: spacing.xl }}>
+      <View style={styles.welcomeIconWrap}>
+        <Ionicons name="sparkles" size={44} color={colors.gold} />
+      </View>
       <Text style={styles.kicker}>
         {returning ? "REDO YOUR PLAN" : "YOUR PLAN"}
       </Text>
@@ -573,11 +609,52 @@ function WelcomeStep({
           ? "Your current answers are prefilled — just change what's different and tap through the rest."
           : "Eleven quick questions. We compute your calorie + macro targets and pick a workout plan that fits your week."}
       </Text>
+      {!returning && (
+        <View style={styles.valueProps}>
+          <ValueRow
+            icon="stats-chart-outline"
+            title="Honest ranges, not fake precision"
+            body="Every kcal and macro shown as a low–high band."
+          />
+          <ValueRow
+            icon="restaurant-outline"
+            title="Gulf-first recipes and portions"
+            body="Machboos, kabsa, shawarma — sized to your day."
+          />
+          <ValueRow
+            icon="fitness-outline"
+            title="Workouts that fit your week"
+            body="We pick a plan for your equipment + days available."
+          />
+        </View>
+      )}
       <Text style={[styles.sub, { marginTop: spacing.md }]}>
         {returning
           ? "Fast — usually 20 seconds if not much has changed."
           : "~90 seconds. You can change any of it any time."}
       </Text>
+    </View>
+  );
+}
+
+function ValueRow({
+  icon,
+  title,
+  body,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+}) {
+  return (
+    <View style={styles.valueRow}>
+      <View style={styles.valueIcon}>
+        <Ionicons name={icon} size={18} color={colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.valueTitle}>{title}</Text>
+        <Text style={styles.valueBody}>{body}</Text>
+      </View>
     </View>
   );
 }
@@ -608,7 +685,12 @@ function BigChoice<T extends string>({
   value,
   onChange,
 }: {
-  options: { v: T; label: string; sub?: string }[];
+  options: {
+    v: T;
+    label: string;
+    sub?: string;
+    icon?: keyof typeof Ionicons.glyphMap;
+  }[];
   value: T | null;
   onChange: (v: T) => void;
 }) {
@@ -622,6 +704,15 @@ function BigChoice<T extends string>({
             onPress={() => onChange(o.v)}
             style={[styles.card, on && styles.cardOn]}
           >
+            {o.icon && (
+              <View style={[styles.choiceIcon, on && styles.choiceIconOn]}>
+                <Ionicons
+                  name={o.icon}
+                  size={20}
+                  color={on ? colors.gold : colors.dim}
+                />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <Text style={[styles.cardLabel, on && styles.cardLabelOn]}>
                 {o.label}
@@ -741,17 +832,85 @@ function rateDescription(rate: number, t: TFn): string {
 }
 
 const styles = StyleSheet.create({
-  head: { marginTop: spacing.sm },
-  progressWrap: {
-    height: 4,
-    backgroundColor: colors.panel2,
-    borderRadius: 2,
-    overflow: "hidden",
+  head: {
+    marginTop: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  progressBar: {
-    height: "100%",
-    backgroundColor: colors.gold,
+  headBack: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepCount: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    letterSpacing: 1.2,
+    width: 60,
+    textAlign: "right",
+  },
+  pillRow: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  pillSeg: {
+    flex: 1,
+    height: 4,
     borderRadius: 2,
+    backgroundColor: colors.panel2,
+  },
+  pillSegDone: {
+    backgroundColor: colors.goldDim,
+  },
+  pillSegCurrent: {
+    backgroundColor: colors.gold,
+  },
+  welcomeIconWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "rgba(246,183,60,0.08)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  valueProps: {
+    marginTop: spacing.md,
+    gap: spacing.md,
+  },
+  valueRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "flex-start",
+  },
+  valueIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  valueTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  valueBody: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 18,
+    marginTop: 2,
   },
   kicker: {
     fontFamily: font.mono,
@@ -827,6 +986,20 @@ const styles = StyleSheet.create({
   cardOn: {
     borderColor: colors.gold,
     backgroundColor: "rgba(246,183,60,0.06)",
+  },
+  choiceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choiceIconOn: {
+    backgroundColor: "rgba(246,183,60,0.10)",
+    borderColor: colors.gold,
   },
   cardLabel: {
     fontFamily: font.displayBold,
