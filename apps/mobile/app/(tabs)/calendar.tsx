@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
@@ -69,22 +70,67 @@ export default function Calendar() {
   const [detail, setDetail] = useState<DayDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api<{ days: DaySummary[] }>(
-        `/api/calendar/month?year=${year}&month=${month}`
-      );
-      setByDate(new Map(res.days.map((d) => [d.date, d])));
-    } catch {
-      setByDate(new Map());
-    }
-    setLoading(false);
-  }, [year, month]);
+  // Session cache of which (year, month) pairs we've already fetched.
+  // Held in a ref so mutations don't cause re-renders; the byDate Map
+  // is the derived state readers actually consume.
+  const fetchedMonths = useRef<Set<string>>(new Set()).current;
 
+  const loadMonth = useCallback(
+    async (y: number, m: number) => {
+      const key = monthKey(y, m);
+      if (fetchedMonths.has(key)) return;
+      // Add optimistically to prevent duplicate in-flight requests when
+      // two effects fire the same load simultaneously (mount + focus).
+      fetchedMonths.add(key);
+      try {
+        const res = await api<{ days: DaySummary[] }>(
+          `/api/calendar/month?year=${y}&month=${m}`
+        );
+        setByDate((prev) => {
+          const next = new Map(prev);
+          for (const d of res.days) next.set(d.date, d);
+          return next;
+        });
+      } catch {
+        // Allow retry — remove from cache set so a later call can try again.
+        fetchedMonths.delete(key);
+      }
+    },
+    [fetchedMonths]
+  );
+
+  // On month change: ensure the visible month is fetched, and pre-fetch
+  // the adjacent months so a swipe to them shows dots immediately.
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    (async () => {
+      const currentKey = monthKey(year, month);
+      if (!fetchedMonths.has(currentKey)) {
+        setLoading(true);
+        await loadMonth(year, month);
+        if (!cancelled) setLoading(false);
+      }
+      // Adjacent months are fire-and-forget — they hydrate the cache in
+      // the background while the user is looking at the current month.
+      const [py, pm] = prevYM(year, month);
+      const [ny, nm] = nextYM(year, month);
+      loadMonth(py, pm);
+      loadMonth(ny, nm);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [year, month, loadMonth, fetchedMonths]);
+
+  // Re-fetch the current month whenever the tab regains focus, so if
+  // the user logs a meal from another tab and comes back, dots update.
+  // Adjacent months keep their cache to avoid a network storm.
+  useFocusEffect(
+    useCallback(() => {
+      fetchedMonths.delete(monthKey(year, month));
+      loadMonth(year, month);
+    }, [year, month, loadMonth, fetchedMonths])
+  );
 
   const openDay = async (date: string) => {
     setPickedDate(date);
@@ -528,6 +574,18 @@ function fmtDateFrom(year: number, month: number, day: number): string {
 
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function monthKey(y: number, m: number): string {
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+function prevYM(y: number, m: number): [number, number] {
+  return m === 1 ? [y - 1, 12] : [y, m - 1];
+}
+
+function nextYM(y: number, m: number): [number, number] {
+  return m === 12 ? [y + 1, 1] : [y, m + 1];
 }
 
 function niceDate(iso: string): string {
