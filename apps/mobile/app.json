@@ -51,6 +51,12 @@
           "cameraPermission": "SE7A needs camera access to scan plates, menus, and physique photos."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SE7A uses the camera to scan barcodes on packaged foods."
+        }
+      ],
       "expo-asset",
       "./plugins/withFmtConstevalFix",
       [
