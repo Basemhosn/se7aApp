@@ -12,6 +12,8 @@ import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Wordmark } from "@/components/Wordmark";
 import { WaterRing } from "@/components/WaterRing";
+import { CalorieRing } from "@/components/CalorieRing";
+import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
@@ -158,31 +160,48 @@ export default function Home() {
         <Text style={styles.kicker}>
           {profile.display_name || user?.email?.split("@")[0]}
         </Text>
-        <Text style={styles.heroKicker}>
+        <Text style={styles.dayLabel}>
           {dayStatus?.kind === "lift"
             ? t("home.lift_day_remaining")
             : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
               ? t("home.rest_day_remaining")
               : t("home.remaining_today")}
         </Text>
-        <View style={styles.heroRow}>
-          <Text style={styles.heroNum}>
-            {Math.round(ledger.remaining.kcal.low)}
-          </Text>
-          <Text style={styles.heroDash}>–</Text>
-          <Text style={styles.heroNum}>
-            {Math.round(ledger.remaining.kcal.high)}
-          </Text>
-          <Text style={styles.heroUnit}> {t("common.kcal")}</Text>
+      </View>
+
+      <View style={styles.ringRow}>
+        <CalorieRing
+          target={dayStatus?.adjusted_target ?? profile.daily_kcal_target ?? 2000}
+          eatenLow={Math.round(ledger.totals.kcal.low)}
+          eatenHigh={Math.round(ledger.totals.kcal.high)}
+          size={220}
+        />
+        <View style={styles.ringSide}>
+          <SideStat
+            label="TARGET"
+            value={String(
+              dayStatus?.adjusted_target ?? profile.daily_kcal_target
+            )}
+            unit="kcal"
+            tint={colors.dim}
+          />
+          <SideStat
+            label="EATEN"
+            value={
+              ledger.totals.items.length === 0
+                ? "—"
+                : `${Math.round(ledger.totals.kcal.low)}–${Math.round(ledger.totals.kcal.high)}`
+            }
+            unit="kcal"
+            tint={colors.gold}
+          />
+          <SideStat
+            label="ITEMS"
+            value={String(ledger.totals.items.length)}
+            unit={ledger.totals.items.length === 1 ? "logged" : "logged"}
+            tint={colors.dim}
+          />
         </View>
-        <Text style={styles.heroSub}>
-          {t("home.of_target", {
-            target: dayStatus?.adjusted_target ?? profile.daily_kcal_target,
-          })}
-          {ledger.totals.items.length > 0
-            ? ` · ${t("home.ate_range", { low: Math.round(ledger.totals.kcal.low), high: Math.round(ledger.totals.kcal.high) })}`
-            : ""}
-        </Text>
       </View>
 
       <View style={styles.macros}>
@@ -324,7 +343,69 @@ export default function Home() {
         </View>
         <Text style={styles.redoArrow}>→</Text>
       </Pressable>
+
+      <QuickLogFab
+        actions={[
+          {
+            key: "plate",
+            label: "Scan a plate",
+            icon: "camera-outline",
+            tint: colors.gold,
+            onPress: () => router.push("/scan/plate"),
+          },
+          {
+            key: "barcode",
+            label: "Barcode",
+            icon: "barcode-outline",
+            tint: colors.gold,
+            onPress: () => router.push("/scan/barcode"),
+          },
+          {
+            key: "manual",
+            label: "Add manually",
+            icon: "create-outline",
+            tint: colors.ink,
+            onPress: () => router.push("/manual-meal"),
+          },
+          {
+            key: "water",
+            label: "Add water",
+            icon: "water-outline",
+            tint: colors.mint,
+            onPress: () => addWater(250),
+          },
+          {
+            key: "weight",
+            label: "Log weight",
+            icon: "speedometer-outline",
+            tint: colors.coral,
+            onPress: () => router.push("/(tabs)/progress"),
+          },
+        ]}
+      />
     </Screen>
+  );
+}
+
+function SideStat({
+  label,
+  value,
+  unit,
+  tint,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  tint: string;
+}) {
+  return (
+    <View style={styles.sideStat}>
+      <Text style={[styles.sideStatLabel, { color: tint }]}>{label}</Text>
+      <Text style={styles.sideStatValue}>
+        {value}
+        <Text style={styles.sideStatUnit}> {unit}</Text>
+      </Text>
+    </View>
   );
 }
 
@@ -421,6 +502,41 @@ const styles = StyleSheet.create({
     color: colors.dim,
     letterSpacing: 1.4,
     marginTop: spacing.md,
+  },
+  dayLabel: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
+    marginTop: 4,
+  },
+  ringRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  ringSide: {
+    flex: 1,
+    gap: spacing.md,
+    paddingLeft: spacing.sm,
+  },
+  sideStat: { gap: 2 },
+  sideStatLabel: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+  },
+  sideStatValue: {
+    fontFamily: font.displayBold,
+    fontSize: 20,
+    color: colors.ink,
+  },
+  sideStatUnit: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
   },
   heroRow: {
     flexDirection: "row",
