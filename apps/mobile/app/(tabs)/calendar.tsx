@@ -271,7 +271,15 @@ export default function Calendar() {
     setMonth(today.getMonth() + 1);
   };
 
-  const grid = useMemo(() => buildMonthGrid(year, month), [year, month]);
+  // Deterministic 7-column layout: split the flat grid into rows of 7.
+  // (Previously used width: 100/7% cells that occasionally wrapped the
+  // Sunday column onto its own line because of iOS sub-percent rounding.)
+  const weeks = useMemo(() => {
+    const flat = buildMonthGrid(year, month);
+    const rows: (number | null)[][] = [];
+    for (let i = 0; i < flat.length; i += 7) rows.push(flat.slice(i, i + 7));
+    return rows;
+  }, [year, month]);
   const todayKey = fmtDate(today);
   const isThisMonth =
     year === today.getFullYear() && month === today.getMonth() + 1;
@@ -377,54 +385,58 @@ export default function Calendar() {
           </View>
         ) : (
           <View style={styles.grid}>
-          {grid.map((cell, i) => {
-            if (!cell) {
-              return <View key={i} style={styles.cell} />;
-            }
-            const dateStr = fmtDateFrom(year, month, cell);
-            const summary = byDate.get(dateStr);
-            const isToday = dateStr === todayKey;
-            const hasMeals = !!summary?.meals;
-            const hasWorkout = !!summary?.workout;
-            const hasWeight = summary?.weight_kg != null;
-            return (
-              <Pressable
-                key={i}
-                onPress={() => openDay(dateStr)}
-                style={styles.cell}
-              >
-                <View
-                  style={[
-                    styles.dayCircle,
-                    isToday && styles.dayCircleToday,
-                    hasMeals && !isToday && styles.dayCircleActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dayNum,
-                      isToday && styles.dayNumToday,
-                      hasMeals && !isToday && styles.dayNumActive,
-                    ]}
-                  >
-                    {cell}
-                  </Text>
-                </View>
-                <View style={styles.dots}>
-                  {hasMeals ? (
-                    <View style={[styles.dot, { backgroundColor: colors.gold }]} />
-                  ) : null}
-                  {hasWorkout ? (
-                    <View style={[styles.dot, { backgroundColor: colors.mint }]} />
-                  ) : null}
-                  {hasWeight ? (
-                    <View style={[styles.dot, { backgroundColor: colors.coral }]} />
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+            {weeks.map((week, wi) => (
+              <View key={wi} style={styles.weekRow}>
+                {week.map((cell, ci) => {
+                  if (!cell) {
+                    return <View key={ci} style={styles.cell} />;
+                  }
+                  const dateStr = fmtDateFrom(year, month, cell);
+                  const summary = byDate.get(dateStr);
+                  const isToday = dateStr === todayKey;
+                  const hasMeals = !!summary?.meals;
+                  const hasWorkout = !!summary?.workout;
+                  const hasWeight = summary?.weight_kg != null;
+                  return (
+                    <Pressable
+                      key={ci}
+                      onPress={() => openDay(dateStr)}
+                      style={styles.cell}
+                    >
+                      <View
+                        style={[
+                          styles.dayCircle,
+                          isToday && styles.dayCircleToday,
+                          hasMeals && !isToday && styles.dayCircleActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dayNum,
+                            isToday && styles.dayNumToday,
+                            hasMeals && !isToday && styles.dayNumActive,
+                          ]}
+                        >
+                          {cell}
+                        </Text>
+                      </View>
+                      <View style={styles.dots}>
+                        {hasMeals ? (
+                          <View style={[styles.dot, { backgroundColor: colors.gold }]} />
+                        ) : null}
+                        {hasWorkout ? (
+                          <View style={[styles.dot, { backgroundColor: colors.mint }]} />
+                        ) : null}
+                        {hasWeight ? (
+                          <View style={[styles.dot, { backgroundColor: colors.coral }]} />
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
         )}
       </Animated.View>
 
@@ -750,8 +762,6 @@ const styles = StyleSheet.create({
   },
   weekdayRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 2,
   },
   weekdayText: {
     flex: 1,
@@ -760,13 +770,16 @@ const styles = StyleSheet.create({
     color: colors.dim,
     textAlign: "center",
     letterSpacing: 1.2,
+    paddingVertical: 4,
   },
   grid: {
+    flexDirection: "column",
+  },
+  weekRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
   },
   cell: {
-    width: `${100 / 7}%`,
+    flex: 1,
     aspectRatio: 1,
     padding: 4,
     alignItems: "center",
