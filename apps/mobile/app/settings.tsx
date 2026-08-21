@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import * as WebBrowser from "expo-web-browser";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -36,6 +37,13 @@ interface NotificationPrefs {
   weekly_recap?: boolean;
 }
 
+interface Integration {
+  provider: "strava" | "whoop" | "oura" | "fitbit";
+  provider_user_id: string | null;
+  connected_at: string;
+  last_sync_at: string | null;
+}
+
 export default function Settings() {
   const { user, signOut } = useAuth();
   const { t, i18n } = useTranslation();
@@ -45,12 +53,113 @@ export default function Settings() {
   const { stats: referral } = useReferral(user?.id);
   const { ent, refresh: refreshEnt } = useEntitlement();
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [stravaBusy, setStravaBusy] = useState<"idle" | "connecting" | "syncing">(
+    "idle"
+  );
 
   useEffect(() => {
     api<{ notification_prefs: NotificationPrefs }>("/api/profile/prefs")
       .then((r) => setPrefs(r.notification_prefs ?? {}))
       .catch(() => setPrefs({}));
+    api<{ integrations: Integration[] }>("/api/integrations")
+      .then((r) => setIntegrations(r.integrations))
+      .catch(() => setIntegrations([]));
   }, []);
+
+  const strava = integrations.find((i) => i.provider === "strava");
+
+  const connectStrava = useCallback(async () => {
+    setStravaBusy("connecting");
+    try {
+      const { url } = await api<{ url: string }>(
+        "/api/integrations/strava/start",
+        { method: "POST" }
+      );
+      const result = await WebBrowser.openAuthSessionAsync(
+        url,
+        "se7a://strava-connected"
+      );
+      if (result.type === "success") {
+        // Refresh state; also kick off a first sync so activities land immediately.
+        const listRes = await api<{ integrations: Integration[] }>(
+          "/api/integrations"
+        ).catch(() => null);
+        if (listRes) setIntegrations(listRes.integrations);
+        try {
+          await api("/api/integrations/strava/sync", { method: "POST" });
+        } catch {
+          /* sync failure is non-blocking; user can tap Sync now */
+        }
+      }
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "تعذّر الاتصال" : "Couldn't connect",
+        (e as Error).message
+      );
+    }
+    setStravaBusy("idle");
+  }, [isArabic]);
+
+  const syncStrava = useCallback(async () => {
+    setStravaBusy("syncing");
+    try {
+      const res = await api<{
+        inserted: number;
+        skipped: number;
+        error?: string;
+      }>("/api/integrations/strava/sync", { method: "POST" });
+      const listRes = await api<{ integrations: Integration[] }>(
+        "/api/integrations"
+      ).catch(() => null);
+      if (listRes) setIntegrations(listRes.integrations);
+      if (res.error) {
+        Alert.alert(isArabic ? "خطأ" : "Sync error", res.error);
+      } else {
+        Alert.alert(
+          isArabic ? "تم" : "Synced",
+          isArabic
+            ? `تم استيراد ${res.inserted} نشاط.`
+            : `Imported ${res.inserted} activit${res.inserted === 1 ? "y" : "ies"}.`
+        );
+      }
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "خطأ" : "Sync error",
+        (e as Error).message
+      );
+    }
+    setStravaBusy("idle");
+  }, [isArabic]);
+
+  const disconnectStrava = useCallback(() => {
+    Alert.alert(
+      isArabic ? "قطع الاتصال مع Strava؟" : "Disconnect Strava?",
+      isArabic
+        ? "لن نستورد أي أنشطة جديدة. النشاطات المستوردة سابقاً تبقى."
+        : "We'll stop importing new activities. Previously imported ones stay.",
+      [
+        { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+        {
+          text: isArabic ? "اقطع" : "Disconnect",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api("/api/integrations/strava", { method: "DELETE" });
+              setIntegrations((prev) =>
+                prev.filter((i) => i.provider !== "strava")
+              );
+            } catch (e) {
+              Alert.alert(
+                isArabic ? "فشل" : "Failed",
+                (e as Error).message
+              );
+            }
+          },
+        },
+      ]
+    );
+  }, [isArabic]);
 
   const togglePref = useCallback(
     async (key: keyof NotificationPrefs, value: boolean) => {
@@ -254,6 +363,74 @@ export default function Settings() {
               />
             </Pressable>
           </>
+        )}
+      </Section>
+
+      <Section title={isArabic ? "التكاملات" : "Integrations"}>
+        {strava ? (
+          <>
+            <View style={styles.integRow}>
+              <View style={styles.integIcon}>
+                <Ionicons name="bicycle" size={20} color="#fc4c02" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.integTitle}>Strava</Text>
+                <Text style={styles.integMeta}>
+                  {isArabic ? "متصل" : "Connected"}
+                  {strava.last_sync_at
+                    ? ` · ${isArabic ? "آخر مزامنة" : "last sync"} ${shortAgo(strava.last_sync_at)}`
+                    : ""}
+                </Text>
+              </View>
+              <Pressable
+                onPress={syncStrava}
+                disabled={stravaBusy !== "idle"}
+                hitSlop={8}
+                style={styles.integSyncBtn}
+              >
+                <Ionicons
+                  name="refresh"
+                  size={16}
+                  color={stravaBusy === "syncing" ? colors.dim : colors.gold}
+                />
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={disconnectStrava}
+              style={[styles.row, { borderBottomWidth: 0 }]}
+            >
+              <Text style={[styles.rowLabel, { color: colors.coral }]}>
+                {isArabic ? "اقطع الاتصال" : "Disconnect Strava"}
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            onPress={connectStrava}
+            disabled={stravaBusy !== "idle"}
+            style={styles.integRow}
+          >
+            <View style={styles.integIcon}>
+              <Ionicons name="bicycle-outline" size={20} color="#fc4c02" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.integTitle}>Strava</Text>
+              <Text style={styles.integMeta}>
+                {isArabic
+                  ? "اربط لاستيراد الجري والدراجة تلقائياً."
+                  : "Auto-import runs, rides, and other activities."}
+              </Text>
+            </View>
+            <Text style={styles.integConnect}>
+              {stravaBusy === "connecting"
+                ? isArabic
+                  ? "…"
+                  : "…"
+                : isArabic
+                  ? "اربط"
+                  : "Connect"}
+            </Text>
+          </Pressable>
         )}
       </Section>
 
@@ -637,9 +814,69 @@ const styles = StyleSheet.create({
     color: colors.bg,
     letterSpacing: 0.5,
   },
+  integRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  integIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  integTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  integMeta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  integConnect: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.2,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  integSyncBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
 
 function shortDate(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function shortAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
