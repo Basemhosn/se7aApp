@@ -26,6 +26,13 @@ import { colors, font, radius, spacing } from "@/lib/theme";
 
 const WEB_BASE = "https://se7a.vercel.app";
 
+// Strava integration is fully implemented but hidden from the UI while
+// Strava's Nov 2024 API terms require a paid Enterprise contract for
+// consumer apps. Flip to true once we're on the paid tier or Strava's
+// terms change. All server routes + sync logic in lib/strava.ts and
+// app/api/integrations/strava/* stay in place.
+const STRAVA_ENABLED = false;
+
 type Deleting = "idle" | "confirming" | "typing" | "deleting";
 
 interface NotificationPrefs {
@@ -390,25 +397,27 @@ export default function Settings() {
       </Section>
 
       <Section title={isArabic ? "التكاملات" : "Integrations"}>
-        <IntegrationRow
-          provider="strava"
-          displayName="Strava"
-          brandColor="#fc4c02"
-          iconConnected="bicycle"
-          iconDisconnected="bicycle-outline"
-          connectedLabel={isArabic ? "متصل" : "Connected"}
-          disconnectedBlurb={
-            isArabic
-              ? "اربط لاستيراد الجري والدراجة تلقائياً."
-              : "Auto-import runs, rides, and other activities."
-          }
-          integration={strava}
-          busy={busy.strava}
-          onConnect={() => connect("strava", "se7a://strava-connected")}
-          onSync={() => sync("strava")}
-          onDisconnect={() => disconnect("strava", "Strava")}
-          isArabic={isArabic}
-        />
+        {STRAVA_ENABLED && (
+          <IntegrationRow
+            provider="strava"
+            displayName="Strava"
+            brandColor="#fc4c02"
+            iconConnected="bicycle"
+            iconDisconnected="bicycle-outline"
+            connectedLabel={isArabic ? "متصل" : "Connected"}
+            disconnectedBlurb={
+              isArabic
+                ? "اربط لاستيراد الجري والدراجة تلقائياً."
+                : "Auto-import runs, rides, and other activities."
+            }
+            integration={strava}
+            busy={busy.strava}
+            onConnect={() => connect("strava", "se7a://strava-connected")}
+            onSync={() => sync("strava")}
+            onDisconnect={() => disconnect("strava", "Strava")}
+            isArabic={isArabic}
+          />
+        )}
         <IntegrationRow
           provider="whoop"
           displayName="Whoop"
