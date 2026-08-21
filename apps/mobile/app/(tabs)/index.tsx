@@ -10,7 +10,6 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
-import { Wordmark } from "@/components/Wordmark";
 import { WaterRing } from "@/components/WaterRing";
 import { CalorieRing } from "@/components/CalorieRing";
 import { QuickLogFab } from "@/components/QuickLogFab";
@@ -149,27 +148,74 @@ export default function Home() {
     );
   }
 
+  const displayName = profile.display_name || user?.email?.split("@")[0] || "";
+  const nowDate = new Date();
+  const y = new Date(nowDate);
+  y.setDate(y.getDate() - 1);
+  const yesterdayIso = fmtDateIso(y);
+  const tomorrowRoute = { pathname: "/meal-plan" as const };
+
   return (
     <Screen>
       <View style={styles.head}>
-        <Wordmark size={22} />
+        <Pressable
+          onPress={() => router.push("/settings")}
+          hitSlop={8}
+          style={styles.avatar}
+        >
+          <Text style={styles.avatarInitial}>
+            {(displayName[0] ?? "S").toUpperCase()}
+          </Text>
+        </Pressable>
+        <View style={styles.headTitleCol}>
+          <Text style={styles.headGreet} numberOfLines={1}>
+            {greeting(nowDate) + (displayName ? `, ${displayName}` : "")}
+          </Text>
+          <Text style={styles.headDate}>
+            {nowDate.toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            })}
+          </Text>
+        </View>
         <Pressable onPress={() => router.push("/settings")} hitSlop={12}>
           <Ionicons name="settings-outline" size={22} color={colors.dim} />
         </Pressable>
       </View>
 
-      <View>
-        <Text style={styles.kicker}>
-          {profile.display_name || user?.email?.split("@")[0]}
-        </Text>
-        <Text style={styles.dayLabel}>
-          {dayStatus?.kind === "lift"
-            ? t("home.lift_day_remaining")
-            : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
-              ? t("home.rest_day_remaining")
-              : t("home.remaining_today")}
-        </Text>
+      <View style={styles.dayPickerRow}>
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/calendar" as const,
+              params: { open: yesterdayIso },
+            })
+          }
+          style={styles.dayChip}
+        >
+          <Ionicons name="chevron-back" size={14} color={colors.dim} />
+          <Text style={styles.dayChipText}>Yesterday</Text>
+        </Pressable>
+        <View style={[styles.dayChip, styles.dayChipOn]}>
+          <Text style={[styles.dayChipText, styles.dayChipTextOn]}>Today</Text>
+        </View>
+        <Pressable
+          onPress={() => router.push(tomorrowRoute)}
+          style={styles.dayChip}
+        >
+          <Text style={styles.dayChipText}>Tomorrow</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.dim} />
+        </Pressable>
       </View>
+
+      <Text style={styles.dayLabel}>
+        {dayStatus?.kind === "lift"
+          ? t("home.lift_day_remaining")
+          : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
+            ? t("home.rest_day_remaining")
+            : t("home.remaining_today")}
+      </Text>
 
       <View style={styles.ringRow}>
         <CalorieRing
@@ -465,6 +511,19 @@ function LedgerCard({
   );
 }
 
+function greeting(d: Date): string {
+  const h = d.getHours();
+  if (h < 5) return "Late night";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  if (h < 21) return "Good evening";
+  return "Good night";
+}
+
+function fmtDateIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function formatFastElapsed(startIso: string): string {
   const ms = Date.now() - new Date(startIso).getTime();
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -482,9 +541,70 @@ const styles = StyleSheet.create({
   },
   head: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: spacing.md,
     marginTop: spacing.sm,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(246,183,60,0.12)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    fontFamily: font.displayBold,
+    fontSize: 16,
+    color: colors.gold,
+  },
+  headTitleCol: {
+    flex: 1,
+    gap: 2,
+  },
+  headGreet: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+  },
+  headDate: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    letterSpacing: 0.6,
+  },
+  dayPickerRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 4,
+  },
+  dayChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.panel,
+  },
+  dayChipOn: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  dayChipText: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    letterSpacing: 0.6,
+  },
+  dayChipTextOn: {
+    color: colors.gold,
+    fontFamily: font.monoBold,
   },
   signout: {
     fontFamily: font.mono,

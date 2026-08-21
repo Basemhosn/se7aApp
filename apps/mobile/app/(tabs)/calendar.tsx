@@ -12,7 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
@@ -61,6 +61,7 @@ const MONTHS = [
 
 export default function Calendar() {
   const { t } = useTranslation();
+  const params = useLocalSearchParams<{ open?: string }>();
   const weekdayHead = t("common.day_names", { returnObjects: true }) as string[];
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -141,7 +142,7 @@ export default function Calendar() {
     }, [year, month, loadMonth, fetchedMonths])
   );
 
-  const openDay = async (date: string) => {
+  const openDay = useCallback(async (date: string) => {
     setPickedDate(date);
     setDetail(null);
     setDetailLoading(true);
@@ -152,7 +153,24 @@ export default function Calendar() {
       setDetail(null);
     }
     setDetailLoading(false);
-  };
+  }, []);
+
+  // Deep-link support: /calendar?open=YYYY-MM-DD auto-navigates the
+  // grid to that day's month and opens its detail modal. Fires once per
+  // change of the param — clicking around the calendar afterwards uses
+  // the same openDay callback.
+  const openParam = params.open;
+  const openedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openParam || openedForRef.current === openParam) return;
+    openedForRef.current = openParam;
+    const [yy, mm] = openParam.split("-").map(Number);
+    if (yy && mm) {
+      setYear(yy);
+      setMonth(mm);
+    }
+    openDay(openParam);
+  }, [openParam, openDay]);
 
   const prev = useCallback(() => {
     if (month === 1) {
