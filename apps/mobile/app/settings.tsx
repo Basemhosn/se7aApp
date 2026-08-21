@@ -76,6 +76,7 @@ export default function Settings() {
 
   const strava = integrations.find((i) => i.provider === "strava");
   const whoop = integrations.find((i) => i.provider === "whoop");
+  const oura = integrations.find((i) => i.provider === "oura");
 
   const refreshIntegrations = useCallback(async () => {
     const listRes = await api<{ integrations: Integration[] }>(
@@ -435,6 +436,25 @@ export default function Settings() {
           onConnect={() => connect("whoop", "se7a://whoop-connected")}
           onSync={() => sync("whoop")}
           onDisconnect={() => disconnect("whoop", "Whoop")}
+          isArabic={isArabic}
+        />
+        <IntegrationRow
+          provider="oura"
+          displayName="Oura"
+          brandColor="#7b6ef6"
+          iconConnected="ellipse"
+          iconDisconnected="ellipse-outline"
+          connectedLabel={isArabic ? "متصل" : "Connected"}
+          disconnectedBlurb={
+            isArabic
+              ? "اربط لاستيراد التمارين والخطوات والسعرات النشطة."
+              : "Auto-import workouts, steps, and active calories."
+          }
+          integration={oura}
+          busy={busy.oura}
+          onConnect={() => connect("oura", "se7a://oura-connected")}
+          onSync={() => sync("oura")}
+          onDisconnect={() => disconnect("oura", "Oura")}
           isArabic={isArabic}
           last
         />
