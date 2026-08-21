@@ -10,6 +10,7 @@ import { MEAL_PLAN_SYSTEM_PROMPT } from "@/lib/prompts/mealPlan.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { requirePro } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
+import { ramadanDaysInWeek, type RamadanPrefs } from "@/lib/ramadan";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, goal, rest_day_kcal_delta, days_per_week"
+      "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, goal, rest_day_kcal_delta, days_per_week, ramadan_prefs"
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -56,6 +57,23 @@ export async function POST(request: Request) {
   }
 
   const restrictions = parsed.data.restrictions ?? [];
+  const ramadan = ramadanDaysInWeek(
+    parsed.data.week_start,
+    profile.ramadan_prefs as Partial<RamadanPrefs> | null
+  );
+
+  const ramadanBlock = ramadan
+    ? `
+Ramadan mode: day indexes ${ramadan.day_indexes.join(", ")} of this
+week (0=Mon..6=Sun) are Ramadan ${ramadan.hijri_year} AH fasting days.
+Fajr ${ramadan.fajr_time}, maghrib ${ramadan.maghrib_time} (Gulf time).
+For those specific days ONLY: use the Ramadan Mode rules — "breakfast"
+slot = suhoor, "dinner" slot = iftar, no "lunch" slot, optional
+between-meal snack, meal name prefixed with "Suhoor:" / "Iftar:".
+The other days of this week follow the normal 3-meal structure.
+`.trim()
+    : "";
+
   const userMsg = `
 Build a 7-day meal plan starting Monday ${parsed.data.week_start}.
 
@@ -72,6 +90,7 @@ Dietary restrictions: ${restrictions.length ? restrictions.join(", ") : "none"}
 
 3 main meals a day + optional snack. Include ingredients per meal so we
 can compile a shopping list from the plan.
+${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
 `.trim();
 
   const locale = localeFromRequest(request);

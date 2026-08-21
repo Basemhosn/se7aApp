@@ -163,6 +163,58 @@ export function computeStatus(
   };
 }
 
+/**
+ * For a 7-day plan window starting `weekStartIso` (Monday), return which
+ * day indices (0=Mon..6=Sun) fall inside a Ramadan range, resolving
+ * against the user's prefs. Returns null if none of the 7 days are
+ * Ramadan days.
+ *
+ * Used by the meal-plan generator to bias the plan structure (suhoor /
+ * iftar timing, kcal distribution) only for the days that actually
+ * overlap Ramadan — a week that straddles the start or end of Ramadan
+ * gets a mixed plan instead of an all-or-nothing one.
+ */
+export function ramadanDaysInWeek(
+  weekStartIso: string,
+  prefsRaw: Partial<RamadanPrefs> | null | undefined
+): {
+  hijri_year: number;
+  day_indexes: number[]; // 0..6 (Mon..Sun) — the plan days that are Ramadan
+  fajr_time: string;
+  maghrib_time: string;
+} | null {
+  const prefs: RamadanPrefs = { ...DEFAULT_RAMADAN_PREFS, ...(prefsRaw ?? {}) };
+  const start = dateFromIso(weekStartIso);
+  const overlaps: Array<{ dow: number; range: RamadanRange }> = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    if (!isRamadanActiveForPrefs(prefs, d)) continue;
+    const w = findRamadanFor(d);
+    if (w) overlaps.push({ dow: i, range: w.range });
+  }
+  if (overlaps.length === 0) return null;
+
+  // If the week straddles two consecutive Ramadan windows (near-impossible
+  // for a 7-day window but keep it deterministic), pick the one covering
+  // the most days.
+  const byYear = new Map<number, number>();
+  for (const o of overlaps) {
+    byYear.set(o.range.hijri_year, (byYear.get(o.range.hijri_year) ?? 0) + 1);
+  }
+  const dominantYear = [...byYear.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+
+  return {
+    hijri_year: dominantYear,
+    day_indexes: overlaps
+      .filter((o) => o.range.hijri_year === dominantYear)
+      .map((o) => o.dow),
+    fajr_time: prefs.fajr_time,
+    maghrib_time: prefs.maghrib_time,
+  };
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────
 
 function fmtIso(d: Date): string {
