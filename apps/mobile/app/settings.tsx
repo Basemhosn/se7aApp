@@ -18,6 +18,8 @@ import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
+import type { RamadanStatus } from "@/lib/useRamadan";
+import { rescheduleRamadanReminders } from "@/lib/ramadanScheduler";
 import { useAuth } from "@/auth/AuthContext";
 import { useReferral } from "@/lib/useReferral";
 import { useEntitlement } from "@/lib/EntitlementContext";
@@ -607,19 +609,11 @@ interface RamadanPrefsShape {
   iftar_reminder: boolean;
 }
 
-interface RamadanStatusShape {
-  active: boolean;
-  day_num: number | null;
-  total_days: number | null;
-  next_ramadan_start: string | null;
-  prefs: RamadanPrefsShape;
-}
-
 function RamadanSettings({ isArabic }: { isArabic: boolean }) {
-  const [status, setStatus] = useState<RamadanStatusShape | null>(null);
+  const [status, setStatus] = useState<RamadanStatus | null>(null);
 
   useEffect(() => {
-    api<RamadanStatusShape>("/api/ramadan/status")
+    api<RamadanStatus>("/api/ramadan/status")
       .then(setStatus)
       .catch(() => setStatus(null));
   }, []);
@@ -632,11 +626,15 @@ function RamadanSettings({ isArabic }: { isArabic: boolean }) {
         : prev
     );
     try {
-      const res = await api<RamadanStatusShape>("/api/ramadan/status", {
+      const res = await api<RamadanStatus>("/api/ramadan/status", {
         method: "POST",
         body: JSON.stringify(p),
       });
       setStatus(res);
+      // Re-sync local iftar/suhoor notifications immediately so a toggle
+      // flip in Settings takes effect without waiting for the Home tab
+      // to re-focus.
+      rescheduleRamadanReminders(res).catch(() => {});
     } catch {
       /* revert would be nice; keeping optimistic for simplicity */
     }

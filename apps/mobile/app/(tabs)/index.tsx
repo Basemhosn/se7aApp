@@ -15,7 +15,7 @@ import { CalorieRing } from "@/components/CalorieRing";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
-import { useRamadan } from "@/lib/useRamadan";
+import { useRamadan, useRamadanScheduling } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
@@ -83,6 +83,7 @@ export default function Home() {
   useHealthSync(user?.id);
   useWidgetToken(user?.id);
   const { status: ramadan } = useRamadan();
+  useRamadanScheduling(ramadan);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
