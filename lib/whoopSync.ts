@@ -94,7 +94,7 @@ export async function syncWhoopForUser(
           : null;
       const row = {
         user_id: userId,
-        kind: mapWhoopKind(w.sport_id),
+        kind: mapWhoopKind(w),
         started_at: w.start,
         duration_min: durationMin,
         distance_km: distanceKm,

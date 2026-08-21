@@ -32,13 +32,16 @@ export interface WhoopTokenResponse {
 }
 
 export interface WhoopWorkout {
-  id: string;
+  id: string; // UUID in v2
+  v1_id?: number; // deprecated after 2025-09-01
   user_id: number;
   created_at: string;
   updated_at: string;
   start: string; // ISO
   end: string; // ISO
-  sport_id: number;
+  timezone_offset?: string;
+  sport_name?: string; // v2 primary — "running", "cycling", etc.
+  sport_id?: number; // deprecated after 2025-09-01
   score_state: string;
   score?: {
     strain: number;
@@ -50,10 +53,11 @@ export interface WhoopWorkout {
 }
 
 export interface WhoopCycle {
-  id: string;
+  id: number; // int64 in v2
   user_id: number;
   start: string;
   end: string | null;
+  timezone_offset?: string;
   score?: {
     strain?: number;
     kilojoule?: number;
@@ -128,7 +132,7 @@ export async function fetchWorkouts(
   // Cap pages to avoid runaway; 5 pages × 25 per page = 125 workouts,
   // more than any user would produce between hourly syncs.
   for (let i = 0; i < 5; i++) {
-    const url = new URL(`${WHOOP_API}/v1/activity/workout`);
+    const url = new URL(`${WHOOP_API}/v2/activity/workout`);
     url.searchParams.set("start", sinceIso);
     url.searchParams.set("limit", "25");
     if (nextToken) url.searchParams.set("nextToken", nextToken);
@@ -150,7 +154,7 @@ export async function fetchCycles(
   accessToken: string,
   sinceIso: string
 ): Promise<WhoopCycle[]> {
-  const url = new URL(`${WHOOP_API}/v1/cycle`);
+  const url = new URL(`${WHOOP_API}/v2/cycle`);
   url.searchParams.set("start", sinceIso);
   url.searchParams.set("limit", "25");
   const res = await fetch(url.toString(), {
@@ -166,7 +170,7 @@ export async function fetchCycles(
 export async function fetchProfile(
   accessToken: string
 ): Promise<{ user_id: number; first_name?: string; last_name?: string } | null> {
-  const res = await fetch(`${WHOOP_API}/v1/user/profile/basic`, {
+  const res = await fetch(`${WHOOP_API}/v2/user/profile/basic`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) return null;
@@ -177,15 +181,7 @@ export async function fetchProfile(
   };
 }
 
-/**
- * Whoop sport IDs → SE7A cardio kind. Non-cardio activities (yoga,
- * weightlifting) fall through to "other" — we don't drop them; users
- * can still see them in the log if they log via Whoop.
- *
- * Full sport ID reference: https://developer.whoop.com/docs/appendix
- * Covers the ones most likely to appear; unknowns → "other".
- */
-export function mapWhoopKind(sportId: number):
+export type CardioKind =
   | "run"
   | "walk"
   | "ride"
@@ -193,28 +189,48 @@ export function mapWhoopKind(sportId: number):
   | "row"
   | "elliptical"
   | "hike"
-  | "other" {
-  switch (sportId) {
-    case 0: // Activity (generic)
-      return "other";
-    case 1: // Cycling
+  | "other";
+
+/**
+ * Whoop v2 sport → SE7A cardio kind. Prefers sport_name (v2, e.g.
+ * "running"); falls back to legacy sport_id for any v1-era workouts
+ * that still surface. Non-cardio activities (yoga, weightlifting)
+ * bucket to "other" so we don't drop them from the user's history.
+ */
+export function mapWhoopKind(workout: WhoopWorkout): CardioKind {
+  const name = (workout.sport_name ?? "").toLowerCase();
+  if (name) {
+    if (name.includes("run")) return "run";
+    if (name.includes("hike")) return "hike";
+    if (name.includes("walk")) return "walk";
+    if (name.includes("cycl") || name.includes("bike") || name.includes("ride"))
       return "ride";
-    case 43: // Rowing
+    if (name.includes("swim")) return "swim";
+    if (name.includes("row") || name.includes("kayak") || name.includes("canoe"))
       return "row";
-    case 45: // Running
-      return "run";
-    case 47: // Swimming
-      return "swim";
-    case 55: // Hiking
-      return "hike";
-    case 63: // Elliptical
-      return "elliptical";
-    case 66: // Walking
-      return "walk";
-    case 68: // Cycling (indoor)
+    if (name.includes("elliptical")) return "elliptical";
+    return "other";
+  }
+  // Legacy sport_id path — Whoop's v1 numeric IDs. Deprecated 2025-09-01
+  // but we keep this branch for backward compat with any pre-transition
+  // workouts still in the DB.
+  switch (workout.sport_id) {
+    case 1:
+    case 68:
       return "ride";
-    case 71: // Running (indoor treadmill)
+    case 43:
+      return "row";
+    case 45:
+    case 71:
       return "run";
+    case 47:
+      return "swim";
+    case 55:
+      return "hike";
+    case 63:
+      return "elliptical";
+    case 66:
+      return "walk";
     default:
       return "other";
   }
