@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   fetchDailyActivity,
+  fetchDailySleep,
+  fetchSleep,
   fetchWorkouts,
   mapOuraKind,
   refreshToken as refreshOuraToken,
@@ -10,6 +12,8 @@ import {
  * Sync one user's Oura data:
  *   - workouts        → cardio_sessions (deduped via provider_activity_id)
  *   - daily activity  → daily_activity (steps + active_calories)
+ *   - sleep sessions  → sleep_sessions (main-sleep only; overall daily
+ *                       score merged from /daily_sleep, keyed on day)
  *
  * Auto-refreshes tokens 60s before expiry.
  */
@@ -19,6 +23,7 @@ export async function syncOuraForUser(
 ): Promise<{
   workouts_inserted: number;
   days_upserted: number;
+  sleep_upserted: number;
   error?: string;
 }> {
   const { data: integration } = await admin
@@ -29,7 +34,12 @@ export async function syncOuraForUser(
     .maybeSingle();
 
   if (!integration) {
-    return { workouts_inserted: 0, days_upserted: 0, error: "not_connected" };
+    return {
+      workouts_inserted: 0,
+      days_upserted: 0,
+      sleep_upserted: 0,
+      error: "not_connected",
+    };
   }
 
   let accessToken = integration.access_token as string;
@@ -42,6 +52,7 @@ export async function syncOuraForUser(
       return {
         workouts_inserted: 0,
         days_upserted: 0,
+        sleep_upserted: 0,
         error: "no_refresh_token",
       };
     }
@@ -63,6 +74,7 @@ export async function syncOuraForUser(
       return {
         workouts_inserted: 0,
         days_upserted: 0,
+        sleep_upserted: 0,
         error: `refresh_failed: ${(e as Error).message}`,
       };
     }
@@ -75,6 +87,7 @@ export async function syncOuraForUser(
 
   let workouts_inserted = 0;
   let days_upserted = 0;
+  let sleep_upserted = 0;
 
   // Workouts
   try {
@@ -112,6 +125,7 @@ export async function syncOuraForUser(
     return {
       workouts_inserted,
       days_upserted,
+      sleep_upserted,
       error: `workouts_failed: ${(e as Error).message}`,
     };
   }
@@ -149,11 +163,87 @@ export async function syncOuraForUser(
     /* secondary; don't fail the whole sync */
   }
 
+  // Sleep sessions — main-sleep only, with the daily overall score
+  // stitched in from /daily_sleep keyed by day.
+  try {
+    const [sleeps, dailyScores] = await Promise.all([
+      fetchSleep(accessToken, sinceIso),
+      fetchDailySleep(accessToken, sinceIso).catch(() => []),
+    ]);
+    const scoreByDay = new Map<string, number>();
+    for (const d of dailyScores) {
+      if (typeof d.score === "number") scoreByDay.set(d.day, d.score);
+    }
+
+    for (const s of sleeps) {
+      if (s.type !== "sleep" && s.type !== "long_sleep") continue;
+      const start = new Date(s.bedtime_start);
+      const end = new Date(s.bedtime_end);
+      const durationMs = end.getTime() - start.getTime();
+      if (durationMs <= 0) continue;
+
+      const totalSleepSec = s.total_sleep_duration ?? null;
+      const awakeSec = s.awake_time ?? null;
+      const durationMinutes = Math.round(
+        (totalSleepSec ?? Math.max(0, durationMs / 1000 - (awakeSec ?? 0))) / 60
+      );
+      if (durationMinutes <= 0) continue;
+
+      const row = {
+        user_id: userId,
+        source: "oura" as const,
+        provider_session_id: s.id,
+        night_date: s.day,
+        start_at: s.bedtime_start,
+        end_at: s.bedtime_end,
+        duration_minutes: durationMinutes,
+        time_in_bed_minutes:
+          typeof s.time_in_bed === "number"
+            ? Math.round(s.time_in_bed / 60)
+            : null,
+        sleep_score: scoreByDay.get(s.day) ?? null,
+        deep_minutes:
+          typeof s.deep_sleep_duration === "number"
+            ? Math.round(s.deep_sleep_duration / 60)
+            : null,
+        rem_minutes:
+          typeof s.rem_sleep_duration === "number"
+            ? Math.round(s.rem_sleep_duration / 60)
+            : null,
+        light_minutes:
+          typeof s.light_sleep_duration === "number"
+            ? Math.round(s.light_sleep_duration / 60)
+            : null,
+        awake_minutes:
+          typeof awakeSec === "number" ? Math.round(awakeSec / 60) : null,
+        hrv_ms:
+          typeof s.average_hrv === "number"
+            ? Math.round(s.average_hrv * 10) / 10
+            : null,
+        resting_hr_bpm:
+          typeof s.lowest_heart_rate === "number"
+            ? Math.round(s.lowest_heart_rate)
+            : null,
+        respiratory_rate:
+          typeof s.average_breath === "number"
+            ? Math.round(s.average_breath * 10) / 10
+            : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await admin.from("sleep_sessions").upsert(row, {
+        onConflict: "user_id,source,provider_session_id",
+      });
+      if (!error) sleep_upserted += 1;
+    }
+  } catch {
+    /* sleep is secondary; don't fail the whole sync on this */
+  }
+
   await admin
     .from("user_integrations")
     .update({ last_sync_at: new Date().toISOString() })
     .eq("user_id", userId)
     .eq("provider", "oura");
 
-  return { workouts_inserted, days_upserted };
+  return { workouts_inserted, days_upserted, sleep_upserted };
 }

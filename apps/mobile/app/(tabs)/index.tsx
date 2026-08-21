@@ -57,6 +57,21 @@ interface StreakResponse {
   todays_status: "logged" | "not_yet";
 }
 
+interface SleepTodayResponse {
+  last_night: {
+    night_date: string;
+    duration_minutes: number;
+    sleep_score: number | null;
+    hrv_ms: number | null;
+    resting_hr_bpm: number | null;
+    source: string;
+  } | null;
+  seven_day: {
+    nights_logged: number;
+    avg_duration_minutes: number | null;
+  };
+}
+
 interface CardioTodayResponse {
   sessions: {
     id: number;
@@ -93,6 +108,7 @@ export default function Home() {
   const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
   const [streak, setStreak] = useState<StreakResponse | null>(null);
   const [cardio, setCardio] = useState<CardioTodayResponse | null>(null);
+  const [sleep, setSleep] = useState<SleepTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -107,6 +123,7 @@ export default function Home() {
       fastingRes,
       streakRes,
       cardioRes,
+      sleepRes,
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -130,6 +147,7 @@ export default function Home() {
         `/api/streaks?tz_offset_min=${tzOffsetMin}`
       ).catch(() => null),
       api<CardioTodayResponse>("/api/cardio/today").catch(() => null),
+      api<SleepTodayResponse>("/api/sleep/today").catch(() => null),
     ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
@@ -143,6 +161,7 @@ export default function Home() {
     setFasting(fastingRes);
     setStreak(streakRes);
     setCardio(cardioRes);
+    setSleep(sleepRes);
     setLoading(false);
   }, [user]);
 
@@ -358,6 +377,56 @@ export default function Home() {
             </View>
           </Pressable>
         )}
+
+      {sleep?.last_night && (
+        <View style={styles.cardioRow}>
+          <View style={styles.cardioStat}>
+            <Ionicons name="moon" size={16} color="#8b7dd6" />
+            <Text style={styles.cardioValue}>
+              {formatHm(sleep.last_night.duration_minutes)}
+            </Text>
+            <Text style={styles.cardioLabel}>last night</Text>
+          </View>
+          <View style={styles.cardioDivider} />
+          <View style={styles.cardioStat}>
+            <Ionicons
+              name={
+                sleep.last_night.sleep_score !== null ? "ribbon" : "pulse"
+              }
+              size={16}
+              color={colors.mint}
+            />
+            <Text style={styles.cardioValue}>
+              {sleep.last_night.sleep_score !== null
+                ? sleep.last_night.sleep_score
+                : sleep.last_night.hrv_ms !== null
+                  ? Math.round(sleep.last_night.hrv_ms)
+                  : sleep.last_night.resting_hr_bpm !== null
+                    ? sleep.last_night.resting_hr_bpm
+                    : "—"}
+            </Text>
+            <Text style={styles.cardioLabel}>
+              {sleep.last_night.sleep_score !== null
+                ? "score"
+                : sleep.last_night.hrv_ms !== null
+                  ? "HRV ms"
+                  : sleep.last_night.resting_hr_bpm !== null
+                    ? "RHR bpm"
+                    : "—"}
+            </Text>
+          </View>
+          <View style={styles.cardioDivider} />
+          <View style={styles.cardioStat}>
+            <Ionicons name="trending-up" size={16} color={colors.gold} />
+            <Text style={styles.cardioValue}>
+              {sleep.seven_day.avg_duration_minutes !== null
+                ? formatHm(sleep.seven_day.avg_duration_minutes)
+                : "—"}
+            </Text>
+            <Text style={styles.cardioLabel}>7-day avg</Text>
+          </View>
+        </View>
+      )}
 
       <Pressable
         onPress={() => router.push("/meals-suggest")}
@@ -654,6 +723,12 @@ function formatFastElapsed(startIso: string): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
+  return `${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+function formatHm(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.max(0, Math.round(minutes - h * 60));
   return `${h}h ${String(m).padStart(2, "0")}m`;
 }
 

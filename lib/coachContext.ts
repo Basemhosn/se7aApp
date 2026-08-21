@@ -59,6 +59,7 @@ export async function buildCoachContext(
     workoutRes,
     fastingRes,
     waterTodayRes,
+    sleepRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -111,6 +112,14 @@ export async function buildCoachContext(
       .select("ml")
       .eq("user_id", userId)
       .gte("logged_at", startOfToday.toISOString()),
+    supabase
+      .from("sleep_sessions")
+      .select(
+        "night_date, duration_minutes, sleep_score, hrv_ms, resting_hr_bpm"
+      )
+      .eq("user_id", userId)
+      .gte("night_date", dayKey(sevenDaysAgo))
+      .order("night_date", { ascending: false }),
   ]);
 
   const profile = (profileRes.data ?? null) as ProfileRow | null;
@@ -127,6 +136,7 @@ export async function buildCoachContext(
     (s, w) => s + Number(w.ml ?? 0),
     0
   );
+  const sleepNights = sleepRes.data ?? [];
 
   const parts: string[] = [];
   parts.push("USER CONTEXT (real data, use this in your answers):");
@@ -263,6 +273,29 @@ export async function buildCoachContext(
     parts.push(`\n[Weight] Latest: ${weights[0]!.kg} kg. Only 1 weigh-in.`);
   }
 
+  // Sleep — last night + 7-day average. Signal-heavy for coaching: poor
+  // sleep suppresses recovery, HRV crash signals overtraining/illness.
+  if (sleepNights.length > 0) {
+    const last = sleepNights[0]!;
+    const lastHrs = Math.floor(Number(last.duration_minutes) / 60);
+    const lastMins = Number(last.duration_minutes) % 60;
+    const avgMin =
+      sleepNights.reduce((s, n) => s + Number(n.duration_minutes ?? 0), 0) /
+      sleepNights.length;
+    const avgHrs = Math.floor(avgMin / 60);
+    const avgMinsRem = Math.round(avgMin - avgHrs * 60);
+    const scoreBits: string[] = [];
+    if (typeof last.sleep_score === "number")
+      scoreBits.push(`score ${last.sleep_score}/100`);
+    if (typeof last.hrv_ms === "number")
+      scoreBits.push(`HRV ${Math.round(Number(last.hrv_ms))}ms`);
+    if (typeof last.resting_hr_bpm === "number")
+      scoreBits.push(`RHR ${last.resting_hr_bpm}bpm`);
+    parts.push(
+      `\n[Sleep] Last night ${lastHrs}h ${lastMins}m${scoreBits.length ? ` (${scoreBits.join(", ")})` : ""}. 7-day avg ${avgHrs}h ${avgMinsRem}m over ${sleepNights.length} night${sleepNights.length === 1 ? "" : "s"}.`
+    );
+  }
+
   // Recent workouts + top PRs (derived in one pass)
   if (workouts.length > 0) {
     const recent = workouts.slice(0, 2);
@@ -308,7 +341,8 @@ export async function buildCoachContext(
     todayMeals.length > 0 ||
     weekMeals.length > 0 ||
     weights.length > 0 ||
-    workouts.length > 0;
+    workouts.length > 0 ||
+    sleepNights.length > 0;
 
   return { block, has_profile: !!profile, has_any_data: hasAny };
 }

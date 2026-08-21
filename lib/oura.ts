@@ -19,7 +19,7 @@ export const OURA_API = "https://api.ouraring.com/v2";
 export const OURA_REDIRECT_URI =
   process.env.OURA_REDIRECT_URI ??
   "https://se7a.app/api/integrations/oura/callback";
-export const OURA_SCOPE = "personal daily workout";
+export const OURA_SCOPE = "personal daily workout heartrate";
 
 export interface OuraTokenResponse {
   access_token: string;
@@ -40,6 +40,41 @@ export interface OuraWorkout {
   intensity?: "easy" | "moderate" | "hard";
   label?: string | null;
   source?: string;
+}
+
+export interface OuraSleep {
+  id: string;
+  average_breath?: number | null;
+  average_heart_rate?: number | null;
+  average_hrv?: number | null;
+  awake_time?: number | null; // seconds
+  bedtime_end: string; // ISO
+  bedtime_start: string; // ISO
+  day: string; // YYYY-MM-DD — Oura already anchors to the wake date
+  deep_sleep_duration?: number | null; // seconds
+  efficiency?: number | null;
+  latency?: number | null;
+  light_sleep_duration?: number | null;
+  low_battery_alert?: boolean;
+  lowest_heart_rate?: number | null;
+  period?: number;
+  readiness?: {
+    score?: number;
+  } | null;
+  rem_sleep_duration?: number | null;
+  restless_periods?: number | null;
+  sleep_phase_5_min?: string;
+  time_in_bed: number; // seconds
+  total_sleep_duration?: number | null; // seconds
+  type: "deleted" | "sleep" | "long_sleep" | "late_nap" | "rest";
+}
+
+export interface OuraDailySleep {
+  id: string;
+  contributors?: Record<string, number | null>;
+  day: string; // YYYY-MM-DD
+  score?: number | null;
+  timestamp?: string;
 }
 
 export interface OuraDailyActivity {
@@ -167,6 +202,63 @@ export async function fetchDailyActivity(
       throw new Error(`Oura daily_activity fetch failed: ${res.status}`);
     }
     const body = (await res.json()) as OuraPaged<OuraDailyActivity>;
+    results.push(...body.data);
+    if (!body.next_token) break;
+    nextToken = body.next_token;
+  }
+  return results;
+}
+
+export async function fetchSleep(
+  accessToken: string,
+  sinceIso: string
+): Promise<OuraSleep[]> {
+  const startDay = sinceIso.slice(0, 10);
+  const endDay = new Date().toISOString().slice(0, 10);
+  const results: OuraSleep[] = [];
+  let nextToken: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const url = new URL(`${OURA_API}/usercollection/sleep`);
+    url.searchParams.set("start_date", startDay);
+    url.searchParams.set("end_date", endDay);
+    if (nextToken) url.searchParams.set("next_token", nextToken);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      throw new Error(`Oura sleep fetch failed: ${res.status}`);
+    }
+    const body = (await res.json()) as OuraPaged<OuraSleep>;
+    results.push(...body.data);
+    if (!body.next_token) break;
+    nextToken = body.next_token;
+  }
+  return results;
+}
+
+/**
+ * Oura's overall sleep score lives in the /daily_sleep collection,
+ * keyed by day. The per-session /sleep endpoint doesn't include it —
+ * we fetch this separately and stitch on `day`.
+ */
+export async function fetchDailySleep(
+  accessToken: string,
+  sinceIso: string
+): Promise<OuraDailySleep[]> {
+  const startDay = sinceIso.slice(0, 10);
+  const endDay = new Date().toISOString().slice(0, 10);
+  const results: OuraDailySleep[] = [];
+  let nextToken: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const url = new URL(`${OURA_API}/usercollection/daily_sleep`);
+    url.searchParams.set("start_date", startDay);
+    url.searchParams.set("end_date", endDay);
+    if (nextToken) url.searchParams.set("next_token", nextToken);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) break;
+    const body = (await res.json()) as OuraPaged<OuraDailySleep>;
     results.push(...body.data);
     if (!body.next_token) break;
     nextToken = body.next_token;

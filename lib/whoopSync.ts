@@ -1,15 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   fetchCycles,
+  fetchRecovery,
+  fetchSleep,
   fetchWorkouts,
   mapWhoopKind,
   refreshToken as refreshWhoopToken,
+  type WhoopRecovery,
 } from "./whoop";
 
 /**
  * Sync one user's Whoop data:
  *   - workouts → cardio_sessions (deduped via provider_activity_id)
  *   - cycles   → daily_activity.active_kcal (kilojoule / 4.184)
+ *   - sleep    → sleep_sessions (deduped via provider_session_id), with
+ *                HRV + resting HR merged in from the recovery endpoint
  *
  * Auto-refreshes tokens 60s before expiry.
  */
@@ -19,6 +24,7 @@ export async function syncWhoopForUser(
 ): Promise<{
   workouts_inserted: number;
   cycles_upserted: number;
+  sleep_upserted: number;
   error?: string;
 }> {
   const { data: integration } = await admin
@@ -29,7 +35,12 @@ export async function syncWhoopForUser(
     .maybeSingle();
 
   if (!integration) {
-    return { workouts_inserted: 0, cycles_upserted: 0, error: "not_connected" };
+    return {
+      workouts_inserted: 0,
+      cycles_upserted: 0,
+      sleep_upserted: 0,
+      error: "not_connected",
+    };
   }
 
   let accessToken = integration.access_token as string;
@@ -43,6 +54,7 @@ export async function syncWhoopForUser(
       return {
         workouts_inserted: 0,
         cycles_upserted: 0,
+        sleep_upserted: 0,
         error: "no_refresh_token",
       };
     }
@@ -64,6 +76,7 @@ export async function syncWhoopForUser(
       return {
         workouts_inserted: 0,
         cycles_upserted: 0,
+        sleep_upserted: 0,
         error: `refresh_failed: ${(e as Error).message}`,
       };
     }
@@ -76,6 +89,7 @@ export async function syncWhoopForUser(
 
   let workouts_inserted = 0;
   let cycles_upserted = 0;
+  let sleep_upserted = 0;
 
   // Workouts
   try {
@@ -116,6 +130,7 @@ export async function syncWhoopForUser(
     return {
       workouts_inserted,
       cycles_upserted,
+      sleep_upserted,
       error: `workouts_failed: ${(e as Error).message}`,
     };
   }
@@ -153,11 +168,99 @@ export async function syncWhoopForUser(
     /* cycles are secondary; don't fail the whole sync on this */
   }
 
+  // Sleep — with HRV + resting HR merged in from the recovery endpoint,
+  // keyed by sleep_id. Recovery is optional (some accounts don't grant
+  // the scope), so we degrade cleanly.
+  try {
+    const [sleeps, recoveries] = await Promise.all([
+      fetchSleep(accessToken, sinceIso),
+      fetchRecovery(accessToken, sinceIso).catch(
+        () => [] as WhoopRecovery[]
+      ),
+    ]);
+    const recoveryBySleep = new Map<string, WhoopRecovery>();
+    for (const r of recoveries) recoveryBySleep.set(r.sleep_id, r);
+
+    for (const s of sleeps) {
+      if (s.nap) continue; // main-sleep only; naps skew the "last night" card
+      const start = new Date(s.start);
+      const end = new Date(s.end);
+      const durationMs = end.getTime() - start.getTime();
+      if (durationMs <= 0) continue;
+
+      const stage = s.score?.stage_summary;
+      const tibMs = stage?.total_in_bed_time_milli;
+      const awakeMs = stage?.total_awake_time_milli;
+      const lightMs = stage?.total_light_sleep_time_milli;
+      const deepMs = stage?.total_slow_wave_sleep_time_milli;
+      const remMs = stage?.total_rem_sleep_time_milli;
+      // asleep = TIB - awake (or sum of stages) — prefer sum when available.
+      const asleepMs =
+        typeof lightMs === "number" &&
+        typeof deepMs === "number" &&
+        typeof remMs === "number"
+          ? lightMs + deepMs + remMs
+          : typeof tibMs === "number" && typeof awakeMs === "number"
+            ? Math.max(0, tibMs - awakeMs)
+            : durationMs;
+      const durationMinutes = Math.round(asleepMs / 60_000);
+      if (durationMinutes <= 0) continue;
+
+      // Anchor to the wake date (matches Whoop's + Oura's convention).
+      const wake = end;
+      const nightDate = `${wake.getFullYear()}-${String(wake.getMonth() + 1).padStart(2, "0")}-${String(wake.getDate()).padStart(2, "0")}`;
+
+      const rec = recoveryBySleep.get(s.id);
+      const row = {
+        user_id: userId,
+        source: "whoop" as const,
+        provider_session_id: s.id,
+        night_date: nightDate,
+        start_at: s.start,
+        end_at: s.end,
+        duration_minutes: durationMinutes,
+        time_in_bed_minutes:
+          typeof tibMs === "number" ? Math.round(tibMs / 60_000) : null,
+        sleep_score:
+          typeof s.score?.sleep_performance_percentage === "number"
+            ? Math.round(s.score.sleep_performance_percentage)
+            : null,
+        deep_minutes:
+          typeof deepMs === "number" ? Math.round(deepMs / 60_000) : null,
+        rem_minutes:
+          typeof remMs === "number" ? Math.round(remMs / 60_000) : null,
+        light_minutes:
+          typeof lightMs === "number" ? Math.round(lightMs / 60_000) : null,
+        awake_minutes:
+          typeof awakeMs === "number" ? Math.round(awakeMs / 60_000) : null,
+        hrv_ms:
+          typeof rec?.score?.hrv_rmssd_milli === "number"
+            ? Math.round(rec.score.hrv_rmssd_milli * 10) / 10
+            : null,
+        resting_hr_bpm:
+          typeof rec?.score?.resting_heart_rate === "number"
+            ? Math.round(rec.score.resting_heart_rate)
+            : null,
+        respiratory_rate:
+          typeof s.score?.respiratory_rate === "number"
+            ? Math.round(s.score.respiratory_rate * 10) / 10
+            : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await admin.from("sleep_sessions").upsert(row, {
+        onConflict: "user_id,source,provider_session_id",
+      });
+      if (!error) sleep_upserted += 1;
+    }
+  } catch {
+    /* sleep is secondary; don't fail the whole sync on this */
+  }
+
   await admin
     .from("user_integrations")
     .update({ last_sync_at: new Date().toISOString() })
     .eq("user_id", userId)
     .eq("provider", "whoop");
 
-  return { workouts_inserted, cycles_upserted };
+  return { workouts_inserted, cycles_upserted, sleep_upserted };
 }

@@ -21,7 +21,7 @@ export const WHOOP_REDIRECT_URI =
   process.env.WHOOP_REDIRECT_URI ??
   "https://se7a.app/api/integrations/whoop/callback";
 export const WHOOP_SCOPE =
-  "read:workout read:cycles read:profile offline";
+  "read:workout read:cycles read:sleep read:recovery read:profile offline";
 
 export interface WhoopTokenResponse {
   access_token: string;
@@ -49,6 +49,58 @@ export interface WhoopWorkout {
     average_heart_rate?: number;
     max_heart_rate?: number;
     distance_meter?: number;
+  };
+}
+
+export interface WhoopSleep {
+  id: string; // UUID v2
+  v1_id?: number;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+  start: string; // ISO — sleep session start
+  end: string; // ISO — sleep session end (wake)
+  timezone_offset?: string;
+  nap: boolean;
+  score_state: string;
+  score?: {
+    stage_summary?: {
+      total_in_bed_time_milli?: number;
+      total_awake_time_milli?: number;
+      total_no_data_time_milli?: number;
+      total_light_sleep_time_milli?: number;
+      total_slow_wave_sleep_time_milli?: number;
+      total_rem_sleep_time_milli?: number;
+      sleep_cycle_count?: number;
+      disturbance_count?: number;
+    };
+    sleep_needed?: {
+      baseline_milli?: number;
+      need_from_sleep_debt_milli?: number;
+      need_from_recent_strain_milli?: number;
+      need_from_recent_nap_milli?: number;
+    };
+    respiratory_rate?: number;
+    sleep_performance_percentage?: number;
+    sleep_consistency_percentage?: number;
+    sleep_efficiency_percentage?: number;
+  };
+}
+
+export interface WhoopRecovery {
+  cycle_id: number;
+  sleep_id: string;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+  score_state: string;
+  score?: {
+    user_calibrating?: boolean;
+    recovery_score?: number;
+    resting_heart_rate?: number;
+    hrv_rmssd_milli?: number;
+    spo2_percentage?: number;
+    skin_temp_celsius?: number;
   };
 }
 
@@ -165,6 +217,63 @@ export async function fetchCycles(
   }
   const body = (await res.json()) as WhoopPaged<WhoopCycle>;
   return body.records;
+}
+
+export async function fetchSleep(
+  accessToken: string,
+  sinceIso: string
+): Promise<WhoopSleep[]> {
+  const results: WhoopSleep[] = [];
+  let nextToken: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const url = new URL(`${WHOOP_API}/v2/activity/sleep`);
+    url.searchParams.set("start", sinceIso);
+    url.searchParams.set("limit", "25");
+    if (nextToken) url.searchParams.set("nextToken", nextToken);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      throw new Error(`Whoop sleep fetch failed: ${res.status}`);
+    }
+    const body = (await res.json()) as WhoopPaged<WhoopSleep>;
+    results.push(...body.records);
+    if (!body.next_token) break;
+    nextToken = body.next_token;
+  }
+  return results;
+}
+
+/**
+ * Fetch recovery scores (HRV + resting HR) keyed by sleep_id, so we can
+ * hydrate the sleep sessions we just inserted. Whoop keys recovery to
+ * the sleep session that generated it, not to a date.
+ */
+export async function fetchRecovery(
+  accessToken: string,
+  sinceIso: string
+): Promise<WhoopRecovery[]> {
+  const results: WhoopRecovery[] = [];
+  let nextToken: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const url = new URL(`${WHOOP_API}/v2/recovery`);
+    url.searchParams.set("start", sinceIso);
+    url.searchParams.set("limit", "25");
+    if (nextToken) url.searchParams.set("nextToken", nextToken);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      // Recovery is optional — some accounts don't grant it. Return
+      // whatever we've collected so far rather than failing the sync.
+      break;
+    }
+    const body = (await res.json()) as WhoopPaged<WhoopRecovery>;
+    results.push(...body.records);
+    if (!body.next_token) break;
+    nextToken = body.next_token;
+  }
+  return results;
 }
 
 export async function fetchProfile(
