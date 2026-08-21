@@ -56,6 +56,25 @@ interface StreakResponse {
   todays_status: "logged" | "not_yet";
 }
 
+interface CardioTodayResponse {
+  sessions: {
+    id: number;
+    kind: string;
+    duration_min: number;
+    distance_km: number | null;
+    kcal_burned: number | null;
+  }[];
+  totals: {
+    duration_min: number;
+    distance_km: number;
+    kcal_burned: number;
+  };
+  activity: {
+    steps: number;
+    active_kcal: number;
+  };
+}
+
 export default function Home() {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -70,6 +89,7 @@ export default function Home() {
   const [dayStatus, setDayStatus] = useState<DayStatusResponse | null>(null);
   const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
   const [streak, setStreak] = useState<StreakResponse | null>(null);
+  const [cardio, setCardio] = useState<CardioTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -83,6 +103,7 @@ export default function Home() {
       dayRes,
       fastingRes,
       streakRes,
+      cardioRes,
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -105,6 +126,7 @@ export default function Home() {
       api<StreakResponse>(
         `/api/streaks?tz_offset_min=${tzOffsetMin}`
       ).catch(() => null),
+      api<CardioTodayResponse>("/api/cardio/today").catch(() => null),
     ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
@@ -117,6 +139,7 @@ export default function Home() {
     setDayStatus(dayRes);
     setFasting(fastingRes);
     setStreak(streakRes);
+    setCardio(cardioRes);
     setLoading(false);
   }, [user]);
 
@@ -293,6 +316,42 @@ export default function Home() {
         </View>
       )}
 
+      {cardio &&
+        (cardio.activity.steps > 0 ||
+          cardio.activity.active_kcal > 0 ||
+          cardio.sessions.length > 0) && (
+          <Pressable
+            onPress={() => router.push("/log-cardio")}
+            style={styles.cardioRow}
+          >
+            <View style={styles.cardioStat}>
+              <Ionicons name="footsteps" size={16} color={colors.mint} />
+              <Text style={styles.cardioValue}>
+                {cardio.activity.steps.toLocaleString()}
+              </Text>
+              <Text style={styles.cardioLabel}>steps</Text>
+            </View>
+            <View style={styles.cardioDivider} />
+            <View style={styles.cardioStat}>
+              <Ionicons name="flame" size={16} color={colors.coral} />
+              <Text style={styles.cardioValue}>
+                {cardio.activity.active_kcal + cardio.totals.kcal_burned}
+              </Text>
+              <Text style={styles.cardioLabel}>burned</Text>
+            </View>
+            <View style={styles.cardioDivider} />
+            <View style={styles.cardioStat}>
+              <Ionicons name="walk" size={16} color={colors.gold} />
+              <Text style={styles.cardioValue}>
+                {cardio.sessions.length}
+              </Text>
+              <Text style={styles.cardioLabel}>
+                {cardio.sessions.length === 1 ? "session" : "sessions"}
+              </Text>
+            </View>
+          </Pressable>
+        )}
+
       <Pressable
         onPress={() => router.push("/meals-suggest")}
         style={styles.suggestCard}
@@ -428,6 +487,13 @@ export default function Home() {
             icon: "speedometer-outline",
             tint: colors.coral,
             onPress: () => router.push("/progress"),
+          },
+          {
+            key: "cardio",
+            label: "Log cardio",
+            icon: "walk-outline",
+            tint: colors.mint,
+            onPress: () => router.push("/log-cardio"),
           },
         ]}
       />
@@ -809,6 +875,37 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     borderRadius: radius.lg,
     padding: spacing.md,
+  },
+  cardioRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    justifyContent: "space-between",
+  },
+  cardioStat: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  cardioValue: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+  },
+  cardioLabel: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 0.6,
+  },
+  cardioDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.line,
   },
   streakCard: {
     flexDirection: "row",
