@@ -502,6 +502,10 @@ export default function Settings() {
         </Section>
       )}
 
+      <Section title={isArabic ? "رمضان" : "Ramadan"}>
+        <RamadanSettings isArabic={isArabic} />
+      </Section>
+
       {referral && (
         <Section title={isArabic ? "ادعُ صديقًا" : "Invite a friend"}>
           <View style={styles.inviteBody}>
@@ -591,6 +595,219 @@ export default function Settings() {
 
       <Text style={styles.foot}>SE7A · v0.1.0</Text>
     </Screen>
+  );
+}
+
+interface RamadanPrefsShape {
+  auto_detect: boolean;
+  enabled_override: boolean | null;
+  fajr_time: string;
+  maghrib_time: string;
+  suhoor_reminder: boolean;
+  iftar_reminder: boolean;
+}
+
+interface RamadanStatusShape {
+  active: boolean;
+  day_num: number | null;
+  total_days: number | null;
+  next_ramadan_start: string | null;
+  prefs: RamadanPrefsShape;
+}
+
+function RamadanSettings({ isArabic }: { isArabic: boolean }) {
+  const [status, setStatus] = useState<RamadanStatusShape | null>(null);
+
+  useEffect(() => {
+    api<RamadanStatusShape>("/api/ramadan/status")
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+
+  const patch = useCallback(async (p: Partial<RamadanPrefsShape>) => {
+    // Optimistic update.
+    setStatus((prev) =>
+      prev
+        ? { ...prev, prefs: { ...prev.prefs, ...p } }
+        : prev
+    );
+    try {
+      const res = await api<RamadanStatusShape>("/api/ramadan/status", {
+        method: "POST",
+        body: JSON.stringify(p),
+      });
+      setStatus(res);
+    } catch {
+      /* revert would be nice; keeping optimistic for simplicity */
+    }
+  }, []);
+
+  if (!status) {
+    return (
+      <View style={{ padding: spacing.md }}>
+        <Text style={styles.rowValue}>{isArabic ? "…" : "Loading…"}</Text>
+      </View>
+    );
+  }
+
+  const modeText = status.prefs.auto_detect
+    ? isArabic
+      ? "تلقائي"
+      : "Auto"
+    : status.prefs.enabled_override
+      ? isArabic
+        ? "مفعل"
+        : "On"
+      : isArabic
+        ? "مطفأ"
+        : "Off";
+
+  const cycleMode = () => {
+    // auto → on → off → auto
+    if (status.prefs.auto_detect) {
+      patch({ auto_detect: false, enabled_override: true });
+    } else if (status.prefs.enabled_override) {
+      patch({ auto_detect: false, enabled_override: false });
+    } else {
+      patch({ auto_detect: true, enabled_override: null });
+    }
+  };
+
+  return (
+    <>
+      <Pressable onPress={cycleMode} style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>{isArabic ? "الوضع" : "Mode"}</Text>
+          <Text style={styles.rowValue}>
+            {isArabic
+              ? "تلقائي: يشتغل خلال رمضان فقط. مفعل: دايماً. مطفأ: أبداً."
+              : "Auto: on during Ramadan only. On: always. Off: never."}
+          </Text>
+        </View>
+        <Text style={[styles.rowValue, { color: colors.gold, fontSize: 13 }]}>
+          {modeText}
+        </Text>
+      </Pressable>
+      {status.active && (
+        <>
+          <View style={[styles.row, { flexDirection: "column", alignItems: "flex-start" }]}>
+            <Text style={styles.rowLabel}>{isArabic ? "الفجر" : "Fajr"}</Text>
+            <TimeField
+              value={status.prefs.fajr_time}
+              onChange={(v) => patch({ fajr_time: v })}
+            />
+          </View>
+          <View style={[styles.row, { flexDirection: "column", alignItems: "flex-start" }]}>
+            <Text style={styles.rowLabel}>{isArabic ? "المغرب" : "Maghrib"}</Text>
+            <TimeField
+              value={status.prefs.maghrib_time}
+              onChange={(v) => patch({ maghrib_time: v })}
+            />
+          </View>
+        </>
+      )}
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>
+            {isArabic ? "تذكير السحور" : "Suhoor reminder"}
+          </Text>
+          <Text style={styles.rowValue}>
+            {isArabic ? "قبل ١٥ دقيقة من الفجر" : "15 min before fajr"}
+          </Text>
+        </View>
+        <Switch
+          value={status.prefs.suhoor_reminder}
+          onValueChange={(v) => patch({ suhoor_reminder: v })}
+          trackColor={{ true: colors.gold, false: colors.line }}
+          thumbColor={colors.ink}
+        />
+      </View>
+      <View style={[styles.row, { borderBottomWidth: 0 }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>
+            {isArabic ? "تذكير الإفطار" : "Iftar reminder"}
+          </Text>
+          <Text style={styles.rowValue}>
+            {isArabic ? "قبل ١٠ دقائق من المغرب" : "10 min before maghrib"}
+          </Text>
+        </View>
+        <Switch
+          value={status.prefs.iftar_reminder}
+          onValueChange={(v) => patch({ iftar_reminder: v })}
+          trackColor={{ true: colors.gold, false: colors.line }}
+          thumbColor={colors.ink}
+        />
+      </View>
+    </>
+  );
+}
+
+function TimeField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.sm,
+        marginTop: spacing.xs,
+      }}
+    >
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: colors.line,
+          borderRadius: radius.md,
+          paddingHorizontal: spacing.md,
+          paddingVertical: 8,
+          backgroundColor: colors.panel2,
+        }}
+      >
+        <Ionicons name="time-outline" size={16} color={colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text
+          onPress={() => {
+            // Simple prompt-style edit — user retypes. Full time-picker
+            // wheel would be nicer but adds a dep.
+            const parts = draft.split(":");
+            const currentH = Number(parts[0] ?? 0);
+            const currentM = Number(parts[1] ?? 0);
+            Alert.prompt(
+              "Time (HH:MM)",
+              `Current: ${String(currentH).padStart(2, "0")}:${String(currentM).padStart(2, "0")}`,
+              (input) => {
+                if (input && /^\d{1,2}:\d{2}$/.test(input)) {
+                  const [h, m] = input.split(":").map(Number);
+                  if (h! >= 0 && h! <= 23 && m! >= 0 && m! <= 59) {
+                    const normalized = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                    setDraft(normalized);
+                    onChange(normalized);
+                  }
+                }
+              },
+              "plain-text",
+              draft
+            );
+          }}
+          style={{
+            fontFamily: font.displayBold,
+            fontSize: 18,
+            color: colors.ink,
+            paddingVertical: 6,
+          }}
+        >
+          {draft}
+        </Text>
+      </View>
+    </View>
   );
 }
 

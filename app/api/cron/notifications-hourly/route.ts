@@ -10,6 +10,7 @@ import {
   type PushMessage,
   type TokenRow,
 } from "@/lib/notifications";
+import { isRamadanActiveForPrefs, type RamadanPrefs } from "@/lib/ramadan";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -47,6 +48,7 @@ interface ProfileRow {
   notification_prefs: Prefs | null;
   tz_offset_min: number | null;
   weight_kg: number | null;
+  ramadan_prefs: RamadanPrefs | null;
 }
 
 export async function GET(request: Request) {
@@ -68,7 +70,9 @@ export async function GET(request: Request) {
   const [profilesRes, subsRes] = await Promise.all([
     admin
       .from("profiles")
-      .select("user_id, display_name, notification_prefs, tz_offset_min, weight_kg")
+      .select(
+        "user_id, display_name, notification_prefs, tz_offset_min, weight_kg, ramadan_prefs"
+      )
       .in("user_id", userIds),
     admin
       .from("v_active_pro")
@@ -125,7 +129,20 @@ export async function GET(request: Request) {
     }
 
     // ── Rule 2: lunch_nudge (local 13:00) ─────────────────────────────
-    if (prefs.lunch_nudge !== false && hour === 13) {
+    // Skip during Ramadan fasting hours — nagging a fasting user about
+    // logging lunch is the fastest way to get uninstalled.
+    const ramadanActive = isRamadanActiveForPrefs(
+      profile.ramadan_prefs ?? {
+        auto_detect: true,
+        enabled_override: null,
+        fajr_time: "04:30",
+        maghrib_time: "18:45",
+        suhoor_reminder: true,
+        iftar_reminder: true,
+      },
+      now
+    );
+    if (prefs.lunch_nudge !== false && hour === 13 && !ramadanActive) {
       const decision = await evalLunchNudge(admin, userId, tz, now);
       if (decision.fire) {
         if (await claimNotification(admin, userId, "lunch_nudge", today)) {

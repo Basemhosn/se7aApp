@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { computeStatus as computeRamadanStatus, type RamadanPrefs } from "./ramadan";
 
 /**
  * Coach context assembler — pulls the user's recent state into a single
@@ -28,6 +29,7 @@ interface ProfileRow {
   height_cm?: number | null;
   goal?: string | null;
   activity_level?: string | null;
+  ramadan_prefs?: RamadanPrefs | null;
   daily_kcal_target?: number | null;
   daily_protein_g?: number | null;
   daily_carb_g?: number | null;
@@ -61,7 +63,7 @@ export async function buildCoachContext(
     supabase
       .from("profiles")
       .select(
-        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries"
+        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs"
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -157,6 +159,20 @@ export async function buildCoachContext(
       ? (profile.injuries as string[])
       : [];
     if (inj.length > 0) parts.push(`Injuries/avoid: ${inj.join(", ")}`);
+
+    // Ramadan context — coach adjusts advice around iftar/suhoor timing.
+    const ramadan = computeRamadanStatus(profile.ramadan_prefs ?? null);
+    if (ramadan.active && ramadan.today) {
+      const secsToMaghrib = ramadan.today.seconds_until_maghrib ?? 0;
+      const hrsToMaghrib = Math.floor(secsToMaghrib / 3600);
+      const mins = Math.floor((secsToMaghrib % 3600) / 60);
+      parts.push(
+        `Ramadan: day ${ramadan.day_num}/${ramadan.total_days}. Fajr ${ramadan.today.fajr}, maghrib ${ramadan.today.maghrib}.` +
+          (ramadan.today.in_fast_window
+            ? ` Currently fasting — ~${hrsToMaghrib}h ${mins}m until iftar. Suggest meals for iftar/suhoor timing, not "right now".`
+            : ` Currently in the eating window.`)
+      );
+    }
   } else {
     parts.push("\n[Profile] Not yet onboarded.");
   }

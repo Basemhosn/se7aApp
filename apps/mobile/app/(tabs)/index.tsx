@@ -15,6 +15,7 @@ import { CalorieRing } from "@/components/CalorieRing";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
+import { useRamadan } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
@@ -81,6 +82,7 @@ export default function Home() {
   usePushRegistration();
   useHealthSync(user?.id);
   useWidgetToken(user?.id);
+  const { status: ramadan } = useRamadan();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
@@ -231,6 +233,10 @@ export default function Home() {
           <Ionicons name="chevron-forward" size={14} color={colors.dim} />
         </Pressable>
       </View>
+
+      {ramadan?.active && ramadan.today && (
+        <RamadanBanner status={ramadan} />
+      )}
 
       <Text style={styles.dayLabel}>
         {dayStatus?.kind === "lift"
@@ -577,6 +583,58 @@ function LedgerCard({
   );
 }
 
+function RamadanBanner({
+  status,
+}: {
+  status: {
+    day_num: number | null;
+    total_days: number | null;
+    today: {
+      fajr: string;
+      maghrib: string;
+      in_fast_window: boolean;
+      seconds_until_maghrib: number | null;
+      seconds_until_fajr: number | null;
+    } | null;
+  };
+}) {
+  // Live countdown — seed from server-provided seconds, tick locally.
+  const seed = status.today?.in_fast_window
+    ? (status.today?.seconds_until_maghrib ?? 0)
+    : (status.today?.seconds_until_fajr ?? 0);
+  const [remaining, setRemaining] = useState(seed);
+  useEffect(() => {
+    setRemaining(seed);
+    const iv = setInterval(() => {
+      setRemaining((r) => Math.max(0, r - 1));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [seed]);
+  const hh = Math.floor(remaining / 3600);
+  const mm = Math.floor((remaining % 3600) / 60);
+  const ss = remaining % 60;
+  const inFast = !!status.today?.in_fast_window;
+  return (
+    <View style={styles.ramadanBanner}>
+      <View style={styles.ramadanIcon}>
+        <Ionicons name="moon" size={22} color={colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.ramadanKicker}>
+          RAMADAN · DAY {status.day_num}/{status.total_days}
+        </Text>
+        <Text style={styles.ramadanCountdown}>
+          {inFast ? "Iftar in" : "Suhoor closes in"} {String(hh).padStart(2, "0")}:
+          {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
+        </Text>
+        <Text style={styles.ramadanTimes}>
+          Fajr {status.today?.fajr} · Maghrib {status.today?.maghrib}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function greeting(d: Date): string {
   const h = d.getHours();
   if (h < 5) return "Late night";
@@ -875,6 +933,43 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     borderRadius: radius.lg,
     padding: spacing.md,
+  },
+  ramadanBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  ramadanIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(246,183,60,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ramadanKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  ramadanCountdown: {
+    fontFamily: font.displayBold,
+    fontSize: 20,
+    color: colors.ink,
+    marginTop: 2,
+    fontVariant: ["tabular-nums"],
+  },
+  ramadanTimes: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
   },
   cardioRow: {
     flexDirection: "row",
