@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/server";
 import { syncStravaForUser } from "@/lib/stravaSync";
+import { syncWhoopForUser } from "@/lib/whoopSync";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -23,25 +24,33 @@ export async function GET(request: Request) {
   const admin = getAdminClient();
   const { data: rows } = await admin
     .from("user_integrations")
-    .select("user_id")
-    .eq("provider", "strava");
+    .select("user_id, provider")
+    .in("provider", ["strava", "whoop"]);
 
   if (!rows || rows.length === 0) {
     return NextResponse.json({ ok: true, users: 0 });
   }
 
-  let totalInserted = 0;
+  let stravaInserted = 0;
+  let whoopInserted = 0;
   const errors: string[] = [];
   for (const row of rows) {
-    const result = await syncStravaForUser(admin, row.user_id);
-    totalInserted += result.inserted;
-    if (result.error) errors.push(`${row.user_id}: ${result.error}`);
+    if (row.provider === "strava") {
+      const r = await syncStravaForUser(admin, row.user_id);
+      stravaInserted += r.inserted;
+      if (r.error) errors.push(`strava:${row.user_id}: ${r.error}`);
+    } else if (row.provider === "whoop") {
+      const r = await syncWhoopForUser(admin, row.user_id);
+      whoopInserted += r.workouts_inserted;
+      if (r.error) errors.push(`whoop:${row.user_id}: ${r.error}`);
+    }
   }
 
   return NextResponse.json({
     ok: true,
     users: rows.length,
-    inserted: totalInserted,
+    strava_inserted: stravaInserted,
+    whoop_inserted: whoopInserted,
     errors,
   });
 }

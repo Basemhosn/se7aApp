@@ -54,9 +54,9 @@ export default function Settings() {
   const { ent, refresh: refreshEnt } = useEntitlement();
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [stravaBusy, setStravaBusy] = useState<"idle" | "connecting" | "syncing">(
-    "idle"
-  );
+  const [busy, setBusy] = useState<
+    Partial<Record<Integration["provider"], "connecting" | "syncing">>
+  >({});
 
   useEffect(() => {
     api<{ notification_prefs: NotificationPrefs }>("/api/profile/prefs")
@@ -68,98 +68,121 @@ export default function Settings() {
   }, []);
 
   const strava = integrations.find((i) => i.provider === "strava");
+  const whoop = integrations.find((i) => i.provider === "whoop");
 
-  const connectStrava = useCallback(async () => {
-    setStravaBusy("connecting");
-    try {
-      const { url } = await api<{ url: string }>(
-        "/api/integrations/strava/start",
-        { method: "POST" }
-      );
-      const result = await WebBrowser.openAuthSessionAsync(
-        url,
-        "se7a://strava-connected"
-      );
-      if (result.type === "success") {
-        // Refresh state; also kick off a first sync so activities land immediately.
-        const listRes = await api<{ integrations: Integration[] }>(
-          "/api/integrations"
-        ).catch(() => null);
-        if (listRes) setIntegrations(listRes.integrations);
-        try {
-          await api("/api/integrations/strava/sync", { method: "POST" });
-        } catch {
-          /* sync failure is non-blocking; user can tap Sync now */
+  const refreshIntegrations = useCallback(async () => {
+    const listRes = await api<{ integrations: Integration[] }>(
+      "/api/integrations"
+    ).catch(() => null);
+    if (listRes) setIntegrations(listRes.integrations);
+  }, []);
+
+  const setProviderBusy = (
+    provider: Integration["provider"],
+    state: "connecting" | "syncing" | null
+  ) => {
+    setBusy((b) => {
+      const next = { ...b };
+      if (state) next[provider] = state;
+      else delete next[provider];
+      return next;
+    });
+  };
+
+  const connect = useCallback(
+    async (provider: Integration["provider"], returnUrl: string) => {
+      setProviderBusy(provider, "connecting");
+      try {
+        const { url } = await api<{ url: string }>(
+          `/api/integrations/${provider}/start`,
+          { method: "POST" }
+        );
+        const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+        if (result.type === "success") {
+          await refreshIntegrations();
+          try {
+            await api(`/api/integrations/${provider}/sync`, { method: "POST" });
+            await refreshIntegrations();
+          } catch {
+            /* sync failure non-blocking; user can tap Sync now */
+          }
         }
-      }
-    } catch (e) {
-      Alert.alert(
-        isArabic ? "تعذّر الاتصال" : "Couldn't connect",
-        (e as Error).message
-      );
-    }
-    setStravaBusy("idle");
-  }, [isArabic]);
-
-  const syncStrava = useCallback(async () => {
-    setStravaBusy("syncing");
-    try {
-      const res = await api<{
-        inserted: number;
-        skipped: number;
-        error?: string;
-      }>("/api/integrations/strava/sync", { method: "POST" });
-      const listRes = await api<{ integrations: Integration[] }>(
-        "/api/integrations"
-      ).catch(() => null);
-      if (listRes) setIntegrations(listRes.integrations);
-      if (res.error) {
-        Alert.alert(isArabic ? "خطأ" : "Sync error", res.error);
-      } else {
+      } catch (e) {
         Alert.alert(
-          isArabic ? "تم" : "Synced",
-          isArabic
-            ? `تم استيراد ${res.inserted} نشاط.`
-            : `Imported ${res.inserted} activit${res.inserted === 1 ? "y" : "ies"}.`
+          isArabic ? "تعذّر الاتصال" : "Couldn't connect",
+          (e as Error).message
         );
       }
-    } catch (e) {
-      Alert.alert(
-        isArabic ? "خطأ" : "Sync error",
-        (e as Error).message
-      );
-    }
-    setStravaBusy("idle");
-  }, [isArabic]);
+      setProviderBusy(provider, null);
+    },
+    [isArabic, refreshIntegrations]
+  );
 
-  const disconnectStrava = useCallback(() => {
-    Alert.alert(
-      isArabic ? "قطع الاتصال مع Strava؟" : "Disconnect Strava?",
-      isArabic
-        ? "لن نستورد أي أنشطة جديدة. النشاطات المستوردة سابقاً تبقى."
-        : "We'll stop importing new activities. Previously imported ones stay.",
-      [
-        { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
-        {
-          text: isArabic ? "اقطع" : "Disconnect",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await api("/api/integrations/strava", { method: "DELETE" });
-              setIntegrations((prev) =>
-                prev.filter((i) => i.provider !== "strava")
-              );
-            } catch (e) {
-              Alert.alert(
-                isArabic ? "فشل" : "Failed",
-                (e as Error).message
-              );
-            }
+  const sync = useCallback(
+    async (provider: Integration["provider"]) => {
+      setProviderBusy(provider, "syncing");
+      try {
+        const res = await api<{
+          inserted?: number;
+          workouts_inserted?: number;
+          error?: string;
+        }>(`/api/integrations/${provider}/sync`, { method: "POST" });
+        await refreshIntegrations();
+        if (res.error) {
+          Alert.alert(isArabic ? "خطأ" : "Sync error", res.error);
+        } else {
+          const count = res.inserted ?? res.workouts_inserted ?? 0;
+          Alert.alert(
+            isArabic ? "تم" : "Synced",
+            isArabic
+              ? `تم استيراد ${count} نشاط.`
+              : `Imported ${count} activit${count === 1 ? "y" : "ies"}.`
+          );
+        }
+      } catch (e) {
+        Alert.alert(
+          isArabic ? "خطأ" : "Sync error",
+          (e as Error).message
+        );
+      }
+      setProviderBusy(provider, null);
+    },
+    [isArabic, refreshIntegrations]
+  );
+
+  const disconnect = useCallback(
+    (provider: Integration["provider"], displayName: string) => {
+      Alert.alert(
+        isArabic ? `قطع الاتصال مع ${displayName}؟` : `Disconnect ${displayName}?`,
+        isArabic
+          ? "لن نستورد أي أنشطة جديدة. النشاطات المستوردة سابقاً تبقى."
+          : "We'll stop importing new activities. Previously imported ones stay.",
+        [
+          { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+          {
+            text: isArabic ? "اقطع" : "Disconnect",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await api(`/api/integrations/${provider}`, {
+                  method: "DELETE",
+                });
+                setIntegrations((prev) =>
+                  prev.filter((i) => i.provider !== provider)
+                );
+              } catch (e) {
+                Alert.alert(
+                  isArabic ? "فشل" : "Failed",
+                  (e as Error).message
+                );
+              }
+            },
           },
-        },
-      ]
-    );
-  }, [isArabic]);
+        ]
+      );
+    },
+    [isArabic]
+  );
 
   const togglePref = useCallback(
     async (key: keyof NotificationPrefs, value: boolean) => {
@@ -367,71 +390,45 @@ export default function Settings() {
       </Section>
 
       <Section title={isArabic ? "التكاملات" : "Integrations"}>
-        {strava ? (
-          <>
-            <View style={styles.integRow}>
-              <View style={styles.integIcon}>
-                <Ionicons name="bicycle" size={20} color="#fc4c02" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.integTitle}>Strava</Text>
-                <Text style={styles.integMeta}>
-                  {isArabic ? "متصل" : "Connected"}
-                  {strava.last_sync_at
-                    ? ` · ${isArabic ? "آخر مزامنة" : "last sync"} ${shortAgo(strava.last_sync_at)}`
-                    : ""}
-                </Text>
-              </View>
-              <Pressable
-                onPress={syncStrava}
-                disabled={stravaBusy !== "idle"}
-                hitSlop={8}
-                style={styles.integSyncBtn}
-              >
-                <Ionicons
-                  name="refresh"
-                  size={16}
-                  color={stravaBusy === "syncing" ? colors.dim : colors.gold}
-                />
-              </Pressable>
-            </View>
-            <Pressable
-              onPress={disconnectStrava}
-              style={[styles.row, { borderBottomWidth: 0 }]}
-            >
-              <Text style={[styles.rowLabel, { color: colors.coral }]}>
-                {isArabic ? "اقطع الاتصال" : "Disconnect Strava"}
-              </Text>
-            </Pressable>
-          </>
-        ) : (
-          <Pressable
-            onPress={connectStrava}
-            disabled={stravaBusy !== "idle"}
-            style={styles.integRow}
-          >
-            <View style={styles.integIcon}>
-              <Ionicons name="bicycle-outline" size={20} color="#fc4c02" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.integTitle}>Strava</Text>
-              <Text style={styles.integMeta}>
-                {isArabic
-                  ? "اربط لاستيراد الجري والدراجة تلقائياً."
-                  : "Auto-import runs, rides, and other activities."}
-              </Text>
-            </View>
-            <Text style={styles.integConnect}>
-              {stravaBusy === "connecting"
-                ? isArabic
-                  ? "…"
-                  : "…"
-                : isArabic
-                  ? "اربط"
-                  : "Connect"}
-            </Text>
-          </Pressable>
-        )}
+        <IntegrationRow
+          provider="strava"
+          displayName="Strava"
+          brandColor="#fc4c02"
+          iconConnected="bicycle"
+          iconDisconnected="bicycle-outline"
+          connectedLabel={isArabic ? "متصل" : "Connected"}
+          disconnectedBlurb={
+            isArabic
+              ? "اربط لاستيراد الجري والدراجة تلقائياً."
+              : "Auto-import runs, rides, and other activities."
+          }
+          integration={strava}
+          busy={busy.strava}
+          onConnect={() => connect("strava", "se7a://strava-connected")}
+          onSync={() => sync("strava")}
+          onDisconnect={() => disconnect("strava", "Strava")}
+          isArabic={isArabic}
+        />
+        <IntegrationRow
+          provider="whoop"
+          displayName="Whoop"
+          brandColor="#5a5a5a"
+          iconConnected="heart"
+          iconDisconnected="heart-outline"
+          connectedLabel={isArabic ? "متصل" : "Connected"}
+          disconnectedBlurb={
+            isArabic
+              ? "اربط لاستيراد التمارين والسعرات النشطة اليومية."
+              : "Auto-import workouts + daily active calories."
+          }
+          integration={whoop}
+          busy={busy.whoop}
+          onConnect={() => connect("whoop", "se7a://whoop-connected")}
+          onSync={() => sync("whoop")}
+          onDisconnect={() => disconnect("whoop", "Whoop")}
+          isArabic={isArabic}
+          last
+        />
       </Section>
 
       {prefs && (
@@ -565,6 +562,101 @@ export default function Settings() {
 
       <Text style={styles.foot}>SE7A · v0.1.0</Text>
     </Screen>
+  );
+}
+
+function IntegrationRow({
+  provider,
+  displayName,
+  brandColor,
+  iconConnected,
+  iconDisconnected,
+  connectedLabel,
+  disconnectedBlurb,
+  integration,
+  busy,
+  onConnect,
+  onSync,
+  onDisconnect,
+  isArabic,
+  last,
+}: {
+  provider: Integration["provider"];
+  displayName: string;
+  brandColor: string;
+  iconConnected: keyof typeof Ionicons.glyphMap;
+  iconDisconnected: keyof typeof Ionicons.glyphMap;
+  connectedLabel: string;
+  disconnectedBlurb: string;
+  integration: Integration | undefined;
+  busy?: "connecting" | "syncing";
+  onConnect: () => void;
+  onSync: () => void;
+  onDisconnect: () => void;
+  isArabic: boolean;
+  last?: boolean;
+}) {
+  if (integration) {
+    return (
+      <>
+        <View style={styles.integRow}>
+          <View style={styles.integIcon}>
+            <Ionicons name={iconConnected} size={20} color={brandColor} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.integTitle}>{displayName}</Text>
+            <Text style={styles.integMeta}>
+              {connectedLabel}
+              {integration.last_sync_at
+                ? ` · ${isArabic ? "آخر مزامنة" : "last sync"} ${shortAgo(integration.last_sync_at)}`
+                : ""}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onSync}
+            disabled={!!busy}
+            hitSlop={8}
+            style={styles.integSyncBtn}
+          >
+            <Ionicons
+              name="refresh"
+              size={16}
+              color={busy === "syncing" ? colors.dim : colors.gold}
+            />
+          </Pressable>
+        </View>
+        <Pressable
+          onPress={onDisconnect}
+          style={[styles.row, last && { borderBottomWidth: 0 }]}
+        >
+          <Text style={[styles.rowLabel, { color: colors.coral }]}>
+            {isArabic ? `اقطع الاتصال مع ${displayName}` : `Disconnect ${displayName}`}
+          </Text>
+        </Pressable>
+      </>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onConnect}
+      disabled={!!busy}
+      style={[styles.integRow, last && { borderBottomWidth: 0 }]}
+    >
+      <View style={styles.integIcon}>
+        <Ionicons name={iconDisconnected} size={20} color={brandColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.integTitle}>{displayName}</Text>
+        <Text style={styles.integMeta}>{disconnectedBlurb}</Text>
+      </View>
+      <Text style={styles.integConnect}>
+        {busy === "connecting"
+          ? "…"
+          : isArabic
+            ? "اربط"
+            : "Connect"}
+      </Text>
+    </Pressable>
   );
 }
 
