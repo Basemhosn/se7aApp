@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -55,6 +56,9 @@ interface StreakResponse {
   longest_days: number;
   days_this_week: number;
   todays_status: "logged" | "not_yet";
+  freezes_available_this_month: number;
+  freezes_monthly_budget: number;
+  freezable_days: string[]; // YYYY-MM-DD, most recent first
 }
 
 interface SleepTodayResponse {
@@ -307,40 +311,18 @@ export default function Home() {
         <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
-      {streak && (streak.current_days > 0 || streak.days_this_week > 0) && (
-        <View
-          style={[
-            styles.streakCard,
-            streak.current_days >= 7 && styles.streakCardHot,
-          ]}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.streakKicker}>
-              {streak.todays_status === "logged"
-                ? "STREAK · TODAY LOGGED"
-                : "STREAK · LOG TODAY TO KEEP IT"}
-            </Text>
-            <View style={styles.streakNumRow}>
-              <Text style={styles.streakFlame}>
-                {streak.current_days === 0
-                  ? "•"
-                  : streak.current_days >= 7
-                    ? "🔥"
-                    : "✦"}
-              </Text>
-              <Text style={styles.streakNum}>{streak.current_days}</Text>
-              <Text style={styles.streakUnit}>
-                {streak.current_days === 1 ? "day" : "days"}
-              </Text>
-            </View>
-            <Text style={styles.streakSub}>
-              {streak.days_this_week}/7 this week
-              {streak.longest_days > streak.current_days &&
-                ` · best ${streak.longest_days}`}
-            </Text>
-          </View>
-        </View>
-      )}
+      {streak &&
+        (streak.current_days > 0 ||
+          streak.days_this_week > 0 ||
+          (streak.freezable_days.length > 0 &&
+            streak.freezes_available_this_month > 0)) && (
+          <StreakCard
+            streak={streak}
+            onFrozen={() => {
+              load().catch(() => {});
+            }}
+          />
+        )}
 
       {cardio &&
         (cardio.activity.steps > 0 ||
@@ -700,6 +682,108 @@ function RamadanBanner({
         <Text style={styles.ramadanTimes}>
           Fajr {status.today?.fajr} · Maghrib {status.today?.maghrib}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+function StreakCard({
+  streak,
+  onFrozen,
+}: {
+  streak: StreakResponse;
+  onFrozen: () => void;
+}) {
+  const [freezing, setFreezing] = useState(false);
+  // Yesterday (in the user's local tz) in YYYY-MM-DD, matching how the
+  // server buckets days. This is the day we offer to freeze.
+  const yesterdayKey = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+  const canFreezeYesterday =
+    streak.freezes_available_this_month > 0 &&
+    streak.freezable_days.includes(yesterdayKey);
+
+  const applyFreeze = () => {
+    Alert.alert(
+      "Save your streak?",
+      `Use 1 of ${streak.freezes_available_this_month} freeze${streak.freezes_available_this_month === 1 ? "" : "s"} this month to protect yesterday.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Use freeze",
+          style: "default",
+          onPress: async () => {
+            setFreezing(true);
+            const tzOffsetMin = -new Date().getTimezoneOffset();
+            try {
+              await api("/api/streaks/freeze", {
+                method: "POST",
+                body: JSON.stringify({
+                  freeze_date: yesterdayKey,
+                  tz_offset_min: tzOffsetMin,
+                }),
+              });
+              onFrozen();
+            } catch {
+              Alert.alert("Couldn't apply freeze", "Try again in a moment.");
+            } finally {
+              setFreezing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <View
+      style={[
+        styles.streakCard,
+        streak.current_days >= 7 && styles.streakCardHot,
+      ]}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.streakKicker}>
+          {streak.todays_status === "logged"
+            ? "STREAK · TODAY LOGGED"
+            : canFreezeYesterday && streak.current_days === 0
+              ? "STREAK · YESTERDAY MISSED"
+              : "STREAK · LOG TODAY TO KEEP IT"}
+        </Text>
+        <View style={styles.streakNumRow}>
+          <Text style={styles.streakFlame}>
+            {streak.current_days === 0
+              ? "•"
+              : streak.current_days >= 7
+                ? "🔥"
+                : "✦"}
+          </Text>
+          <Text style={styles.streakNum}>{streak.current_days}</Text>
+          <Text style={styles.streakUnit}>
+            {streak.current_days === 1 ? "day" : "days"}
+          </Text>
+        </View>
+        <Text style={styles.streakSub}>
+          {streak.days_this_week}/7 this week
+          {streak.longest_days > streak.current_days &&
+            ` · best ${streak.longest_days}`}
+          {streak.freezes_monthly_budget > 0 &&
+            ` · ❄ ${streak.freezes_available_this_month}/${streak.freezes_monthly_budget}`}
+        </Text>
+        {canFreezeYesterday && (
+          <Pressable
+            onPress={applyFreeze}
+            disabled={freezing}
+            style={styles.streakFreezeBtn}
+          >
+            <Text style={styles.streakFreezeBtnText}>
+              {freezing ? "Saving…" : "❄ Save yesterday's streak"}
+            </Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -1122,6 +1206,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.dim,
     marginTop: 4,
+  },
+  streakFreezeBtn: {
+    marginTop: spacing.sm,
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.panel,
+  },
+  streakFreezeBtnText: {
+    fontFamily: font.displayBold,
+    fontSize: 13,
+    color: colors.gold,
+    letterSpacing: 0.3,
   },
   planCard: {
     flexDirection: "row",

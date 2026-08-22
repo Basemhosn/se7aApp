@@ -60,6 +60,7 @@ export async function buildCoachContext(
     fastingRes,
     waterTodayRes,
     sleepRes,
+    freezesRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -120,6 +121,11 @@ export async function buildCoachContext(
       .eq("user_id", userId)
       .gte("night_date", dayKey(sevenDaysAgo))
       .order("night_date", { ascending: false }),
+    supabase
+      .from("streak_freezes")
+      .select("freeze_date")
+      .eq("user_id", userId)
+      .gte("freeze_date", dayKey(sevenDaysAgo)),
   ]);
 
   const profile = (profileRes.data ?? null) as ProfileRow | null;
@@ -137,6 +143,9 @@ export async function buildCoachContext(
     0
   );
   const sleepNights = sleepRes.data ?? [];
+  const frozenDays = new Set<string>(
+    (freezesRes.data ?? []).map((f) => String(f.freeze_date))
+  );
 
   const parts: string[] = [];
   parts.push("USER CONTEXT (real data, use this in your answers):");
@@ -240,7 +249,9 @@ export async function buildCoachContext(
   for (const m of weekMeals) {
     daysLoggedSet.add(String(m.eaten_at).slice(0, 10));
   }
-  const streak = computeCurrentStreak(daysLoggedSet, now);
+  // Streak walk treats frozen days as covered — matches /api/streaks.
+  const coveredForStreak = new Set<string>([...daysLoggedSet, ...frozenDays]);
+  const streak = computeCurrentStreak(coveredForStreak, now);
   parts.push("\n[Last 7 days]");
   parts.push(
     `Logged ${daysLoggedSet.size}/7 days. Current streak: ${streak.current} day${streak.current === 1 ? "" : "s"}.`

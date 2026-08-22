@@ -237,16 +237,28 @@ async function evalStreakAtRisk(
     .gte("eaten_at", startOfLocalToday.toISOString());
   if ((todayCount ?? 0) > 0) return { fire: false };
 
-  // Compute current streak from meal_items — walk back from yesterday.
+  // Compute current streak from meal_items + freezes — walk back from
+  // yesterday. Frozen days count as covered so a real 5-day streak
+  // reads as 5, not 2, when the user has used a freeze in the middle.
   const lookback = new Date(now.getTime() - 30 * DAY_MS);
-  const { data: rows } = await admin
-    .from("meal_items")
-    .select("eaten_at")
-    .eq("user_id", userId)
-    .gte("eaten_at", lookback.toISOString());
+  const [mealsRes, freezesRes] = await Promise.all([
+    admin
+      .from("meal_items")
+      .select("eaten_at")
+      .eq("user_id", userId)
+      .gte("eaten_at", lookback.toISOString()),
+    admin
+      .from("streak_freezes")
+      .select("freeze_date")
+      .eq("user_id", userId)
+      .gte("freeze_date", localDayKey(lookback, tz)),
+  ]);
   const days = new Set<string>();
-  for (const r of rows ?? []) {
+  for (const r of mealsRes.data ?? []) {
     days.add(localDayKey(new Date(r.eaten_at as string), tz));
+  }
+  for (const f of freezesRes.data ?? []) {
+    days.add(String(f.freeze_date));
   }
   let cursor = new Date(now.getTime() - DAY_MS);
   let streak = 0;
