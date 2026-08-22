@@ -77,6 +77,16 @@ export interface OuraDailySleep {
   timestamp?: string;
 }
 
+export interface OuraDailyReadiness {
+  id: string;
+  contributors?: Record<string, number | null>;
+  day: string; // YYYY-MM-DD
+  score?: number | null;
+  temperature_deviation?: number | null;
+  temperature_trend_deviation?: number | null;
+  timestamp?: string;
+}
+
 export interface OuraDailyActivity {
   id: string;
   day: string; // YYYY-MM-DD
@@ -259,6 +269,36 @@ export async function fetchDailySleep(
     });
     if (!res.ok) break;
     const body = (await res.json()) as OuraPaged<OuraDailySleep>;
+    results.push(...body.data);
+    if (!body.next_token) break;
+    nextToken = body.next_token;
+  }
+  return results;
+}
+
+/**
+ * Oura's readiness score is the closest analogue to Whoop's recovery —
+ * a 0-100 composite from HRV balance, resting HR, body temp, prior-day
+ * activity, and sleep quality. Lives in its own endpoint, keyed by day.
+ */
+export async function fetchDailyReadiness(
+  accessToken: string,
+  sinceIso: string
+): Promise<OuraDailyReadiness[]> {
+  const startDay = sinceIso.slice(0, 10);
+  const endDay = new Date().toISOString().slice(0, 10);
+  const results: OuraDailyReadiness[] = [];
+  let nextToken: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const url = new URL(`${OURA_API}/usercollection/daily_readiness`);
+    url.searchParams.set("start_date", startDay);
+    url.searchParams.set("end_date", endDay);
+    if (nextToken) url.searchParams.set("next_token", nextToken);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) break;
+    const body = (await res.json()) as OuraPaged<OuraDailyReadiness>;
     results.push(...body.data);
     if (!body.next_token) break;
     nextToken = body.next_token;

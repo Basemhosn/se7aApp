@@ -1,12 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   fetchDailyActivity,
+  fetchDailyReadiness,
   fetchDailySleep,
   fetchSleep,
   fetchWorkouts,
   mapOuraKind,
   refreshToken as refreshOuraToken,
 } from "./oura";
+import { bandForScore } from "./recovery";
 
 /**
  * Sync one user's Oura data:
@@ -14,6 +16,8 @@ import {
  *   - daily activity  → daily_activity (steps + active_calories)
  *   - sleep sessions  → sleep_sessions (main-sleep only; overall daily
  *                       score merged from /daily_sleep, keyed on day)
+ *   - readiness       → recovery_scores (one per day; Oura's readiness
+ *                       is the closest analogue to Whoop recovery)
  *
  * Auto-refreshes tokens 60s before expiry.
  */
@@ -24,6 +28,7 @@ export async function syncOuraForUser(
   workouts_inserted: number;
   days_upserted: number;
   sleep_upserted: number;
+  recovery_upserted: number;
   error?: string;
 }> {
   const { data: integration } = await admin
@@ -38,6 +43,7 @@ export async function syncOuraForUser(
       workouts_inserted: 0,
       days_upserted: 0,
       sleep_upserted: 0,
+      recovery_upserted: 0,
       error: "not_connected",
     };
   }
@@ -53,6 +59,7 @@ export async function syncOuraForUser(
         workouts_inserted: 0,
         days_upserted: 0,
         sleep_upserted: 0,
+        recovery_upserted: 0,
         error: "no_refresh_token",
       };
     }
@@ -75,6 +82,7 @@ export async function syncOuraForUser(
         workouts_inserted: 0,
         days_upserted: 0,
         sleep_upserted: 0,
+        recovery_upserted: 0,
         error: `refresh_failed: ${(e as Error).message}`,
       };
     }
@@ -88,6 +96,7 @@ export async function syncOuraForUser(
   let workouts_inserted = 0;
   let days_upserted = 0;
   let sleep_upserted = 0;
+  let recovery_upserted = 0;
 
   // Workouts
   try {
@@ -126,6 +135,7 @@ export async function syncOuraForUser(
       workouts_inserted,
       days_upserted,
       sleep_upserted,
+      recovery_upserted,
       error: `workouts_failed: ${(e as Error).message}`,
     };
   }
@@ -239,11 +249,36 @@ export async function syncOuraForUser(
     /* sleep is secondary; don't fail the whole sync on this */
   }
 
+  // Daily readiness — Oura's recovery analogue. Same lookback window
+  // as the other daily endpoints. Not all users have the ring worn
+  // long enough for a score every day; we skip nulls.
+  try {
+    const readiness = await fetchDailyReadiness(accessToken, sinceIso);
+    for (const r of readiness) {
+      if (typeof r.score !== "number") continue;
+      const scoreInt = Math.round(r.score);
+      const { error } = await admin.from("recovery_scores").upsert(
+        {
+          user_id: userId,
+          source: "oura" as const,
+          day: r.day,
+          score: scoreInt,
+          band: bandForScore(scoreInt),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,source,day" }
+      );
+      if (!error) recovery_upserted += 1;
+    }
+  } catch {
+    /* readiness is optional; don't fail the whole sync on this */
+  }
+
   await admin
     .from("user_integrations")
     .update({ last_sync_at: new Date().toISOString() })
     .eq("user_id", userId)
     .eq("provider", "oura");
 
-  return { workouts_inserted, days_upserted, sleep_upserted };
+  return { workouts_inserted, days_upserted, sleep_upserted, recovery_upserted };
 }

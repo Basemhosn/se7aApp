@@ -5,6 +5,7 @@ import {
   DEFAULT_CYCLE_PREFS,
   type CyclePrefs,
 } from "./cycle";
+import { bandForScore, coachHintForBand } from "./recovery";
 
 /**
  * Coach context assembler — pulls the user's recent state into a single
@@ -70,6 +71,7 @@ export async function buildCoachContext(
     sleepRes,
     freezesRes,
     cyclePeriodsRes,
+    recoveryRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -141,6 +143,12 @@ export async function buildCoachContext(
       .eq("user_id", userId)
       .order("started_on", { ascending: false })
       .limit(6),
+    supabase
+      .from("recovery_scores")
+      .select("day, source, score, band, hrv_ms, resting_hr_bpm")
+      .eq("user_id", userId)
+      .gte("day", dayKey(sevenDaysAgo))
+      .order("day", { ascending: false }),
   ]);
 
   const profile = (profileRes.data ?? null) as ProfileRow | null;
@@ -158,6 +166,7 @@ export async function buildCoachContext(
     0
   );
   const sleepNights = sleepRes.data ?? [];
+  const recoveryDays = recoveryRes.data ?? [];
   const frozenDays = new Set<string>(
     (freezesRes.data ?? []).map((f) => String(f.freeze_date))
   );
@@ -377,6 +386,24 @@ export async function buildCoachContext(
     );
   }
 
+  // Recovery / readiness — directly biases training intensity advice.
+  // Whoop + Oura both write here; we prefer whichever has the more
+  // recent entry, then fall back to same-day cross-source.
+  if (recoveryDays.length > 0) {
+    const latest = recoveryDays[0]!;
+    const latestScore = Number(latest.score);
+    const latestBand = latest.band
+      ? (latest.band as "poor" | "compromised" | "primed")
+      : bandForScore(latestScore);
+    const avgScore =
+      recoveryDays.reduce((s, r) => s + Number(r.score ?? 0), 0) /
+      recoveryDays.length;
+    const hint = coachHintForBand(latestBand, latestScore);
+    parts.push(
+      `\n[Recovery] ${hint} 7-day avg ${Math.round(avgScore)}% (${latest.source}).`
+    );
+  }
+
   // Recent workouts + top PRs (derived in one pass)
   if (workouts.length > 0) {
     const recent = workouts.slice(0, 2);
@@ -423,7 +450,8 @@ export async function buildCoachContext(
     weekMeals.length > 0 ||
     weights.length > 0 ||
     workouts.length > 0 ||
-    sleepNights.length > 0;
+    sleepNights.length > 0 ||
+    recoveryDays.length > 0;
 
   return { block, has_profile: !!profile, has_any_data: hasAny };
 }

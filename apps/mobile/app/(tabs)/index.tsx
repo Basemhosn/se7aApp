@@ -74,6 +74,12 @@ interface SleepTodayResponse {
     nights_logged: number;
     avg_duration_minutes: number | null;
   };
+  recovery: {
+    day: string;
+    score: number;
+    band: "poor" | "compromised" | "primed" | null;
+    source: string;
+  } | null;
 }
 
 interface CardioTodayResponse {
@@ -373,28 +379,40 @@ export default function Home() {
           <View style={styles.cardioStat}>
             <Ionicons
               name={
-                sleep.last_night.sleep_score !== null ? "ribbon" : "pulse"
+                sleep.recovery
+                  ? "heart"
+                  : sleep.last_night.sleep_score !== null
+                    ? "ribbon"
+                    : "pulse"
               }
               size={16}
-              color={colors.mint}
+              color={
+                sleep.recovery
+                  ? recoveryBandColor(sleep.recovery.band)
+                  : colors.mint
+              }
             />
             <Text style={styles.cardioValue}>
-              {sleep.last_night.sleep_score !== null
-                ? sleep.last_night.sleep_score
-                : sleep.last_night.hrv_ms !== null
-                  ? Math.round(sleep.last_night.hrv_ms)
-                  : sleep.last_night.resting_hr_bpm !== null
-                    ? sleep.last_night.resting_hr_bpm
-                    : "—"}
+              {sleep.recovery
+                ? sleep.recovery.score
+                : sleep.last_night.sleep_score !== null
+                  ? sleep.last_night.sleep_score
+                  : sleep.last_night.hrv_ms !== null
+                    ? Math.round(sleep.last_night.hrv_ms)
+                    : sleep.last_night.resting_hr_bpm !== null
+                      ? sleep.last_night.resting_hr_bpm
+                      : "—"}
             </Text>
             <Text style={styles.cardioLabel}>
-              {sleep.last_night.sleep_score !== null
-                ? "score"
-                : sleep.last_night.hrv_ms !== null
-                  ? "HRV ms"
-                  : sleep.last_night.resting_hr_bpm !== null
-                    ? "RHR bpm"
-                    : "—"}
+              {sleep.recovery
+                ? "recovery"
+                : sleep.last_night.sleep_score !== null
+                  ? "score"
+                  : sleep.last_night.hrv_ms !== null
+                    ? "HRV ms"
+                    : sleep.last_night.resting_hr_bpm !== null
+                      ? "RHR bpm"
+                      : "—"}
             </Text>
           </View>
           <View style={styles.cardioDivider} />
@@ -814,6 +832,14 @@ function formatHm(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = Math.max(0, Math.round(minutes - h * 60));
   return `${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+function recoveryBandColor(
+  band: "poor" | "compromised" | "primed" | null
+): string {
+  if (band === "poor") return colors.coral;
+  if (band === "primed") return colors.mint;
+  return colors.gold;
 }
 
 const styles = StyleSheet.create({

@@ -25,16 +25,26 @@ export async function GET(request: Request) {
   const isoDay = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  const { data: recent } = await supabase
-    .from("sleep_sessions")
-    .select(
-      "night_date, start_at, end_at, duration_minutes, sleep_score, deep_minutes, rem_minutes, light_minutes, awake_minutes, hrv_ms, resting_hr_bpm, source"
-    )
-    .eq("user_id", user.id)
-    .gte("night_date", isoDay(sevenDaysAgo))
-    .order("night_date", { ascending: false });
+  const [recentRes, recoveryRes] = await Promise.all([
+    supabase
+      .from("sleep_sessions")
+      .select(
+        "night_date, start_at, end_at, duration_minutes, sleep_score, deep_minutes, rem_minutes, light_minutes, awake_minutes, hrv_ms, resting_hr_bpm, source"
+      )
+      .eq("user_id", user.id)
+      .gte("night_date", isoDay(sevenDaysAgo))
+      .order("night_date", { ascending: false }),
+    supabase
+      .from("recovery_scores")
+      .select("day, source, score, band")
+      .eq("user_id", user.id)
+      .gte("day", isoDay(sevenDaysAgo))
+      .order("day", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  const rows = recent ?? [];
+  const rows = recentRes.data ?? [];
   const lastNight = rows[0] ?? null;
 
   const durations = rows.map((r) => r.duration_minutes as number);
@@ -64,5 +74,13 @@ export async function GET(request: Request) {
       nights_logged: rows.length,
       avg_duration_minutes: avgMinutes,
     },
+    recovery: recoveryRes.data
+      ? {
+          day: recoveryRes.data.day,
+          score: recoveryRes.data.score,
+          band: recoveryRes.data.band,
+          source: recoveryRes.data.source,
+        }
+      : null,
   });
 }

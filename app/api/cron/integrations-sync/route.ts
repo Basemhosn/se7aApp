@@ -36,6 +36,7 @@ export async function GET(request: Request) {
   let whoopInserted = 0;
   let ouraInserted = 0;
   let sleepInserted = 0;
+  let recoveryInserted = 0;
   const errors: string[] = [];
   for (const row of rows) {
     if (row.provider === "strava") {
@@ -46,11 +47,13 @@ export async function GET(request: Request) {
       const r = await syncWhoopForUser(admin, row.user_id);
       whoopInserted += r.workouts_inserted;
       sleepInserted += r.sleep_upserted;
+      recoveryInserted += r.recovery_upserted;
       if (r.error) errors.push(`whoop:${row.user_id}: ${r.error}`);
     } else if (row.provider === "oura") {
       const r = await syncOuraForUser(admin, row.user_id);
       ouraInserted += r.workouts_inserted;
       sleepInserted += r.sleep_upserted;
+      recoveryInserted += r.recovery_upserted;
       if (r.error) errors.push(`oura:${row.user_id}: ${r.error}`);
     }
   }
@@ -62,6 +65,7 @@ export async function GET(request: Request) {
     whoop_inserted: whoopInserted,
     oura_inserted: ouraInserted,
     sleep_inserted: sleepInserted,
+    recovery_inserted: recoveryInserted,
     errors,
   });
 }

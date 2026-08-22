@@ -8,6 +8,7 @@ import {
   refreshToken as refreshWhoopToken,
   type WhoopRecovery,
 } from "./whoop";
+import { bandForScore } from "./recovery";
 
 /**
  * Sync one user's Whoop data:
@@ -15,6 +16,7 @@ import {
  *   - cycles   → daily_activity.active_kcal (kilojoule / 4.184)
  *   - sleep    → sleep_sessions (deduped via provider_session_id), with
  *                HRV + resting HR merged in from the recovery endpoint
+ *   - recovery → recovery_scores (one per sleep session, day = wake date)
  *
  * Auto-refreshes tokens 60s before expiry.
  */
@@ -25,6 +27,7 @@ export async function syncWhoopForUser(
   workouts_inserted: number;
   cycles_upserted: number;
   sleep_upserted: number;
+  recovery_upserted: number;
   error?: string;
 }> {
   const { data: integration } = await admin
@@ -39,6 +42,7 @@ export async function syncWhoopForUser(
       workouts_inserted: 0,
       cycles_upserted: 0,
       sleep_upserted: 0,
+      recovery_upserted: 0,
       error: "not_connected",
     };
   }
@@ -55,6 +59,7 @@ export async function syncWhoopForUser(
         workouts_inserted: 0,
         cycles_upserted: 0,
         sleep_upserted: 0,
+        recovery_upserted: 0,
         error: "no_refresh_token",
       };
     }
@@ -77,6 +82,7 @@ export async function syncWhoopForUser(
         workouts_inserted: 0,
         cycles_upserted: 0,
         sleep_upserted: 0,
+        recovery_upserted: 0,
         error: `refresh_failed: ${(e as Error).message}`,
       };
     }
@@ -90,6 +96,7 @@ export async function syncWhoopForUser(
   let workouts_inserted = 0;
   let cycles_upserted = 0;
   let sleep_upserted = 0;
+  let recovery_upserted = 0;
 
   // Workouts
   try {
@@ -131,6 +138,7 @@ export async function syncWhoopForUser(
       workouts_inserted,
       cycles_upserted,
       sleep_upserted,
+      recovery_upserted,
       error: `workouts_failed: ${(e as Error).message}`,
     };
   }
@@ -251,6 +259,36 @@ export async function syncWhoopForUser(
         onConflict: "user_id,source,provider_session_id",
       });
       if (!error) sleep_upserted += 1;
+
+      // Persist the recovery score keyed on the wake date. Whoop
+      // recovery is anchored to a sleep, not a day, so we use this
+      // sleep's night_date as the day key.
+      const score = rec?.score?.recovery_score;
+      if (typeof score === "number") {
+        const scoreInt = Math.round(score);
+        const { error: recErr } = await admin
+          .from("recovery_scores")
+          .upsert(
+            {
+              user_id: userId,
+              source: "whoop" as const,
+              day: nightDate,
+              score: scoreInt,
+              band: bandForScore(scoreInt),
+              hrv_ms:
+                typeof rec?.score?.hrv_rmssd_milli === "number"
+                  ? Math.round(rec.score.hrv_rmssd_milli * 10) / 10
+                  : null,
+              resting_hr_bpm:
+                typeof rec?.score?.resting_heart_rate === "number"
+                  ? Math.round(rec.score.resting_heart_rate)
+                  : null,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,source,day" }
+          );
+        if (!recErr) recovery_upserted += 1;
+      }
     }
   } catch {
     /* sleep is secondary; don't fail the whole sync on this */
@@ -262,5 +300,5 @@ export async function syncWhoopForUser(
     .eq("user_id", userId)
     .eq("provider", "whoop");
 
-  return { workouts_inserted, cycles_upserted, sleep_upserted };
+  return { workouts_inserted, cycles_upserted, sleep_upserted, recovery_upserted };
 }
