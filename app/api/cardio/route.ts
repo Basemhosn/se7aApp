@@ -37,15 +37,35 @@ export async function POST(request: Request) {
     avg_hr: parsed.data.avg_hr ?? null,
     source: parsed.data.source,
     hk_uuid: parsed.data.hk_uuid ?? null,
+    provider_activity_id: parsed.data.hc_uuid ?? null,
     notes: parsed.data.notes ?? null,
   };
 
   // Manual inserts: plain insert. HealthKit inserts: upsert on
-  // (user_id, hk_uuid) so re-imports don't double-count.
+  // (user_id, hk_uuid). Health Connect inserts: upsert on
+  // (user_id, source, provider_activity_id) — matches the same dedupe
+  // pattern Strava/Whoop/Oura already use.
   if (parsed.data.source === "healthkit" && parsed.data.hk_uuid) {
     const { data, error } = await supabase
       .from("cardio_sessions")
       .upsert(row, { onConflict: "user_id,hk_uuid", ignoreDuplicates: false })
+      .select("id, started_at")
+      .single();
+    if (error) {
+      return NextResponse.json(
+        { error: "persist_failed", details: error.message },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ ok: true, session: data });
+  }
+  if (parsed.data.source === "health_connect" && parsed.data.hc_uuid) {
+    const { data, error } = await supabase
+      .from("cardio_sessions")
+      .upsert(row, {
+        onConflict: "user_id,source,provider_activity_id",
+        ignoreDuplicates: false,
+      })
       .select("id, started_at")
       .single();
     if (error) {

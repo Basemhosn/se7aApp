@@ -18,8 +18,9 @@ export const logCardioSchema = z.object({
   distance_km: z.number().min(0).max(500).optional().nullable(),
   kcal_burned: z.number().int().min(0).max(10000).optional().nullable(),
   avg_hr: z.number().int().min(30).max(250).optional().nullable(),
-  source: z.enum(["manual", "healthkit"]).default("manual"),
+  source: z.enum(["manual", "healthkit", "health_connect"]).default("manual"),
   hk_uuid: z.string().max(64).optional().nullable(),
+  hc_uuid: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
 
