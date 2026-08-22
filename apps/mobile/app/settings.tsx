@@ -611,12 +611,76 @@ interface RamadanPrefsShape {
 
 function RamadanSettings({ isArabic }: { isArabic: boolean }) {
   const [status, setStatus] = useState<RamadanStatus | null>(null);
+  const [savingCity, setSavingCity] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     api<RamadanStatus>("/api/ramadan/status")
       .then(setStatus)
       .catch(() => setStatus(null));
   }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const saveCityCountry = useCallback(
+    async (patch: { city?: string | null; country?: string | null }) => {
+      setSavingCity(true);
+      try {
+        await api("/api/profile/prefs", {
+          method: "POST",
+          body: JSON.stringify(patch),
+        });
+        reload();
+      } catch {
+        /* silent */
+      }
+      setSavingCity(false);
+    },
+    [reload]
+  );
+
+  const promptCity = () => {
+    Alert.prompt(
+      isArabic ? "المدينة" : "City",
+      isArabic
+        ? "اسم المدينة بالإنجليزية (مثلاً Dubai)"
+        : "City name (e.g. Dubai, Riyadh)",
+      [
+        { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+        {
+          text: isArabic ? "حفظ" : "Save",
+          onPress: (val) => {
+            const v = (val ?? "").trim();
+            saveCityCountry({ city: v || null });
+          },
+        },
+      ],
+      "plain-text",
+      status?.city ?? ""
+    );
+  };
+
+  const promptCountry = () => {
+    Alert.prompt(
+      isArabic ? "الدولة" : "Country",
+      isArabic
+        ? "اسم الدولة بالإنجليزية (مثلاً United Arab Emirates)"
+        : "Country name (e.g. United Arab Emirates)",
+      [
+        { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+        {
+          text: isArabic ? "حفظ" : "Save",
+          onPress: (val) => {
+            const v = (val ?? "").trim();
+            saveCityCountry({ country: v || null });
+          },
+        },
+      ],
+      "plain-text",
+      status?.country ?? ""
+    );
+  };
 
   const patch = useCallback(async (p: Partial<RamadanPrefsShape>) => {
     // Optimistic update.
@@ -686,21 +750,103 @@ function RamadanSettings({ isArabic }: { isArabic: boolean }) {
           {modeText}
         </Text>
       </Pressable>
+      <Pressable onPress={promptCity} style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>{isArabic ? "المدينة" : "City"}</Text>
+          <Text style={styles.rowValue}>
+            {isArabic
+              ? "لضبط أوقات الفجر والمغرب تلقائياً"
+              : "For auto fajr + maghrib times"}
+          </Text>
+        </View>
+        <Text style={[styles.rowValue, { color: colors.gold, fontSize: 13 }]}>
+          {savingCity
+            ? isArabic
+              ? "…"
+              : "…"
+            : status.city ?? (isArabic ? "غير محدد" : "Not set")}
+        </Text>
+      </Pressable>
+      <Pressable onPress={promptCountry} style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>
+            {isArabic ? "الدولة" : "Country"}
+          </Text>
+          <Text style={styles.rowValue}>
+            {isArabic
+              ? "الاسم بالإنجليزية (مثلاً UAE)"
+              : "English name (e.g. UAE)"}
+          </Text>
+        </View>
+        <Text style={[styles.rowValue, { color: colors.gold, fontSize: 13 }]}>
+          {status.country ?? (isArabic ? "غير محدد" : "Not set")}
+        </Text>
+      </Pressable>
       {status.active && (
         <>
-          <View style={[styles.row, { flexDirection: "column", alignItems: "flex-start" }]}>
-            <Text style={styles.rowLabel}>{isArabic ? "الفجر" : "Fajr"}</Text>
-            <TimeField
-              value={status.prefs.fajr_time}
-              onChange={(v) => patch({ fajr_time: v })}
-            />
+          <View
+            style={[
+              styles.row,
+              { flexDirection: "column", alignItems: "flex-start" },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.xs,
+              }}
+            >
+              <Text style={styles.rowLabel}>{isArabic ? "الفجر" : "Fajr"}</Text>
+              {status.times_source === "aladhan" && (
+                <Text style={styles.autoBadge}>
+                  {isArabic ? "تلقائي" : "auto"}
+                </Text>
+              )}
+            </View>
+            {status.times_source === "aladhan" ? (
+              <Text style={[styles.rowValue, { fontSize: 15, marginTop: 4 }]}>
+                {status.prefs.fajr_time}
+              </Text>
+            ) : (
+              <TimeField
+                value={status.prefs.fajr_time}
+                onChange={(v) => patch({ fajr_time: v })}
+              />
+            )}
           </View>
-          <View style={[styles.row, { flexDirection: "column", alignItems: "flex-start" }]}>
-            <Text style={styles.rowLabel}>{isArabic ? "المغرب" : "Maghrib"}</Text>
-            <TimeField
-              value={status.prefs.maghrib_time}
-              onChange={(v) => patch({ maghrib_time: v })}
-            />
+          <View
+            style={[
+              styles.row,
+              { flexDirection: "column", alignItems: "flex-start" },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.xs,
+              }}
+            >
+              <Text style={styles.rowLabel}>
+                {isArabic ? "المغرب" : "Maghrib"}
+              </Text>
+              {status.times_source === "aladhan" && (
+                <Text style={styles.autoBadge}>
+                  {isArabic ? "تلقائي" : "auto"}
+                </Text>
+              )}
+            </View>
+            {status.times_source === "aladhan" ? (
+              <Text style={[styles.rowValue, { fontSize: 15, marginTop: 4 }]}>
+                {status.prefs.maghrib_time}
+              </Text>
+            ) : (
+              <TimeField
+                value={status.prefs.maghrib_time}
+                onChange={(v) => patch({ maghrib_time: v })}
+              />
+            )}
           </View>
         </>
       )}
@@ -1030,6 +1176,17 @@ const styles = StyleSheet.create({
     fontFamily: font.mono,
     fontSize: 12,
     color: colors.dim,
+  },
+  autoBadge: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.gold,
+    letterSpacing: 0.8,
+    borderColor: colors.gold,
+    borderWidth: 1,
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
   dangerBtn: {
     padding: spacing.md,

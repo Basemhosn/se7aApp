@@ -6,6 +6,7 @@ import {
   computeStatus,
   type RamadanPrefs,
 } from "@/lib/ramadan";
+import { fetchPrayerTimesForDate } from "@/lib/prayerTimes";
 
 export const runtime = "nodejs";
 
@@ -27,14 +28,42 @@ export async function GET(request: Request) {
 
   const { data } = await supabase
     .from("profiles")
-    .select("ramadan_prefs")
+    .select("ramadan_prefs, city, country")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const status = computeStatus(
-    (data?.ramadan_prefs ?? DEFAULT_RAMADAN_PREFS) as RamadanPrefs
-  );
-  return NextResponse.json(status);
+  const rawPrefs = (data?.ramadan_prefs ?? DEFAULT_RAMADAN_PREFS) as RamadanPrefs;
+  const prefs = await withAladhanTimes(rawPrefs, data?.city, data?.country);
+
+  const status = computeStatus(prefs);
+  return NextResponse.json({
+    ...status,
+    times_source: prefs === rawPrefs ? "manual" : "aladhan",
+    city: data?.city ?? null,
+    country: data?.country ?? null,
+  });
+}
+
+/**
+ * If the user has a city + country set and auto_detect is on, overlay
+ * live Aladhan fajr/maghrib onto their prefs before computeStatus runs.
+ * On any failure (unresolvable city, network flake, Redis down) we
+ * return the original prefs so the user still gets a status back.
+ */
+async function withAladhanTimes(
+  prefs: RamadanPrefs,
+  city: string | null | undefined,
+  country: string | null | undefined
+): Promise<RamadanPrefs> {
+  if (!prefs.auto_detect) return prefs;
+  if (!city || !country) return prefs;
+  const times = await fetchPrayerTimesForDate(city, country, new Date());
+  if (!times) return prefs;
+  return {
+    ...prefs,
+    fajr_time: times.fajr,
+    maghrib_time: times.maghrib,
+  };
 }
 
 const patchSchema = z
@@ -76,7 +105,7 @@ export async function POST(request: Request) {
 
   const { data: current } = await supabase
     .from("profiles")
-    .select("ramadan_prefs")
+    .select("ramadan_prefs, city, country")
     .eq("user_id", user.id)
     .maybeSingle();
   const merged: RamadanPrefs = {
@@ -96,5 +125,15 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json(computeStatus(merged));
+  const withTimes = await withAladhanTimes(
+    merged,
+    current?.city,
+    current?.country
+  );
+  return NextResponse.json({
+    ...computeStatus(withTimes),
+    times_source: withTimes === merged ? "manual" : "aladhan",
+    city: current?.city ?? null,
+    country: current?.country ?? null,
+  });
 }

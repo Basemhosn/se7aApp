@@ -28,6 +28,11 @@ export interface RamadanStatus {
     suhoor_reminder: boolean;
     iftar_reminder: boolean;
   };
+  // Present when the /api/ramadan/status route resolves fajr/maghrib
+  // via Aladhan instead of the manual values on prefs.
+  times_source?: "manual" | "aladhan";
+  city?: string | null;
+  country?: string | null;
 }
 
 /**

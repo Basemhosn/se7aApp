@@ -25,6 +25,11 @@ const prefsSchema = z.object({
   // so the user can clear it. Not touched by the /api/profile macro
   // recompute — it only powers ETA + goal-line rendering.
   goal_weight_kg: z.number().positive().max(500).nullable().optional(),
+  // City + country for prayer-time auto-detection during Ramadan.
+  // Nullable so the user can clear either field. Free-form text —
+  // Aladhan resolves the city; we don't validate against a list.
+  city: z.string().trim().max(80).nullable().optional(),
+  country: z.string().trim().max(80).nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -55,6 +60,12 @@ export async function POST(request: Request) {
   }
   if (parsed.data.goal_weight_kg !== undefined) {
     patch.goal_weight_kg = parsed.data.goal_weight_kg;
+  }
+  if (parsed.data.city !== undefined) {
+    patch.city = parsed.data.city === "" ? null : parsed.data.city;
+  }
+  if (parsed.data.country !== undefined) {
+    patch.country = parsed.data.country === "" ? null : parsed.data.country;
   }
   if (parsed.data.notification_prefs) {
     const { data: current } = await supabase
@@ -97,7 +108,7 @@ export async function GET(request: Request) {
 
   const { data } = await supabase
     .from("profiles")
-    .select("notification_prefs, tz_offset_min, goal_weight_kg")
+    .select("notification_prefs, tz_offset_min, goal_weight_kg, city, country")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -105,5 +116,7 @@ export async function GET(request: Request) {
     notification_prefs: data?.notification_prefs ?? {},
     tz_offset_min: data?.tz_offset_min ?? 0,
     goal_weight_kg: data?.goal_weight_kg ?? null,
+    city: data?.city ?? null,
+    country: data?.country ?? null,
   });
 }
