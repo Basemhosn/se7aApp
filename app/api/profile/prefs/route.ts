@@ -21,6 +21,10 @@ const prefsSchema = z.object({
     })
     .optional(),
   tz_offset_min: z.number().int().min(-14 * 60).max(14 * 60).optional(),
+  // Optional absolute target weight for the projection chart. Nullable
+  // so the user can clear it. Not touched by the /api/profile macro
+  // recompute — it only powers ETA + goal-line rendering.
+  goal_weight_kg: z.number().positive().max(500).nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -48,6 +52,9 @@ export async function POST(request: Request) {
   const patch: Record<string, unknown> = {};
   if (parsed.data.tz_offset_min != null) {
     patch.tz_offset_min = parsed.data.tz_offset_min;
+  }
+  if (parsed.data.goal_weight_kg !== undefined) {
+    patch.goal_weight_kg = parsed.data.goal_weight_kg;
   }
   if (parsed.data.notification_prefs) {
     const { data: current } = await supabase
@@ -90,12 +97,13 @@ export async function GET(request: Request) {
 
   const { data } = await supabase
     .from("profiles")
-    .select("notification_prefs, tz_offset_min")
+    .select("notification_prefs, tz_offset_min, goal_weight_kg")
     .eq("user_id", user.id)
     .maybeSingle();
 
   return NextResponse.json({
     notification_prefs: data?.notification_prefs ?? {},
     tz_offset_min: data?.tz_offset_min ?? 0,
+    goal_weight_kg: data?.goal_weight_kg ?? null,
   });
 }

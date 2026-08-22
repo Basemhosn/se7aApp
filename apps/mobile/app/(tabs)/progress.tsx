@@ -15,6 +15,10 @@ import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { TrendChart } from "@/components/TrendChart";
+import {
+  ProjectionChart,
+  type ProjectionResponse,
+} from "@/components/ProjectionChart";
 import { AdherenceRing } from "@/components/AdherenceRing";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
@@ -100,6 +104,7 @@ export default function Progress() {
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [measurements, setMeasurements] = useState<MeasurementsResponse | null>(null);
   const [days, setDays] = useState(30);
+  const [projection, setProjection] = useState<ProjectionResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [weight, setWeight] = useState("");
@@ -107,29 +112,44 @@ export default function Progress() {
   const [logging, setLogging] = useState(false);
   const [logErr, setLogErr] = useState("");
 
+  const [goalWeightInput, setGoalWeightInput] = useState("");
+  const [savingGoal, setSavingGoal] = useState(false);
+
   const load = useCallback(async (d: number) => {
     setLoading(true);
     try {
       const tzOffsetMin = -new Date().getTimezoneOffset();
-      const [tr, adh, prRes, streakRes, photosRes, mRes] = await Promise.all([
-        api<TrendResponse>(`/api/weight/trend?days=${d}`),
-        api<AdherenceResponse>("/api/progress/adherence?days=7").catch(() => null),
-        api<PrsResponse>("/api/workouts/prs?period=all").catch(() => null),
-        api<StreakResponse>(
-          `/api/streaks?tz_offset_min=${tzOffsetMin}`
-        ).catch(() => null),
-        api<PhotosResponse>("/api/progress/photos?limit=4").catch(() => ({
-          photos: [] as ProgressPhoto[],
-          count: 0,
-        })),
-        api<MeasurementsResponse>("/api/measurements?limit=10").catch(() => null),
-      ]);
+      const [tr, adh, prRes, streakRes, photosRes, mRes, projRes] =
+        await Promise.all([
+          api<TrendResponse>(`/api/weight/trend?days=${d}`),
+          api<AdherenceResponse>("/api/progress/adherence?days=7").catch(
+            () => null
+          ),
+          api<PrsResponse>("/api/workouts/prs?period=all").catch(() => null),
+          api<StreakResponse>(
+            `/api/streaks?tz_offset_min=${tzOffsetMin}`
+          ).catch(() => null),
+          api<PhotosResponse>("/api/progress/photos?limit=4").catch(() => ({
+            photos: [] as ProgressPhoto[],
+            count: 0,
+          })),
+          api<MeasurementsResponse>("/api/measurements?limit=10").catch(
+            () => null
+          ),
+          api<ProjectionResponse>(
+            "/api/weight/projection?lookback_days=56&forward_days=90"
+          ).catch(() => null),
+        ]);
       setTrend(tr);
       setAdherence(adh);
       setPrs(prRes);
       setStreak(streakRes);
       setPhotos(photosRes.photos);
       setMeasurements(mRes);
+      setProjection(projRes);
+      if (projRes?.goal.weight_kg != null) {
+        setGoalWeightInput(String(projRes.goal.weight_kg));
+      }
     } catch {
       /* empty */
     }
@@ -141,6 +161,23 @@ export default function Progress() {
       load(days);
     }, [days, load])
   );
+
+  const saveGoalWeight = async () => {
+    const raw = goalWeightInput.trim();
+    const parsed = raw === "" ? null : Number(raw);
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) return;
+    setSavingGoal(true);
+    try {
+      await api("/api/profile/prefs", {
+        method: "POST",
+        body: JSON.stringify({ goal_weight_kg: parsed }),
+      });
+      await load(days);
+    } catch {
+      /* silent — user can retry */
+    }
+    setSavingGoal(false);
+  };
 
   const logWeight = async () => {
     const w = Number(weight);
@@ -267,6 +304,83 @@ export default function Progress() {
           <TrendChart points={trend?.points ?? []} />
         )}
       </View>
+
+      {projection && !projection.insufficient && projection.regression && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Projection</Text>
+          <Text style={styles.cardSub}>
+            {formatProjectionSub(projection)}
+          </Text>
+          <View style={{ marginTop: spacing.sm }}>
+            <ProjectionChart data={projection} />
+          </View>
+          <View style={styles.projStatsRow}>
+            <ProjStat
+              label="PACE"
+              value={`${
+                projection.regression.slope_kg_per_week > 0 ? "+" : ""
+              }${projection.regression.slope_kg_per_week.toFixed(2)}`}
+              unit="kg/wk"
+              tint={
+                projection.regression.slope_kg_per_week === 0
+                  ? colors.dim
+                  : projection.regression.slope_kg_per_week < 0
+                    ? colors.gold
+                    : colors.mint
+              }
+            />
+            <ProjStat
+              label="R²"
+              value={projection.regression.r_squared.toFixed(2)}
+              unit="fit"
+              tint={colors.ink}
+            />
+            {projection.goal.on_pace_pct != null && (
+              <ProjStat
+                label="ON PACE"
+                value={`${projection.goal.on_pace_pct}`}
+                unit="%"
+                tint={
+                  projection.goal.on_pace_pct >= 80
+                    ? colors.gold
+                    : projection.goal.on_pace_pct >= 40
+                      ? colors.ink
+                      : colors.coral
+                }
+              />
+            )}
+            {projection.goal.eta_days != null && (
+              <ProjStat
+                label="ETA"
+                value={String(Math.round(projection.goal.eta_days / 7))}
+                unit="wks"
+                tint={colors.mint}
+              />
+            )}
+          </View>
+          <View style={styles.goalRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Target weight (optional)</Text>
+              <TextInput
+                value={goalWeightInput}
+                onChangeText={setGoalWeightInput}
+                keyboardType="numeric"
+                placeholder="e.g. 78"
+                placeholderTextColor={colors.dim}
+                style={styles.input}
+              />
+            </View>
+            <View style={{ justifyContent: "flex-end" }}>
+              <Btn
+                label={savingGoal ? "Saving…" : "Set target"}
+                onPress={saveGoalWeight}
+                disabled={savingGoal}
+                variant="ghost"
+              />
+            </View>
+          </View>
+        </View>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("progress.log_weighin")}</Text>
@@ -487,6 +601,44 @@ function weightDeltaTint(
   return colors.dim;
 }
 
+function ProjStat({
+  label,
+  value,
+  unit,
+  tint,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  tint: string;
+}) {
+  return (
+    <View style={styles.projStat}>
+      <Text style={[styles.projStatLabel, { color: tint }]}>{label}</Text>
+      <Text style={styles.projStatValue}>
+        {value}
+        <Text style={styles.projStatUnit}> {unit}</Text>
+      </Text>
+    </View>
+  );
+}
+
+function formatProjectionSub(p: ProjectionResponse): string {
+  const dir =
+    p.regression && p.regression.slope_kg_per_week < -0.05
+      ? "losing"
+      : p.regression && p.regression.slope_kg_per_week > 0.05
+        ? "gaining"
+        : "holding steady at";
+  const currentKg = p.current?.weight_kg ?? null;
+  const rate =
+    p.regression && Math.abs(p.regression.slope_kg_per_week) >= 0.05
+      ? ` ${Math.abs(p.regression.slope_kg_per_week).toFixed(2)} kg/wk`
+      : "";
+  const anchor = currentKg !== null ? ` from ${currentKg} kg` : "";
+  return `Currently ${dir}${rate}${anchor}. Shaded band = 95% range.`;
+}
+
 const styles = StyleSheet.create({
   head: { marginTop: spacing.sm, gap: 4 },
   title: {
@@ -629,6 +781,38 @@ const styles = StyleSheet.create({
   },
   rangeTextOn: { color: colors.gold },
   formRow: { flexDirection: "row", gap: spacing.sm },
+  projStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  projStat: {
+    minWidth: 68,
+  },
+  projStatLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+  projStatValue: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  projStatUnit: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 0.6,
+  },
+  goalRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    alignItems: "flex-end",
+  },
   label: {
     fontFamily: font.mono,
     fontSize: 10,

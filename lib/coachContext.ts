@@ -30,6 +30,8 @@ interface ProfileRow {
   goal?: string | null;
   activity_level?: string | null;
   ramadan_prefs?: RamadanPrefs | null;
+  goal_weight_kg?: number | null;
+  goal_rate_kg_per_week?: number | null;
   daily_kcal_target?: number | null;
   daily_protein_g?: number | null;
   daily_carb_g?: number | null;
@@ -65,7 +67,7 @@ export async function buildCoachContext(
     supabase
       .from("profiles")
       .select(
-        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs"
+        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs, goal_weight_kg, goal_rate_kg_per_week"
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -265,7 +267,9 @@ export async function buildCoachContext(
     parts.push(`Avg kcal per logged day: ~${Math.round(midKcal)}.`);
   }
 
-  // Weight trend
+  // Weight trend + projection. Regression on the same 30-day window
+  // that's already loaded so the coach can talk about pace, ETA, and
+  // on-pace percentage without a second query.
   if (weights.length >= 2) {
     const first = weights[0]!;
     const last = weights[weights.length - 1]!;
@@ -280,6 +284,36 @@ export async function buildCoachContext(
     parts.push(
       `\n[Weight] ${sign}${delta} kg over ${days} d (${first.kg} → ${last.kg}). ${weights.length} weigh-ins.`
     );
+
+    const reg = linearRegression(
+      weights.map((w) => new Date(w.at).getTime() / 86_400_000),
+      weights.map((w) => w.kg)
+    );
+    if (reg) {
+      const perWk = Math.round(reg.slope * 7 * 100) / 100;
+      const paceBits = [`current pace ${perWk > 0 ? "+" : ""}${perWk} kg/wk`];
+      const targetRate = profile?.goal_rate_kg_per_week ?? null;
+      if (typeof targetRate === "number" && Math.abs(targetRate) > 1e-6) {
+        const onPace = Math.round((reg.slope * 7) / targetRate * 100);
+        paceBits.push(`${onPace}% of target ${targetRate} kg/wk`);
+      }
+      const goalWeight = profile?.goal_weight_kg ?? null;
+      if (typeof goalWeight === "number" && Math.abs(reg.slope) > 1e-6) {
+        const todayOffset = Date.now() / 86_400_000;
+        const targetOffset = (goalWeight - reg.intercept) / reg.slope;
+        const daysToGoal = Math.round(targetOffset - todayOffset);
+        if (daysToGoal > 0 && daysToGoal < 365 * 3) {
+          paceBits.push(
+            `~${Math.round(daysToGoal / 7)} wks to ${goalWeight} kg at this pace`
+          );
+        } else if (daysToGoal <= 0) {
+          paceBits.push(`already past goal ${goalWeight} kg`);
+        } else {
+          paceBits.push(`goal ${goalWeight} kg unreachable at this pace`);
+        }
+      }
+      parts.push(`[Projection] ${paceBits.join(", ")}.`);
+    }
   } else if (weights.length === 1) {
     parts.push(`\n[Weight] Latest: ${weights[0]!.kg} kg. Only 1 weigh-in.`);
   }
@@ -421,6 +455,25 @@ function topPrs(
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function linearRegression(
+  xs: number[],
+  ys: number[]
+): { slope: number; intercept: number } | null {
+  const n = xs.length;
+  if (n < 2) return null;
+  const meanX = xs.reduce((s, x) => s + x, 0) / n;
+  const meanY = ys.reduce((s, y) => s + y, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i]! - meanX) * (ys[i]! - meanY);
+    den += (xs[i]! - meanX) ** 2;
+  }
+  if (den === 0) return null;
+  const slope = num / den;
+  return { slope, intercept: meanY - slope * meanX };
 }
 
 function shortDate(d: Date): string {
