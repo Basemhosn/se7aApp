@@ -714,46 +714,75 @@ function StreakCard({
 }) {
   const [freezing, setFreezing] = useState(false);
   // Yesterday (in the user's local tz) in YYYY-MM-DD, matching how the
-  // server buckets days. This is the day we offer to freeze.
+  // server buckets days. This is the anchor for the freeze CTA.
   const yesterdayKey = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
-  const canFreezeYesterday =
-    streak.freezes_available_this_month > 0 &&
-    streak.freezable_days.includes(yesterdayKey);
+
+  // Compute the longest run of consecutive freezable days starting
+  // from yesterday and walking back, capped by remaining budget. This
+  // is the "restore max" the CTA offers. Example: freezable_days =
+  // [Fri, Thu] with budget 2 → CTA restores 2 days in one confirm.
+  // freezable_days = [Fri] with budget 2 → CTA is a single-day freeze.
+  const freezableSet = useMemo(
+    () => new Set(streak.freezable_days),
+    [streak.freezable_days]
+  );
+  const consecutiveFreezable = useMemo(() => {
+    const out: string[] = [];
+    let cursor = new Date();
+    cursor.setDate(cursor.getDate() - 1);
+    // Cap by budget so we never propose more than the user can afford.
+    for (let i = 0; i < streak.freezes_available_this_month; i++) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+      if (!freezableSet.has(key)) break;
+      out.push(key);
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return out;
+  }, [freezableSet, streak.freezes_available_this_month]);
+
+  const canRestore = consecutiveFreezable.length > 0;
+  const restoreCount = consecutiveFreezable.length;
 
   const applyFreeze = () => {
-    Alert.alert(
-      "Save your streak?",
-      `Use 1 of ${streak.freezes_available_this_month} freeze${streak.freezes_available_this_month === 1 ? "" : "s"} this month to protect yesterday.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Use freeze",
-          style: "default",
-          onPress: async () => {
-            setFreezing(true);
-            const tzOffsetMin = -new Date().getTimezoneOffset();
-            try {
-              await api("/api/streaks/freeze", {
-                method: "POST",
-                body: JSON.stringify({
-                  freeze_date: yesterdayKey,
-                  tz_offset_min: tzOffsetMin,
-                }),
-              });
-              onFrozen();
-            } catch {
-              Alert.alert("Couldn't apply freeze", "Try again in a moment.");
-            } finally {
-              setFreezing(false);
-            }
-          },
+    const cost = restoreCount;
+    const budgetRemaining = streak.freezes_available_this_month;
+    const title =
+      restoreCount === 1
+        ? "Save your streak?"
+        : `Restore ${restoreCount}-day gap?`;
+    const body =
+      restoreCount === 1
+        ? `Use 1 of ${budgetRemaining} freeze${budgetRemaining === 1 ? "" : "s"} this month to protect yesterday.`
+        : `Uses ${cost} of ${budgetRemaining} freezes this month to cover the last ${restoreCount} missed days in one go.`;
+    Alert.alert(title, body, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: restoreCount === 1 ? "Use freeze" : `Use ${cost} freezes`,
+        style: "default",
+        onPress: async () => {
+          setFreezing(true);
+          const tzOffsetMin = -new Date().getTimezoneOffset();
+          try {
+            await api("/api/streaks/freeze", {
+              method: "POST",
+              body: JSON.stringify({
+                freeze_dates: consecutiveFreezable,
+                tz_offset_min: tzOffsetMin,
+              }),
+            });
+            onFrozen();
+          } catch {
+            Alert.alert("Couldn't apply freeze", "Try again in a moment.");
+          } finally {
+            setFreezing(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
@@ -767,8 +796,10 @@ function StreakCard({
         <Text style={styles.streakKicker}>
           {streak.todays_status === "logged"
             ? "STREAK · TODAY LOGGED"
-            : canFreezeYesterday && streak.current_days === 0
-              ? "STREAK · YESTERDAY MISSED"
+            : canRestore && streak.current_days === 0
+              ? restoreCount === 1
+                ? "STREAK · YESTERDAY MISSED"
+                : `STREAK · ${restoreCount} DAYS MISSED`
               : "STREAK · LOG TODAY TO KEEP IT"}
         </Text>
         <View style={styles.streakNumRow}>
@@ -791,14 +822,18 @@ function StreakCard({
           {streak.freezes_monthly_budget > 0 &&
             ` · ❄ ${streak.freezes_available_this_month}/${streak.freezes_monthly_budget}`}
         </Text>
-        {canFreezeYesterday && (
+        {canRestore && (
           <Pressable
             onPress={applyFreeze}
             disabled={freezing}
             style={styles.streakFreezeBtn}
           >
             <Text style={styles.streakFreezeBtnText}>
-              {freezing ? "Saving…" : "❄ Save yesterday's streak"}
+              {freezing
+                ? "Saving…"
+                : restoreCount === 1
+                  ? "❄ Save yesterday's streak"
+                  : `❄ Restore ${restoreCount}-day gap · ${restoreCount} freezes`}
             </Text>
           </Pressable>
         )}
