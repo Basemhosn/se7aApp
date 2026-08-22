@@ -20,6 +20,7 @@ const PERMISSIONS: HealthKitPermissions = {
       P.HeartRate,
       P.DistanceWalkingRunning,
       P.DistanceCycling,
+      P.SleepAnalysis,
     ],
     write: [P.Weight, P.BodyFatPercentage],
   },
@@ -212,6 +213,182 @@ function mapActivityKind(name: string): HkWorkout["kind"] {
   if (n.includes("row")) return "row";
   if (n.includes("elliptical")) return "elliptical";
   return "other";
+}
+
+export interface HkSleep {
+  hk_uuid: string; // synthesized session ID (see buildSession)
+  night_date: string; // YYYY-MM-DD, anchored to wake date
+  start_at: string;
+  end_at: string;
+  duration_minutes: number;
+  time_in_bed_minutes: number;
+  deep_minutes: number | null;
+  rem_minutes: number | null;
+  light_minutes: number | null;
+  awake_minutes: number | null;
+}
+
+interface HkSleepSample {
+  id?: string;
+  startDate: string;
+  endDate: string;
+  sourceId?: string;
+  sourceName?: string;
+  value: string; // "INBED" | "ASLEEP" | "CORE" | "DEEP" | "REM" | "AWAKE" | "UNSPECIFIED"
+}
+
+const MIN_MAIN_SLEEP_MINUTES = 30; // filter naps; main-sleep only
+
+/**
+ * Read sleep sessions since the given ISO datetime and roll HealthKit's
+ * flat sample stream (InBed / stage / Awake, one row per stretch) into
+ * one session per night per source.
+ *
+ * Grouping rules — HealthKit doesn't have a native "session" concept:
+ *   - Bucket samples by sourceId first (an Apple Watch and a Whoop
+ *     mirror both write to HK; keep them separate rather than mashing
+ *     their overlapping samples into one artificially long night)
+ *   - Within a source, start a new session when the gap between the
+ *     previous session's max endDate and the next sample's startDate
+ *     exceeds 60 min. Anything shorter is treated as the same session
+ *   - Filter sessions < 30 min (naps, accidental InBed logs)
+ *
+ * Session dedupe ID is deterministic (`sourceId:startTimestamp`) so
+ * repeat syncs upsert cleanly on (user, source, provider_session_id).
+ */
+export function readSleepSessionsSince(sinceIso: string): Promise<HkSleep[]> {
+  if (Platform.OS !== "ios") return Promise.resolve([]);
+  return new Promise((resolve) => {
+    const opts: HealthInputOptions = {
+      startDate: sinceIso,
+      endDate: new Date().toISOString(),
+      ascending: true,
+    };
+    AppleHealthKit.getSleepSamples(opts, (err, samples) => {
+      if (err || !samples) return resolve([]);
+      resolve(groupSleepSessions(samples as unknown as HkSleepSample[]));
+    });
+  });
+}
+
+function groupSleepSessions(samples: HkSleepSample[]): HkSleep[] {
+  const bySource = new Map<string, HkSleepSample[]>();
+  for (const s of samples) {
+    const key = s.sourceId ?? "unknown";
+    const list = bySource.get(key) ?? [];
+    list.push(s);
+    bySource.set(key, list);
+  }
+
+  const gapMs = 60 * 60 * 1000;
+  const out: HkSleep[] = [];
+  for (const [sourceId, list] of bySource) {
+    list.sort(
+      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    );
+    let bucket: HkSleepSample[] = [];
+    const flush = () => {
+      if (bucket.length === 0) return;
+      const session = buildSleepSession(sourceId, bucket);
+      if (session) out.push(session);
+      bucket = [];
+    };
+    for (const s of list) {
+      if (bucket.length === 0) {
+        bucket.push(s);
+        continue;
+      }
+      const lastEnd = Math.max(
+        ...bucket.map((b) => new Date(b.endDate).getTime())
+      );
+      const startMs = new Date(s.startDate).getTime();
+      if (startMs - lastEnd > gapMs) {
+        flush();
+        bucket.push(s);
+      } else {
+        bucket.push(s);
+      }
+    }
+    flush();
+  }
+  return out;
+}
+
+function buildSleepSession(
+  sourceId: string,
+  samples: HkSleepSample[]
+): HkSleep | null {
+  const startMs = Math.min(
+    ...samples.map((s) => new Date(s.startDate).getTime())
+  );
+  const endMs = Math.max(...samples.map((s) => new Date(s.endDate).getTime()));
+  const spanMs = endMs - startMs;
+  if (spanMs <= 0) return null;
+
+  let deepMs = 0;
+  let remMs = 0;
+  let coreMs = 0;
+  let awakeMs = 0;
+  let asleepMs = 0; // legacy ASLEEP / UNSPECIFIED
+  let inBedMs = 0;
+
+  for (const s of samples) {
+    const sms =
+      new Date(s.endDate).getTime() - new Date(s.startDate).getTime();
+    if (sms <= 0) continue;
+    switch (s.value) {
+      case "DEEP":
+        deepMs += sms;
+        break;
+      case "REM":
+        remMs += sms;
+        break;
+      case "CORE":
+        coreMs += sms;
+        break;
+      case "AWAKE":
+        awakeMs += sms;
+        break;
+      case "ASLEEP":
+      case "UNSPECIFIED":
+        asleepMs += sms;
+        break;
+      case "INBED":
+        inBedMs += sms;
+        break;
+    }
+  }
+
+  const stageTotal = deepMs + remMs + coreMs;
+  const hasStages = stageTotal > 0;
+  // Prefer summed stage minutes when we have them (iOS 16+ Apple Watch),
+  // otherwise fall back to the legacy ASLEEP samples, and only if
+  // neither exists infer duration from InBed minus Awake.
+  const asleepChosenMs = hasStages
+    ? stageTotal
+    : asleepMs > 0
+      ? asleepMs
+      : Math.max(0, (inBedMs > 0 ? inBedMs : spanMs) - awakeMs);
+  const durationMinutes = Math.round(asleepChosenMs / 60_000);
+  if (durationMinutes < MIN_MAIN_SLEEP_MINUTES) return null;
+
+  const wake = new Date(endMs);
+  const nightDate = `${wake.getFullYear()}-${String(wake.getMonth() + 1).padStart(2, "0")}-${String(wake.getDate()).padStart(2, "0")}`;
+
+  return {
+    hk_uuid: `${sourceId}:${startMs}`,
+    night_date: nightDate,
+    start_at: new Date(startMs).toISOString(),
+    end_at: new Date(endMs).toISOString(),
+    duration_minutes: durationMinutes,
+    time_in_bed_minutes: Math.round(
+      (inBedMs > 0 ? inBedMs : spanMs) / 60_000
+    ),
+    deep_minutes: hasStages ? Math.round(deepMs / 60_000) : null,
+    rem_minutes: hasStages ? Math.round(remMs / 60_000) : null,
+    light_minutes: hasStages ? Math.round(coreMs / 60_000) : null,
+    awake_minutes: awakeMs > 0 ? Math.round(awakeMs / 60_000) : null,
+  };
 }
 
 /** Write a weight sample back to HealthKit when the user logs one. */

@@ -44,6 +44,7 @@ export function useHealthSync(userId: string | undefined) {
           syncWeightAndBf(userId, "healthkit"),
           syncTodayActivity("healthkit"),
           syncRecentWorkouts("healthkit"),
+          syncRecentSleep("healthkit"),
         ]);
       } else if (Platform.OS === "android") {
         const authed = await HC.requestHealthConnectAuth();
@@ -52,7 +53,7 @@ export function useHealthSync(userId: string | undefined) {
           syncWeightAndBf(userId, "health_connect"),
           syncTodayActivity("health_connect"),
           syncRecentWorkouts("health_connect"),
-          syncRecentSleep(),
+          syncRecentSleep("health_connect"),
         ]);
       }
     })();
@@ -198,39 +199,52 @@ async function syncRecentWorkouts(source: Source) {
 }
 
 /**
- * Health Connect only for now — HealthKit sleep import is a follow-up.
- * Batches sessions into a single POST /api/sleep/import call so the
- * server can upsert them together.
+ * Read sleep from whichever store the platform exposes and batch-POST
+ * to /api/sleep/import. HealthKit + Health Connect return equivalent
+ * shapes (only the UUID field name differs); the mapper here
+ * normalizes both into the sleep_sessions row shape.
  */
-async function syncRecentSleep() {
+async function syncRecentSleep(source: Source) {
   try {
     const lastRaw = await AsyncStorage.getItem(LAST_SLEEP_SYNC_KEY);
     const sinceIso = lastRaw
       ? new Date(Number(lastRaw)).toISOString()
       : new Date(Date.now() - 14 * 86_400_000).toISOString();
 
-    const sessions = await HC.readSleepSessionsSince(sinceIso);
+    const sessions =
+      source === "healthkit"
+        ? (await HK.readSleepSessionsSince(sinceIso)).map((s) => ({
+            provider_session_id: s.hk_uuid,
+            night_date: s.night_date,
+            start_at: s.start_at,
+            end_at: s.end_at,
+            duration_minutes: s.duration_minutes,
+            time_in_bed_minutes: s.time_in_bed_minutes,
+            deep_minutes: s.deep_minutes,
+            rem_minutes: s.rem_minutes,
+            light_minutes: s.light_minutes,
+            awake_minutes: s.awake_minutes,
+          }))
+        : (await HC.readSleepSessionsSince(sinceIso)).map((s) => ({
+            provider_session_id: s.hc_uuid,
+            night_date: s.night_date,
+            start_at: s.start_at,
+            end_at: s.end_at,
+            duration_minutes: s.duration_minutes,
+            time_in_bed_minutes: s.time_in_bed_minutes,
+            deep_minutes: s.deep_minutes,
+            rem_minutes: s.rem_minutes,
+            light_minutes: s.light_minutes,
+            awake_minutes: s.awake_minutes,
+          }));
+
     if (sessions.length === 0) {
       await AsyncStorage.setItem(LAST_SLEEP_SYNC_KEY, String(Date.now()));
       return;
     }
     await api("/api/sleep/import", {
       method: "POST",
-      body: JSON.stringify({
-        source: "health_connect",
-        sessions: sessions.map((s) => ({
-          provider_session_id: s.hc_uuid,
-          night_date: s.night_date,
-          start_at: s.start_at,
-          end_at: s.end_at,
-          duration_minutes: s.duration_minutes,
-          time_in_bed_minutes: s.time_in_bed_minutes,
-          deep_minutes: s.deep_minutes,
-          rem_minutes: s.rem_minutes,
-          light_minutes: s.light_minutes,
-          awake_minutes: s.awake_minutes,
-        })),
-      }),
+      body: JSON.stringify({ source, sessions }),
     }).catch(() => {
       /* silent */
     });
