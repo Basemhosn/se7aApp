@@ -508,6 +508,10 @@ export default function Settings() {
         <RamadanSettings isArabic={isArabic} />
       </Section>
 
+      <Section title={isArabic ? "الدورة الشهرية" : "Cycle"}>
+        <CycleSettings isArabic={isArabic} />
+      </Section>
+
       {referral && (
         <Section title={isArabic ? "ادعُ صديقًا" : "Invite a friend"}>
           <View style={styles.inviteBody}>
@@ -882,6 +886,114 @@ function RamadanSettings({ isArabic }: { isArabic: boolean }) {
           thumbColor={colors.ink}
         />
       </View>
+    </>
+  );
+}
+
+interface CyclePrefsShape {
+  enabled: boolean;
+  avg_cycle_length_days: number;
+  avg_period_length_days: number;
+  share_with_coach: boolean;
+}
+
+function CycleSettings({ isArabic }: { isArabic: boolean }) {
+  const [prefs, setPrefs] = useState<CyclePrefsShape | null>(null);
+
+  const load = useCallback(() => {
+    api<{ prefs: CyclePrefsShape }>("/api/cycle/status")
+      .then((r) => setPrefs(r.prefs))
+      .catch(() => setPrefs(null));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const patch = useCallback(
+    async (p: Partial<CyclePrefsShape>) => {
+      setPrefs((prev) => (prev ? { ...prev, ...p } : prev));
+      try {
+        const res = await api<{ prefs: CyclePrefsShape }>(
+          "/api/cycle/status",
+          { method: "POST", body: JSON.stringify(p) }
+        );
+        setPrefs(res.prefs);
+      } catch {
+        load();
+      }
+    },
+    [load]
+  );
+
+  if (!prefs) {
+    return (
+      <View style={{ padding: spacing.md }}>
+        <Text style={styles.rowValue}>{isArabic ? "…" : "Loading…"}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>
+            {isArabic ? "تفعيل" : "Track cycle"}
+          </Text>
+          <Text style={styles.rowValue}>
+            {isArabic
+              ? "خصوصي وبيتحكم فيه. مغلق افتراضياً."
+              : "Private + opt-in. Off by default."}
+          </Text>
+        </View>
+        <Switch
+          value={prefs.enabled}
+          onValueChange={(v) => patch({ enabled: v })}
+          trackColor={{ true: colors.gold, false: colors.line }}
+          thumbColor={colors.ink}
+        />
+      </View>
+      {prefs.enabled && (
+        <>
+          <Pressable
+            onPress={() => router.push("/cycle")}
+            style={styles.row}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>
+                {isArabic ? "افتح الشاشة" : "Open cycle screen"}
+              </Text>
+              <Text style={styles.rowValue}>
+                {isArabic
+                  ? "سجل بداية الدورة وشوف المرحلة الحالية"
+                  : "Log period starts + see current phase"}
+              </Text>
+            </View>
+            <Text style={[styles.rowValue, { color: colors.gold, fontSize: 13 }]}>
+              →
+            </Text>
+          </Pressable>
+          <View style={[styles.row, { borderBottomWidth: 0 }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>
+                {isArabic ? "شارك مع المدرب" : "Share with coach"}
+              </Text>
+              <Text style={styles.rowValue}>
+                {isArabic
+                  ? "يعدل نصائح التدريب والأكل حسب المرحلة"
+                  : "Adjust training + nutrition advice by phase"}
+              </Text>
+            </View>
+            <Switch
+              value={prefs.share_with_coach}
+              onValueChange={(v) => patch({ share_with_coach: v })}
+              trackColor={{ true: colors.gold, false: colors.line }}
+              thumbColor={colors.ink}
+            />
+          </View>
+        </>
+      )}
     </>
   );
 }

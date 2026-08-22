@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeStatus as computeRamadanStatus, type RamadanPrefs } from "./ramadan";
+import {
+  computeCycleStatus,
+  DEFAULT_CYCLE_PREFS,
+  type CyclePrefs,
+} from "./cycle";
 
 /**
  * Coach context assembler — pulls the user's recent state into a single
@@ -30,6 +35,7 @@ interface ProfileRow {
   goal?: string | null;
   activity_level?: string | null;
   ramadan_prefs?: RamadanPrefs | null;
+  cycle_prefs?: CyclePrefs | null;
   goal_weight_kg?: number | null;
   goal_rate_kg_per_week?: number | null;
   daily_kcal_target?: number | null;
@@ -63,11 +69,12 @@ export async function buildCoachContext(
     waterTodayRes,
     sleepRes,
     freezesRes,
+    cyclePeriodsRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs, goal_weight_kg, goal_rate_kg_per_week"
+        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs, cycle_prefs, goal_weight_kg, goal_rate_kg_per_week"
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -128,6 +135,12 @@ export async function buildCoachContext(
       .select("freeze_date")
       .eq("user_id", userId)
       .gte("freeze_date", dayKey(sevenDaysAgo)),
+    supabase
+      .from("cycle_periods")
+      .select("started_on, ended_on")
+      .eq("user_id", userId)
+      .order("started_on", { ascending: false })
+      .limit(6),
   ]);
 
   const profile = (profileRes.data ?? null) as ProfileRow | null;
@@ -180,6 +193,29 @@ export async function buildCoachContext(
       ? (profile.injuries as string[])
       : [];
     if (inj.length > 0) parts.push(`Injuries/avoid: ${inj.join(", ")}`);
+
+    // Cycle context — opt-in AND share_with_coach must be true. Kept
+    // brief on purpose: a one-line hint so the coach can bias advice
+    // without moralizing.
+    const cyclePrefsRaw = (profile.cycle_prefs ??
+      DEFAULT_CYCLE_PREFS) as CyclePrefs;
+    if (cyclePrefsRaw.enabled && cyclePrefsRaw.share_with_coach) {
+      const periods = (cyclePeriodsRes.data ?? []).map((p) => ({
+        started_on: String(p.started_on),
+        ended_on: p.ended_on ? String(p.ended_on) : null,
+      }));
+      const cycle = computeCycleStatus(cyclePrefsRaw, periods);
+      if (cycle.phase !== "unknown" && cycle.cycle_day !== null) {
+        const nextBit =
+          cycle.days_until_next_period !== null
+            ? `, ~${cycle.days_until_next_period}d to next period`
+            : "";
+        parts.push(
+          `Cycle: ${cycle.phase} (day ${cycle.cycle_day}/${cycle.avg_cycle_length_days}${nextBit}).` +
+            (cycle.coaching_hint ? ` ${cycle.coaching_hint}` : "")
+        );
+      }
+    }
 
     // Ramadan context — coach adjusts advice around iftar/suhoor timing.
     const ramadan = computeRamadanStatus(profile.ramadan_prefs ?? null);
