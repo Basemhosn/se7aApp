@@ -11,6 +11,7 @@
     "continue": "Continue",
     "save": "Save",
     "cancel": "Cancel",
+    "apply": "Apply",
     "discard": "Discard",
     "loading": "Loading…",
     "saving": "Saving…",
@@ -215,7 +216,10 @@
       "hidden_costs": "HIDDEN COSTS ACCOUNTED FOR",
       "couldnt_analyze": "Couldn't analyze the photo.",
       "pick_at_least_one_err": "Pick at least one item to log.",
-      "couldnt_save": "Couldn't save — try again."
+      "couldnt_save": "Couldn't save — try again.",
+      "edit_portion_title": "Adjust portion",
+      "edit_portion_grams_body": "Currently ~{{g}}g. Enter actual weight in grams.",
+      "edit_portion_multiplier_body": "Enter a multiplier (e.g. 0.5 for half, 1.5 for 50% more)."
     },
     "menu": {
       "kicker": "MENU SCAN",

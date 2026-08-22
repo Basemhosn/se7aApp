@@ -11,6 +11,7 @@
     "continue": "متابعة",
     "save": "حفظ",
     "cancel": "إلغاء",
+    "apply": "تطبيق",
     "discard": "تجاهل",
     "loading": "جارٍ التحميل…",
     "saving": "جارٍ الحفظ…",
@@ -215,7 +216,10 @@
       "hidden_costs": "تكاليف خفية تم احتسابها",
       "couldnt_analyze": "تعذّر تحليل الصورة.",
       "pick_at_least_one_err": "اختر عنصرًا واحدًا على الأقل للتسجيل.",
-      "couldnt_save": "تعذّر الحفظ — حاول مجددًا."
+      "couldnt_save": "تعذّر الحفظ — حاول مجددًا.",
+      "edit_portion_title": "تعديل الكمية",
+      "edit_portion_grams_body": "حاليًا ~{{g}} جم. أدخل الوزن الفعلي بالجرام.",
+      "edit_portion_multiplier_body": "أدخل معامل (مثلاً 0.5 للنصف، 1.5 لزيادة 50%)."
     },
     "menu": {
       "kicker": "مسح القائمة",

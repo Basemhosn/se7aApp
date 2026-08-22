@@ -30,6 +30,10 @@ export default function PlateScan() {
   const [invisible, setInvisible] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [slot, setSlot] = useState<MealSlot>(slotForNow());
+  // Per-item portion overrides. Scale of 1 = as-scanned. Label overrides
+  // the portion_estimate string in both the UI and the ledger row so
+  // the user's edit is what gets persisted.
+  const [edits, setEdits] = useState<Record<number, { scale: number; label: string | null }>>({});
 
   const pickAndAnalyze = async (source: "camera" | "library") => {
     setErr("");
@@ -72,6 +76,7 @@ export default function PlateScan() {
       setConfidence(body.result.confidence);
       setInvisible(body.result.invisible_costs ?? []);
       setSelected(new Set(body.result.items.map((_, i) => i)));
+      setEdits({});
       setPhase("review");
     } catch (e) {
       if (e instanceof RateLimitedError) {
@@ -85,17 +90,90 @@ export default function PlateScan() {
     }
   };
 
+  const scaled = (it: PlateItem, i: number): PlateItem => {
+    const e = edits[i];
+    if (!e || e.scale === 1) return it;
+    const s = e.scale;
+    return {
+      ...it,
+      portion_estimate: e.label ?? it.portion_estimate,
+      kcal_low: Math.round(it.kcal_low * s),
+      kcal_high: Math.round(it.kcal_high * s),
+      protein_g_low: Math.round(it.protein_g_low * s * 10) / 10,
+      protein_g_high: Math.round(it.protein_g_high * s * 10) / 10,
+      carb_g_low: Math.round(it.carb_g_low * s * 10) / 10,
+      carb_g_high: Math.round(it.carb_g_high * s * 10) / 10,
+      fat_g_low: Math.round(it.fat_g_low * s * 10) / 10,
+      fat_g_high: Math.round(it.fat_g_high * s * 10) / 10,
+    };
+  };
+
+  const editPortion = (i: number) => {
+    const it = items[i];
+    if (!it) return;
+    const parsed = parsePortionGrams(it.portion_estimate);
+    const currentGrams = parsed !== null && edits[i]
+      ? Math.round(parsed * edits[i]!.scale)
+      : parsed;
+
+    if (parsed !== null) {
+      Alert.prompt(
+        t("scan.plate.edit_portion_title"),
+        t("scan.plate.edit_portion_grams_body", { g: parsed }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.save"),
+            onPress: (val) => {
+              const n = Number((val ?? "").trim());
+              if (!Number.isFinite(n) || n <= 0) return;
+              const scale = n / parsed;
+              setEdits((prev) => ({
+                ...prev,
+                [i]: { scale, label: `${Math.round(n)}g` },
+              }));
+            },
+          },
+        ],
+        "plain-text",
+        String(currentGrams ?? parsed)
+      );
+    } else {
+      Alert.prompt(
+        t("scan.plate.edit_portion_title"),
+        t("scan.plate.edit_portion_multiplier_body"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.apply"),
+            onPress: (val) => {
+              const n = Number((val ?? "").trim());
+              if (!Number.isFinite(n) || n <= 0) return;
+              setEdits((prev) => ({
+                ...prev,
+                [i]: { scale: n, label: null },
+              }));
+            },
+          },
+        ],
+        "plain-text",
+        String(edits[i]?.scale ?? 1)
+      );
+    }
+  };
+
   const totals = items.reduce(
     (acc, it, i) => {
       if (!selected.has(i)) return acc;
-      acc.kcal_low += it.kcal_low;
-      acc.kcal_high += it.kcal_high;
-      acc.protein_g_low += it.protein_g_low;
-      acc.protein_g_high += it.protein_g_high;
-      acc.carb_g_low += it.carb_g_low;
-      acc.carb_g_high += it.carb_g_high;
-      acc.fat_g_low += it.fat_g_low;
-      acc.fat_g_high += it.fat_g_high;
+      const s = scaled(it, i);
+      acc.kcal_low += s.kcal_low;
+      acc.kcal_high += s.kcal_high;
+      acc.protein_g_low += s.protein_g_low;
+      acc.protein_g_high += s.protein_g_high;
+      acc.carb_g_low += s.carb_g_low;
+      acc.carb_g_high += s.carb_g_high;
+      acc.fat_g_low += s.fat_g_low;
+      acc.fat_g_high += s.fat_g_high;
       return acc;
     },
     {
@@ -128,13 +206,18 @@ export default function PlateScan() {
     setPhase("saving");
     setErr("");
     try {
+      // Persist the scaled items so the user's grammage edits stick.
+      const scaledPicked = items
+        .map((it, i) => ({ it: scaled(it, i), i }))
+        .filter((x) => selected.has(x.i))
+        .map((x) => ({ ...x.it, confidence }));
       await api("/api/ledger/add", {
         method: "POST",
         body: JSON.stringify({
           scan_id: scanId,
           source: "plate_scan",
           meal_slot: slot,
-          items: picked.map((it) => ({ ...it, confidence })),
+          items: scaledPicked,
         }),
       });
       markDayDirty();
@@ -233,8 +316,10 @@ export default function PlateScan() {
           <Text style={styles.sub}>
             {t("scan.plate.what_we_see_hint")}
           </Text>
-          {items.map((it, i) => {
+          {items.map((raw, i) => {
             const on = selected.has(i);
+            const it = scaled(raw, i);
+            const isEdited = !!edits[i] && edits[i]!.scale !== 1;
             return (
               <Pressable
                 key={i}
@@ -247,7 +332,23 @@ export default function PlateScan() {
                 <View style={styles.itemContent}>
                   <Text style={styles.itemName}>{it.name}</Text>
                   {!!it.portion_estimate && (
-                    <Text style={styles.itemPortion}>{it.portion_estimate}</Text>
+                    <Pressable
+                      onPress={() => editPortion(i)}
+                      hitSlop={8}
+                      style={styles.portionRow}
+                    >
+                      <Text style={styles.itemPortion}>
+                        {it.portion_estimate}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.portionEditHint,
+                          isEdited && styles.portionEditHintActive,
+                        ]}
+                      >
+                        {isEdited ? "✎ edited" : "✎ edit"}
+                      </Text>
+                    </Pressable>
                   )}
                   <Text style={styles.itemKcal}>
                     {it.kcal_low}–{it.kcal_high}
@@ -305,6 +406,22 @@ function slotForNow(): MealSlot {
   if (h < 16) return "lunch";
   if (h < 21) return "dinner";
   return "snack";
+}
+
+/**
+ * Extract a leading grams value from the AI's portion_estimate string
+ * ("180g grilled chicken", "180 g", "180 grams", "1.5 kg"). Returns
+ * null when the portion is described in cups/tbsp/pieces/servings —
+ * those go through the multiplier prompt instead. kg is normalized
+ * to g so the user always edits in grams.
+ */
+function parsePortionGrams(portion: string): number | null {
+  const trimmed = portion.trim();
+  const m = /^(\d+(?:\.\d+)?)\s*(kg|g|grams?)\b/i.exec(trimmed);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return /^kg$/i.test(m[2]!) ? Math.round(n * 1000) : Math.round(n);
 }
 
 function fmt(n: number): string {
@@ -378,6 +495,27 @@ const styles = StyleSheet.create({
   itemContent: { flex: 1, gap: 2 },
   itemName: { fontFamily: font.body, fontSize: 15, color: colors.ink },
   itemPortion: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
+  portionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexWrap: "wrap",
+  },
+  portionEditHint: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 0.6,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  portionEditHintActive: {
+    color: colors.gold,
+    borderColor: colors.gold,
+  },
   itemKcal: {
     fontFamily: font.displayBold,
     fontSize: 20,
