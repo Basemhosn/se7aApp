@@ -235,7 +235,13 @@
       "cta_pick_dish": "اختر طبقًا للتسجيل",
       "cta_scan_another": "امسح أخرى",
       "couldnt_read": "تعذّر قراءة القائمة.",
-      "couldnt_save": "تعذّر الحفظ — حاول مجددًا."
+      "couldnt_save": "تعذّر الحفظ — حاول مجددًا.",
+      "tap_to_name": "اضغط لتسمية المطعم",
+      "restaurant_prompt_title": "اسم المطعم",
+      "restaurant_prompt_body": "يُستخدم لتذكّر الأطباق بين الزيارات. حالة الأحرف لا تهم.",
+      "past_dishes_kicker": "زرت هنا · {{count}} مرات",
+      "past_dishes_sub": "اضغط أي طبق سبق أن تناولته لتسجيله مجددًا.",
+      "past_meta": "سُجّل {{count}}× · آخر مرة {{when}}"
     },
     "body": {
       "kicker": "فحص الجسم",

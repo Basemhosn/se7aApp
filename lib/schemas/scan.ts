@@ -66,6 +66,10 @@ export const ledgerAddSchema = z.object({
   scan_id: z.string().uuid().optional(),
   source: z.enum(["plate_scan", "menu_scan", "manual", "barcode"]),
   meal_slot: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
+  // Restaurant tag applied to every item in this write. Optional so
+  // home meals + manual logs skip it. Empty string coerces to null so
+  // the client can clear the field.
+  restaurant_name: z.string().trim().max(140).nullable().optional(),
   items: z.array(plateItemSchema.extend({
     confidence: z.enum(["low", "medium", "high"]).optional(),
   })).min(1).max(15),

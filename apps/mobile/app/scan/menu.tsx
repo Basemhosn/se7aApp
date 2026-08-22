@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
@@ -24,6 +25,27 @@ import type {
   MenuScanResponse,
 } from "@/types";
 
+interface PastDish {
+  name: string;
+  portion_estimate: string | null;
+  kcal_low: number;
+  kcal_high: number;
+  protein_g_low: number;
+  protein_g_high: number;
+  carb_g_low: number;
+  carb_g_high: number;
+  fat_g_low: number;
+  fat_g_high: number;
+  times_logged: number;
+  last_logged_at: string;
+}
+
+interface PastDishesResponse {
+  restaurant: string | null;
+  dishes: PastDish[];
+  total_visits?: number;
+}
+
 type Phase = "idle" | "analyzing" | "result" | "saving";
 
 export default function MenuScan() {
@@ -37,8 +59,34 @@ export default function MenuScan() {
   const [budget, setBudget] = useState<MenuScanBudget | null>(null);
   const [targetsKnown, setTargetsKnown] = useState(true);
   const [restaurantGuess, setRestaurantGuess] = useState<string | null>(null);
+  const [restaurantName, setRestaurantName] = useState<string | null>(null);
+  const [pastDishes, setPastDishes] = useState<PastDish[]>([]);
+  const [pastVisits, setPastVisits] = useState<number>(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Past-dish selections (keyed on the dish name, since past dishes
+  // don't share an index space with the AI's ranked dishes). Included
+  // in the same save.
+  const [pastSelected, setPastSelected] = useState<Set<string>>(new Set());
   const [slot, setSlot] = useState<MealSlot>(slotForNow());
+
+  const loadPastDishes = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setPastDishes([]);
+      setPastVisits(0);
+      return;
+    }
+    try {
+      const res = await api<PastDishesResponse>(
+        `/api/restaurants/dishes?name=${encodeURIComponent(trimmed)}&limit=6`
+      );
+      setPastDishes(res.dishes);
+      setPastVisits(res.total_visits ?? 0);
+    } catch {
+      setPastDishes([]);
+      setPastVisits(0);
+    }
+  }, []);
 
   const pickAndAnalyze = async (source: "camera" | "library") => {
     setErr("");
@@ -76,9 +124,16 @@ export default function MenuScan() {
       setConfidence(body.result.confidence);
       setBudget(body.budget);
       setTargetsKnown(body.targets_known);
-      setRestaurantGuess(body.result.restaurant_guess ?? null);
+      const guess = body.result.restaurant_guess ?? null;
+      setRestaurantGuess(guess);
+      setRestaurantName(guess);
       setSelected(new Set());
+      setPastSelected(new Set());
       setPhase("result");
+      // Fire-and-forget: if the AI guessed a restaurant, look up past
+      // dishes so the "you liked here last time" section renders as
+      // soon as the review appears.
+      if (guess) loadPastDishes(guess);
     } catch (e) {
       if (e instanceof ProRequiredError) {
         router.push({
@@ -106,9 +161,47 @@ export default function MenuScan() {
     setDishes([]);
     setBudget(null);
     setRestaurantGuess(null);
+    setRestaurantName(null);
+    setPastDishes([]);
+    setPastVisits(0);
     setSelected(new Set());
+    setPastSelected(new Set());
     setErr("");
   };
+
+  const editRestaurantName = () => {
+    Alert.prompt(
+      t("scan.menu.restaurant_prompt_title"),
+      t("scan.menu.restaurant_prompt_body"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.save"),
+          onPress: (val) => {
+            const v = (val ?? "").trim();
+            const next = v.length > 0 ? v : null;
+            setRestaurantName(next);
+            if (next) loadPastDishes(next);
+            else {
+              setPastDishes([]);
+              setPastVisits(0);
+            }
+          },
+        },
+      ],
+      "plain-text",
+      restaurantName ?? ""
+    );
+  };
+
+  const togglePast = (name: string) =>
+    setPastSelected((s) => {
+      const n = new Set(s);
+      const key = name.toLowerCase();
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
 
   const toggle = (i: number) =>
     setSelected((s) => {
@@ -121,29 +214,50 @@ export default function MenuScan() {
   const save = async () => {
     if (!scanId) return;
     const picked = dishes.filter((_, i) => selected.has(i));
-    if (picked.length === 0) return;
+    const pickedPast = pastDishes.filter((d) =>
+      pastSelected.has(d.name.toLowerCase())
+    );
+    const totalPicked = picked.length + pickedPast.length;
+    if (totalPicked === 0) return;
     setPhase("saving");
     setErr("");
     try {
+      const items = [
+        ...picked.map((d) => ({
+          name: d.name,
+          portion_estimate: d.description ?? null,
+          kcal_low: d.kcal_low,
+          kcal_high: d.kcal_high,
+          protein_g_low: d.protein_g_low,
+          protein_g_high: d.protein_g_high,
+          carb_g_low: d.carb_g_low,
+          carb_g_high: d.carb_g_high,
+          fat_g_low: d.fat_g_low,
+          fat_g_high: d.fat_g_high,
+          confidence,
+        })),
+        ...pickedPast.map((d) => ({
+          name: d.name,
+          portion_estimate: d.portion_estimate,
+          kcal_low: d.kcal_low,
+          kcal_high: d.kcal_high,
+          protein_g_low: d.protein_g_low,
+          protein_g_high: d.protein_g_high,
+          carb_g_low: d.carb_g_low,
+          carb_g_high: d.carb_g_high,
+          fat_g_low: d.fat_g_low,
+          fat_g_high: d.fat_g_high,
+          confidence: "medium" as const,
+        })),
+      ];
       await api("/api/ledger/add", {
         method: "POST",
         body: JSON.stringify({
           scan_id: scanId,
           source: "menu_scan",
           meal_slot: slot,
-          items: picked.map((d) => ({
-            name: d.name,
-            portion_estimate: d.description ?? null,
-            kcal_low: d.kcal_low,
-            kcal_high: d.kcal_high,
-            protein_g_low: d.protein_g_low,
-            protein_g_high: d.protein_g_high,
-            carb_g_low: d.carb_g_low,
-            carb_g_high: d.carb_g_high,
-            fat_g_low: d.fat_g_low,
-            fat_g_high: d.fat_g_high,
-            confidence,
-          })),
+          restaurant_name: restaurantName ?? null,
+          items,
         }),
       });
       markDayDirty();
@@ -163,6 +277,13 @@ export default function MenuScan() {
     },
     { kcal_low: 0, kcal_high: 0 }
   );
+  for (const d of pastDishes) {
+    if (pastSelected.has(d.name.toLowerCase())) {
+      totals.kcal_low += d.kcal_low;
+      totals.kcal_high += d.kcal_high;
+    }
+  }
+  const totalSelected = selected.size + pastSelected.size;
 
   const orders = dishes.map((d, i) => ({ d, i })).filter((x) => x.d.verdict === "order");
   const considers = dishes.map((d, i) => ({ d, i })).filter((x) => x.d.verdict === "consider");
@@ -189,10 +310,10 @@ export default function MenuScan() {
           label={
             phase === "saving"
               ? t("common.saving")
-              : selected.size === 0
+              : totalSelected === 0
                 ? t("scan.menu.cta_pick_dish")
                 : t("scan.menu.cta_log_to", {
-                    count: selected.size,
+                    count: totalSelected,
                     slot: t(`common.meal_slot.${slot}`),
                     low: totals.kcal_low,
                     high: totals.kcal_high,
@@ -200,7 +321,7 @@ export default function MenuScan() {
           }
           onPress={save}
           loading={phase === "saving"}
-          disabled={selected.size === 0}
+          disabled={totalSelected === 0}
         />
         <Btn
           label={t("scan.menu.cta_scan_another")}
@@ -247,11 +368,63 @@ export default function MenuScan() {
             )}
             <View style={{ flex: 1 }}>
               <ConfidencePill level={confidence} />
-              {restaurantGuess && (
-                <Text style={[styles.dim, { marginTop: 4 }]}>{restaurantGuess}</Text>
-              )}
+              <Pressable
+                onPress={editRestaurantName}
+                hitSlop={6}
+                style={styles.restaurantRow}
+              >
+                <Ionicons name="storefront" size={12} color={colors.dim} />
+                <Text style={styles.dim} numberOfLines={1}>
+                  {restaurantName ?? t("scan.menu.tap_to_name")}
+                </Text>
+                <Text style={styles.restaurantEditHint}>✎</Text>
+              </Pressable>
             </View>
           </View>
+
+          {pastDishes.length > 0 && (
+            <View style={styles.pastCard}>
+              <Text style={styles.pastKicker}>
+                {t("scan.menu.past_dishes_kicker", { count: pastVisits })}
+              </Text>
+              <Text style={styles.pastSub}>
+                {t("scan.menu.past_dishes_sub")}
+              </Text>
+              {pastDishes.map((d) => {
+                const key = d.name.toLowerCase();
+                const on = pastSelected.has(key);
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => togglePast(d.name)}
+                    style={[styles.dish, on && styles.dishOn]}
+                  >
+                    <View
+                      style={[styles.checkbox, on && styles.checkboxOn]}
+                    >
+                      {on && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.dishName}>{d.name}</Text>
+                      <Text style={styles.dishKcal}>
+                        {d.kcal_low}–{d.kcal_high}
+                        <Text style={styles.dishKcalUnit}>
+                          {" "}
+                          {t("common.kcal")}
+                        </Text>
+                      </Text>
+                      <Text style={styles.dishReason}>
+                        {t("scan.menu.past_meta", {
+                          count: d.times_logged,
+                          when: formatRelativeDate(d.last_logged_at),
+                        })}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
           <View style={styles.budget}>
             <Text style={styles.kicker}>
@@ -358,6 +531,20 @@ function slotForNow(): MealSlot {
   return "snack";
 }
 
+function formatRelativeDate(iso: string): string {
+  const now = new Date();
+  const then = new Date(iso);
+  const diffDays = Math.floor(
+    (now.getTime() - then.getTime()) / 86_400_000
+  );
+  if (diffDays < 1) return "today";
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
+
 function fmt(n: number): string {
   if (n >= 100) return String(Math.round(n));
   return String(Math.round(n * 10) / 10);
@@ -409,6 +596,39 @@ const styles = StyleSheet.create({
   },
   budgetMain: { fontFamily: font.displayBold, fontSize: 22, color: colors.gold, marginTop: 4 },
   budgetMacros: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
+  restaurantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    flexShrink: 1,
+  },
+  restaurantEditHint: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    marginLeft: 4,
+  },
+  pastCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  pastKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  pastSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginBottom: 4,
+  },
   sectionH: { fontFamily: font.displayBold, fontSize: 17 },
   sectionCount: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
   dish: {

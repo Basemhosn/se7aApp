@@ -19,7 +19,9 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const { scan_id, source, meal_slot, items } = parsed.data;
+  const { scan_id, source, meal_slot, items, restaurant_name } = parsed.data;
+  const normalizedRestaurant =
+    restaurant_name && restaurant_name.length > 0 ? restaurant_name : null;
 
   // If a scan_id is provided, ensure it belongs to this user before
   // letting them attach meal_items to it.
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
     fat_g_low: it.fat_g_low,
     fat_g_high: it.fat_g_high,
     confidence: it.confidence ?? null,
+    restaurant_name: normalizedRestaurant,
   }));
 
   const { data: inserted, error } = await supabase

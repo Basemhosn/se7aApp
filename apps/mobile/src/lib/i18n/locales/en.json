@@ -235,7 +235,13 @@
       "cta_pick_dish": "Pick a dish to log",
       "cta_scan_another": "Scan another",
       "couldnt_read": "Couldn't read the menu.",
-      "couldnt_save": "Couldn't save — try again."
+      "couldnt_save": "Couldn't save — try again.",
+      "tap_to_name": "tap to name this restaurant",
+      "restaurant_prompt_title": "Restaurant name",
+      "restaurant_prompt_body": "Used to remember dishes across visits. Case doesn't matter.",
+      "past_dishes_kicker": "YOU'VE BEEN HERE · {{count}} VISITS",
+      "past_dishes_sub": "Tap any dish you had before to log it again.",
+      "past_meta": "logged {{count}}× · last {{when}}"
     },
     "body": {
       "kicker": "BODY SCAN",
