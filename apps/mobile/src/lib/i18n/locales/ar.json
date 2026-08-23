@@ -482,6 +482,56 @@
       "meta": "{{days}} أيام / أسبوع · {{exp}} · {{eq}}"
     }
   },
+  "progress_cards": {
+    "projection": {
+      "title": "الإسقاط",
+      "sub_losing": "تخسر حالياً {{rate}} كجم/أسبوع من {{weight}} كجم. النطاق المظلل = مجال 95%.",
+      "sub_gaining": "تكسب حالياً {{rate}} كجم/أسبوع من {{weight}} كجم. النطاق المظلل = مجال 95%.",
+      "sub_holding": "الوزن ثابت حالياً عند {{weight}} كجم. النطاق المظلل = مجال 95%.",
+      "sub_losing_no_weight": "تخسر حالياً {{rate}} كجم/أسبوع. النطاق المظلل = مجال 95%.",
+      "sub_gaining_no_weight": "تكسب حالياً {{rate}} كجم/أسبوع. النطاق المظلل = مجال 95%.",
+      "sub_holding_no_weight": "الوزن ثابت حالياً. النطاق المظلل = مجال 95%.",
+      "stat_pace": "الوتيرة",
+      "stat_pace_unit": "كجم/أسبوع",
+      "stat_r2": "R²",
+      "stat_r2_unit": "دقة",
+      "stat_on_pace": "الالتزام",
+      "stat_eta": "المدة المتوقعة",
+      "stat_eta_unit": "أسبوع",
+      "target_label": "وزن الهدف (اختياري)",
+      "target_placeholder": "مثلاً 78",
+      "target_cta_save": "حدد الهدف",
+      "target_cta_saving": "جاري الحفظ…"
+    },
+    "top_foods": {
+      "title": "الأطعمة التي تحرك {{macro}}",
+      "sub": "أعلى المساهمين خلال آخر {{days}} يوم.",
+      "empty": "لا توجد بيانات كافية بعد — سجّل بضع وجبات وعد لاحقاً.",
+      "row_meta": "{{count}}× · {{low}}–{{high}} {{unit}} لكل حصة",
+      "share": "الحصة",
+      "macro_calories": "السعرات",
+      "macro_protein": "البروتين",
+      "macro_carbs": "الكربوهيدرات",
+      "macro_fat": "الدهون"
+    },
+    "nutrients": {
+      "title": "العناصر الغذائية",
+      "sub": "المتوسط اليومي لآخر {{days}} يوم.",
+      "empty": "لا شيء مسجل بعد — سجّل بضع وجبات وعد لاحقاً.",
+      "col_nutrient": "العنصر",
+      "col_avg": "المتوسط اليومي",
+      "col_target": "الهدف",
+      "col_pct": "%",
+      "name_calories": "السعرات",
+      "name_protein": "البروتين",
+      "name_carbs": "الكربوهيدرات",
+      "name_fat": "الدهون",
+      "name_fiber": "الألياف",
+      "name_sugar": "السكر",
+      "name_sodium": "الصوديوم",
+      "name_sat_fat": "دهون مشبعة"
+    }
+  },
   "insights": {
     "kicker": "الأنماط",
     "title": "أنماط لاحظها SE7A",

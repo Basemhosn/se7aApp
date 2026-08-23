@@ -307,20 +307,22 @@ export default function Progress() {
 
       {projection && !projection.insufficient && projection.regression && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Projection</Text>
+          <Text style={styles.cardTitle}>
+            {t("progress_cards.projection.title")}
+          </Text>
           <Text style={styles.cardSub}>
-            {formatProjectionSub(projection)}
+            {formatProjectionSub(projection, t)}
           </Text>
           <View style={{ marginTop: spacing.sm }}>
             <ProjectionChart data={projection} />
           </View>
           <View style={styles.projStatsRow}>
             <ProjStat
-              label="PACE"
+              label={t("progress_cards.projection.stat_pace")}
               value={`${
                 projection.regression.slope_kg_per_week > 0 ? "+" : ""
               }${projection.regression.slope_kg_per_week.toFixed(2)}`}
-              unit="kg/wk"
+              unit={t("progress_cards.projection.stat_pace_unit")}
               tint={
                 projection.regression.slope_kg_per_week === 0
                   ? colors.dim
@@ -330,14 +332,14 @@ export default function Progress() {
               }
             />
             <ProjStat
-              label="R²"
+              label={t("progress_cards.projection.stat_r2")}
               value={projection.regression.r_squared.toFixed(2)}
-              unit="fit"
+              unit={t("progress_cards.projection.stat_r2_unit")}
               tint={colors.ink}
             />
             {projection.goal.on_pace_pct != null && (
               <ProjStat
-                label="ON PACE"
+                label={t("progress_cards.projection.stat_on_pace")}
                 value={`${projection.goal.on_pace_pct}`}
                 unit="%"
                 tint={
@@ -351,28 +353,34 @@ export default function Progress() {
             )}
             {projection.goal.eta_days != null && (
               <ProjStat
-                label="ETA"
+                label={t("progress_cards.projection.stat_eta")}
                 value={String(Math.round(projection.goal.eta_days / 7))}
-                unit="wks"
+                unit={t("progress_cards.projection.stat_eta_unit")}
                 tint={colors.mint}
               />
             )}
           </View>
           <View style={styles.goalRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Target weight (optional)</Text>
+              <Text style={styles.label}>
+                {t("progress_cards.projection.target_label")}
+              </Text>
               <TextInput
                 value={goalWeightInput}
                 onChangeText={setGoalWeightInput}
                 keyboardType="numeric"
-                placeholder="e.g. 78"
+                placeholder={t("progress_cards.projection.target_placeholder")}
                 placeholderTextColor={colors.dim}
                 style={styles.input}
               />
             </View>
             <View style={{ justifyContent: "flex-end" }}>
               <Btn
-                label={savingGoal ? "Saving…" : "Set target"}
+                label={
+                  savingGoal
+                    ? t("progress_cards.projection.target_cta_saving")
+                    : t("progress_cards.projection.target_cta_save")
+                }
                 onPress={saveGoalWeight}
                 disabled={savingGoal}
                 variant="ghost"
@@ -626,12 +634,12 @@ interface TopFoodsResponse {
 
 const TOP_MACRO_META: Record<
   TopFoodsMacro,
-  { label: string; tint: string }
+  { labelKey: string; tint: string }
 > = {
-  kcal: { label: "Calories", tint: colors.gold },
-  protein: { label: "Protein", tint: colors.mint },
-  carb: { label: "Carbs", tint: colors.coral },
-  fat: { label: "Fat", tint: "#8b7dd6" },
+  kcal: { labelKey: "progress_cards.top_foods.macro_calories", tint: colors.gold },
+  protein: { labelKey: "progress_cards.top_foods.macro_protein", tint: colors.mint },
+  carb: { labelKey: "progress_cards.top_foods.macro_carbs", tint: colors.coral },
+  fat: { labelKey: "progress_cards.top_foods.macro_fat", tint: "#8b7dd6" },
 };
 
 /**
@@ -640,6 +648,7 @@ const TOP_MACRO_META: Record<
  * the offenders that match the trend they're looking at.
  */
 function TopFoods({ days }: { days: number }) {
+  const { t } = useTranslation();
   const [macro, setMacro] = useState<TopFoodsMacro>("kcal");
   const [data, setData] = useState<TopFoodsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -665,16 +674,19 @@ function TopFoods({ days }: { days: number }) {
   }, [days, macro]);
 
   const meta = TOP_MACRO_META[macro];
+  const macroLabel = t(meta.labelKey);
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHead}>
         <Text style={styles.cardTitle}>
-          Foods driving your {meta.label.toLowerCase()}
+          {t("progress_cards.top_foods.title", {
+            macro: macroLabel.toLowerCase(),
+          })}
         </Text>
       </View>
       <Text style={styles.cardSub}>
-        Highest contributors over the last {days} days.
+        {t("progress_cards.top_foods.sub", { days })}
       </Text>
       <View style={styles.rangeRow}>
         {(Object.keys(TOP_MACRO_META) as TopFoodsMacro[]).map((m) => (
@@ -689,7 +701,7 @@ function TopFoods({ days }: { days: number }) {
                 macro === m && styles.rangeTextOn,
               ]}
             >
-              {TOP_MACRO_META[m].label.toUpperCase()}
+              {t(TOP_MACRO_META[m].labelKey).toUpperCase()}
             </Text>
           </Pressable>
         ))}
@@ -701,7 +713,7 @@ function TopFoods({ days }: { days: number }) {
         />
       ) : !data || data.foods.length === 0 ? (
         <Text style={styles.topFoodsEmpty}>
-          Not enough logged data yet — log a few meals and check back.
+          {t("progress_cards.top_foods.empty")}
         </Text>
       ) : (
         <>
@@ -717,8 +729,12 @@ function TopFoods({ days }: { days: number }) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.topFoodName}>{f.name}</Text>
                 <Text style={styles.topFoodMeta}>
-                  {f.times_logged}× · {Math.round(f.avg_per_serving_low)}–
-                  {Math.round(f.avg_per_serving_high)} {data.unit} per serving
+                  {t("progress_cards.top_foods.row_meta", {
+                    count: f.times_logged,
+                    low: Math.round(f.avg_per_serving_low),
+                    high: Math.round(f.avg_per_serving_high),
+                    unit: data.unit,
+                  })}
                 </Text>
               </View>
               <View style={styles.topFoodShare}>
@@ -727,7 +743,9 @@ function TopFoods({ days }: { days: number }) {
                 >
                   {f.share_pct}%
                 </Text>
-                <Text style={styles.topFoodShareUnit}>share</Text>
+                <Text style={styles.topFoodShareUnit}>
+                  {t("progress_cards.top_foods.share")}
+                </Text>
               </View>
             </View>
           ))}
@@ -762,8 +780,26 @@ interface NutrientsResponse {
  * as "—" so a legacy-only week doesn't misread as a real zero intake.
  */
 function Nutrients({ days }: { days: number }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<NutrientsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Localized nutrient labels by key — falls back to the server label
+  // when a nutrient we don't have a translation for shows up (future-
+  // proofs the endpoint adding new nutrients without a mobile bump).
+  const nutrientLabel = (key: string, fallback: string): string => {
+    const map: Record<string, string> = {
+      kcal: t("progress_cards.nutrients.name_calories"),
+      protein_g: t("progress_cards.nutrients.name_protein"),
+      carb_g: t("progress_cards.nutrients.name_carbs"),
+      fat_g: t("progress_cards.nutrients.name_fat"),
+      fiber_g: t("progress_cards.nutrients.name_fiber"),
+      sugar_g: t("progress_cards.nutrients.name_sugar"),
+      sodium_mg: t("progress_cards.nutrients.name_sodium"),
+      saturated_fat_g: t("progress_cards.nutrients.name_sat_fat"),
+    };
+    return map[key] ?? fallback;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -785,9 +821,11 @@ function Nutrients({ days }: { days: number }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Nutrients</Text>
+      <Text style={styles.cardTitle}>
+        {t("progress_cards.nutrients.title")}
+      </Text>
       <Text style={styles.cardSub}>
-        Daily average over the last {days} days.
+        {t("progress_cards.nutrients.sub", { days })}
       </Text>
       {loading ? (
         <ActivityIndicator
@@ -796,17 +834,23 @@ function Nutrients({ days }: { days: number }) {
         />
       ) : !data || data.nutrients.length === 0 ? (
         <Text style={styles.topFoodsEmpty}>
-          Nothing tracked yet — log a few meals and check back.
+          {t("progress_cards.nutrients.empty")}
         </Text>
       ) : (
         <>
           <View style={styles.nutrientHeaderRow}>
             <Text style={[styles.nutrientHeaderCell, { flex: 2 }]}>
-              NUTRIENT
+              {t("progress_cards.nutrients.col_nutrient")}
             </Text>
-            <Text style={styles.nutrientHeaderCell}>DAILY AVG</Text>
-            <Text style={styles.nutrientHeaderCell}>TARGET</Text>
-            <Text style={styles.nutrientHeaderCell}>% </Text>
+            <Text style={styles.nutrientHeaderCell}>
+              {t("progress_cards.nutrients.col_avg")}
+            </Text>
+            <Text style={styles.nutrientHeaderCell}>
+              {t("progress_cards.nutrients.col_target")}
+            </Text>
+            <Text style={styles.nutrientHeaderCell}>
+              {t("progress_cards.nutrients.col_pct")}
+            </Text>
           </View>
           {data.nutrients.map((n) => {
             const hasData = n.avg_high > 0;
@@ -829,7 +873,7 @@ function Nutrients({ days }: { days: number }) {
             return (
               <View key={n.key} style={styles.nutrientRow}>
                 <Text style={[styles.nutrientName, { flex: 2 }]}>
-                  {n.label}
+                  {nutrientLabel(n.key, n.label)}
                 </Text>
                 <Text style={[styles.nutrientAvg, { color: tint }]}>
                   {hasData
@@ -880,20 +924,23 @@ function ProjStat({
   );
 }
 
-function formatProjectionSub(p: ProjectionResponse): string {
-  const dir =
-    p.regression && p.regression.slope_kg_per_week < -0.05
-      ? "losing"
-      : p.regression && p.regression.slope_kg_per_week > 0.05
-        ? "gaining"
-        : "holding steady at";
+function formatProjectionSub(
+  p: ProjectionResponse,
+  t: (key: string, opts?: Record<string, string | number>) => string
+): string {
+  const slope = p.regression?.slope_kg_per_week ?? 0;
+  const dir: "losing" | "gaining" | "holding" =
+    slope < -0.05 ? "losing" : slope > 0.05 ? "gaining" : "holding";
   const currentKg = p.current?.weight_kg ?? null;
-  const rate =
-    p.regression && Math.abs(p.regression.slope_kg_per_week) >= 0.05
-      ? ` ${Math.abs(p.regression.slope_kg_per_week).toFixed(2)} kg/wk`
-      : "";
-  const anchor = currentKg !== null ? ` from ${currentKg} kg` : "";
-  return `Currently ${dir}${rate}${anchor}. Shaded band = 95% range.`;
+  const rate = Math.abs(slope).toFixed(2);
+  const key =
+    currentKg !== null
+      ? `progress_cards.projection.sub_${dir}`
+      : `progress_cards.projection.sub_${dir}_no_weight`;
+  // "holding" branch doesn't render {{rate}} — the copy is intentionally
+  // absent — but passing rate through is harmless because i18next skips
+  // unknown placeholders.
+  return t(key, { rate, weight: currentKg ?? 0 });
 }
 
 const styles = StyleSheet.create({

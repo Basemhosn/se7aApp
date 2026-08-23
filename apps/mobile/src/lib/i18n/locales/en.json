@@ -482,6 +482,56 @@
       "meta": "{{days}} days / week · {{exp}} · {{eq}}"
     }
   },
+  "progress_cards": {
+    "projection": {
+      "title": "Projection",
+      "sub_losing": "Currently losing {{rate}} kg/wk from {{weight}} kg. Shaded band = 95% range.",
+      "sub_gaining": "Currently gaining {{rate}} kg/wk from {{weight}} kg. Shaded band = 95% range.",
+      "sub_holding": "Currently holding steady at {{weight}} kg. Shaded band = 95% range.",
+      "sub_losing_no_weight": "Currently losing {{rate}} kg/wk. Shaded band = 95% range.",
+      "sub_gaining_no_weight": "Currently gaining {{rate}} kg/wk. Shaded band = 95% range.",
+      "sub_holding_no_weight": "Currently holding steady. Shaded band = 95% range.",
+      "stat_pace": "PACE",
+      "stat_pace_unit": "kg/wk",
+      "stat_r2": "R²",
+      "stat_r2_unit": "fit",
+      "stat_on_pace": "ON PACE",
+      "stat_eta": "ETA",
+      "stat_eta_unit": "wks",
+      "target_label": "Target weight (optional)",
+      "target_placeholder": "e.g. 78",
+      "target_cta_save": "Set target",
+      "target_cta_saving": "Saving…"
+    },
+    "top_foods": {
+      "title": "Foods driving your {{macro}}",
+      "sub": "Highest contributors over the last {{days}} days.",
+      "empty": "Not enough logged data yet — log a few meals and check back.",
+      "row_meta": "{{count}}× · {{low}}–{{high}} {{unit}} per serving",
+      "share": "share",
+      "macro_calories": "Calories",
+      "macro_protein": "Protein",
+      "macro_carbs": "Carbs",
+      "macro_fat": "Fat"
+    },
+    "nutrients": {
+      "title": "Nutrients",
+      "sub": "Daily average over the last {{days}} days.",
+      "empty": "Nothing tracked yet — log a few meals and check back.",
+      "col_nutrient": "NUTRIENT",
+      "col_avg": "DAILY AVG",
+      "col_target": "TARGET",
+      "col_pct": "%",
+      "name_calories": "Calories",
+      "name_protein": "Protein",
+      "name_carbs": "Carbs",
+      "name_fat": "Fat",
+      "name_fiber": "Fiber",
+      "name_sugar": "Sugar",
+      "name_sodium": "Sodium",
+      "name_sat_fat": "Sat fat"
+    }
+  },
   "insights": {
     "kicker": "INSIGHTS",
     "title": "Patterns SE7A noticed",
