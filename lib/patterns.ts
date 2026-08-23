@@ -32,7 +32,8 @@ export interface Pattern {
     | "fiber_sodium_days"
     | "ramadan_drift"
     | "cycle_phase_kcal_drift"
-    | "cycle_phase_workout_capacity";
+    | "cycle_phase_workout_capacity"
+    | "cycle_phase_micro_drift";
   severity: PatternSeverity;
   title: string;
   body: string;
@@ -601,6 +602,237 @@ export function detectCyclePhaseWorkoutCapacity(
       sessions_in_phase: perPhase[biggest.phase].length,
     },
   };
+}
+
+// ── Cycle-phase micronutrient drift ──────────────────────────────
+/**
+ * "Your luteal sodium averages 20% higher, sugar 25% higher — classic
+ * pre-menstrual cravings pattern." Buckets daily totals of sodium,
+ * sugar, fiber, and saturated fat by cycle phase; surfaces the
+ * biggest deviation as the headline and mentions any secondary
+ * signals in the same phase.
+ *
+ * Same double-gate + minimum-observations rules as the other cycle
+ * detectors. Same warning: this is biology + cravings, not moral
+ * failure. Copy leads with a "why" so users know they're not
+ * imagining it, then a "what to do" hint that's practical rather
+ * than prescriptive.
+ */
+type MicroKey = "sodium" | "sugar" | "fiber" | "sat_fat";
+
+interface MicroMealRow {
+  eaten_at: string;
+  sodium_mg_high: number | null;
+  sugar_g_high: number | null;
+  fiber_g_high: number | null;
+  saturated_fat_g_high: number | null;
+}
+
+export function detectCyclePhaseMicroDrift(
+  meals: MicroMealRow[],
+  prefs: Partial<CyclePrefs> | null | undefined,
+  periods: PeriodEntry[]
+): Pattern | null {
+  if (!prefs?.enabled || !prefs.share_with_coach) return null;
+  if (periods.length < 2) return null;
+  if (meals.length === 0) return null;
+
+  const avgCycle = averageCycleLength(
+    periods,
+    prefs.avg_cycle_length_days ?? 28
+  );
+  const avgPeriod = averagePeriodLength(
+    periods,
+    prefs.avg_period_length_days ?? 5
+  );
+  const sortedPeriods = [...periods].sort((a, b) =>
+    a.started_on.localeCompare(b.started_on)
+  );
+
+  // per day → per micronutrient totals + phase
+  const perDay = new Map<
+    string,
+    {
+      date: Date;
+      sodium: number;
+      sugar: number;
+      fiber: number;
+      sat_fat: number;
+    }
+  >();
+  for (const m of meals) {
+    const d = new Date(m.eaten_at);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const existing = perDay.get(key);
+    const sodium = Number(m.sodium_mg_high ?? 0);
+    const sugar = Number(m.sugar_g_high ?? 0);
+    const fiber = Number(m.fiber_g_high ?? 0);
+    const sat_fat = Number(m.saturated_fat_g_high ?? 0);
+    if (existing) {
+      existing.sodium += sodium;
+      existing.sugar += sugar;
+      existing.fiber += fiber;
+      existing.sat_fat += sat_fat;
+    } else {
+      perDay.set(key, { date: d, sodium, sugar, fiber, sat_fat });
+    }
+  }
+
+  // Bucket per phase per nutrient. Skip days with zero data for a
+  // nutrient (means the meals that day didn't have micros logged —
+  // averaging a zero in would tank the mean).
+  const perPhase: Record<CyclePhase, Record<MicroKey, number[]>> = {
+    menstrual: emptyMicroBuckets(),
+    follicular: emptyMicroBuckets(),
+    ovulation: emptyMicroBuckets(),
+    luteal: emptyMicroBuckets(),
+    unknown: emptyMicroBuckets(),
+  };
+
+  for (const v of perDay.values()) {
+    const iso = isoDay(v.date);
+    let applicable: PeriodEntry | null = null;
+    for (let i = sortedPeriods.length - 1; i >= 0; i--) {
+      if (sortedPeriods[i]!.started_on <= iso) {
+        applicable = sortedPeriods[i]!;
+        break;
+      }
+    }
+    if (!applicable) continue;
+    const cycleDay = daysBetween(applicable.started_on, iso) + 1;
+    if (cycleDay < 1 || cycleDay > avgCycle + 7) continue;
+    const phase = phaseForDay(cycleDay, avgCycle, avgPeriod);
+    if (v.sodium > 0) perPhase[phase].sodium.push(v.sodium);
+    if (v.sugar > 0) perPhase[phase].sugar.push(v.sugar);
+    if (v.fiber > 0) perPhase[phase].fiber.push(v.fiber);
+    if (v.sat_fat > 0) perPhase[phase].sat_fat.push(v.sat_fat);
+  }
+
+  // For each nutrient, compute per-phase averages (need ≥3 days in
+  // the phase) then find the biggest deviation from that nutrient's
+  // overall mean.
+  interface Signal {
+    nutrient: MicroKey;
+    phase: CyclePhase;
+    delta: number;
+    phase_avg: number;
+  }
+  const signals: Signal[] = [];
+  const nutrientKeys: MicroKey[] = ["sodium", "sugar", "fiber", "sat_fat"];
+  const phaseKeys: CyclePhase[] = [
+    "menstrual",
+    "follicular",
+    "ovulation",
+    "luteal",
+  ];
+
+  for (const n of nutrientKeys) {
+    const avgs = new Map<CyclePhase, number>();
+    for (const p of phaseKeys) {
+      const arr = perPhase[p][n];
+      if (arr.length < 3) continue;
+      avgs.set(p, arr.reduce((s, x) => s + x, 0) / arr.length);
+    }
+    if (avgs.size < 2) continue;
+    const overallMean =
+      [...avgs.values()].reduce((s, x) => s + x, 0) / avgs.size;
+    if (overallMean <= 0) continue;
+    for (const [phase, avg] of avgs) {
+      signals.push({
+        nutrient: n,
+        phase,
+        delta: (avg - overallMean) / overallMean,
+        phase_avg: avg,
+      });
+    }
+  }
+
+  if (signals.length === 0) return null;
+
+  // Headline = biggest absolute deviation
+  const headline = signals.reduce((best, s) =>
+    Math.abs(s.delta) > Math.abs(best.delta) ? s : best
+  );
+  if (Math.abs(headline.delta) < 0.15) return null;
+
+  // Secondary signals = same phase, different nutrient, |delta| ≥ 0.15
+  const secondaries = signals.filter(
+    (s) =>
+      s.phase === headline.phase &&
+      s.nutrient !== headline.nutrient &&
+      Math.abs(s.delta) >= 0.15
+  );
+
+  const phaseLabel =
+    headline.phase[0]!.toUpperCase() + headline.phase.slice(1);
+  const pct = Math.round(Math.abs(headline.delta) * 100);
+  const direction = headline.delta > 0 ? "higher" : "lower";
+
+  const title = `${phaseLabel} ${niceNutrient(headline.nutrient)} runs ${pct}% ${direction}`;
+  const body = microDriftBody(headline, secondaries);
+
+  return {
+    id: "cycle_phase_micro_drift",
+    severity: "info",
+    title,
+    body,
+    evidence: {
+      phase: headline.phase,
+      nutrient: headline.nutrient,
+      delta_pct: Math.round(headline.delta * 100),
+      phase_avg: Math.round(headline.phase_avg),
+      secondary_count: secondaries.length,
+    },
+  };
+}
+
+function emptyMicroBuckets(): Record<MicroKey, number[]> {
+  return { sodium: [], sugar: [], fiber: [], sat_fat: [] };
+}
+
+function niceNutrient(n: MicroKey): string {
+  return n === "sodium"
+    ? "sodium"
+    : n === "sugar"
+      ? "sugar"
+      : n === "fiber"
+        ? "fiber"
+        : "saturated fat";
+}
+
+function microDriftBody(
+  headline: {
+    nutrient: MicroKey;
+    phase: CyclePhase;
+    delta: number;
+  },
+  secondaries: {
+    nutrient: MicroKey;
+    delta: number;
+  }[]
+): string {
+  const secondaryText =
+    secondaries.length > 0
+      ? ` Also: ${secondaries
+          .map(
+            (s) =>
+              `${niceNutrient(s.nutrient)} ${s.delta > 0 ? "+" : ""}${Math.round(s.delta * 100)}%`
+          )
+          .join(", ")}.`
+      : "";
+
+  // Physiology + practical hint per phase.
+  if (
+    headline.phase === "luteal" &&
+    (headline.nutrient === "sodium" || headline.nutrient === "sugar") &&
+    headline.delta > 0
+  ) {
+    return `Late-luteal sodium + sugar cravings are a real physiological pattern — progesterone + serotonin shifts drive it. Front-loading a proper suhoor-style breakfast (protein + slow carbs) usually blunts the afternoon reach for salty/sweet.${secondaryText}`;
+  }
+  if (headline.phase === "menstrual" && headline.nutrient === "fiber" && headline.delta < 0) {
+    return `Fiber typically dips during the menstrual phase — comfort foods over greens. Iron losses are also higher this week, so leaning on lentils, spinach, or dates helps both.${secondaryText}`;
+  }
+  return `Worth noticing so it reads as biology rather than an adherence gap. Programming meals around the pattern usually works better than fighting it.${secondaryText}`;
 }
 
 /**

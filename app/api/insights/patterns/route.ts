@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
 import {
   detectCyclePhaseKcalDrift,
+  detectCyclePhaseMicroDrift,
   detectCyclePhaseWorkoutCapacity,
   detectDayOfWeekKcalBias,
   detectFiberSodiumDays,
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
       supabase
         .from("meal_items")
         .select(
-          "eaten_at, kcal_low, kcal_high, sodium_mg_high, fiber_g_high"
+          "eaten_at, kcal_low, kcal_high, sodium_mg_high, fiber_g_high, sugar_g_high, saturated_fat_g_high"
         )
         .eq("user_id", user.id)
         .gte("eaten_at", sinceIso),
@@ -155,6 +156,20 @@ export async function GET(request: Request) {
       workouts.map((w) => ({
         completed_at: w.completed_at as string,
         exercises: w.exercises as unknown,
+      })),
+      (profile?.cycle_prefs ?? null) as Partial<CyclePrefs> | null,
+      (periodsRes.data ?? []).map((p) => ({
+        started_on: String(p.started_on),
+        ended_on: p.ended_on ? String(p.ended_on) : null,
+      }))
+    ),
+    detectCyclePhaseMicroDrift(
+      meals.map((m) => ({
+        eaten_at: m.eaten_at as string,
+        sodium_mg_high: m.sodium_mg_high as number | null,
+        sugar_g_high: m.sugar_g_high as number | null,
+        fiber_g_high: m.fiber_g_high as number | null,
+        saturated_fat_g_high: m.saturated_fat_g_high as number | null,
       })),
       (profile?.cycle_prefs ?? null) as Partial<CyclePrefs> | null,
       (periodsRes.data ?? []).map((p) => ({
