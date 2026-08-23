@@ -12,6 +12,14 @@
  */
 
 import { isRamadanActiveForPrefs, type RamadanPrefs } from "./ramadan";
+import {
+  averageCycleLength,
+  averagePeriodLength,
+  phaseForDay,
+  type CyclePhase,
+  type CyclePrefs,
+  type PeriodEntry,
+} from "./cycle";
 
 export type PatternSeverity = "info" | "warn";
 
@@ -22,7 +30,8 @@ export interface Pattern {
     | "post_workout_sleep_drop"
     | "weekend_cardio_dip"
     | "fiber_sodium_days"
-    | "ramadan_drift";
+    | "ramadan_drift"
+    | "cycle_phase_kcal_drift";
   severity: PatternSeverity;
   title: string;
   body: string;
@@ -359,6 +368,156 @@ export function detectRamadanDrift(
       delta_pct: Math.round(deltaPct * 100),
     },
   };
+}
+
+// ── Cycle-phase kcal drift ────────────────────────────────────────
+/**
+ * "Your luteal phase averages 18% higher kcal than the rest of your
+ * cycle." Only runs when the user has explicitly opted into cycle
+ * tracking AND opted into sharing it with the coach — same gate the
+ * coach-context injection uses.
+ *
+ * Method:
+ *   1. Aggregate meals per calendar day (mid kcal)
+ *   2. For each day, find the most recent period start ON OR BEFORE
+ *      that day, compute cycle_day, map to phase via phaseForDay()
+ *   3. Bucket kcal averages by phase; require ≥3 days per phase
+ *   4. Compare each phase's average to the overall mean; flag the
+ *      biggest deviation ≥15%
+ *
+ * Copy is deliberately non-prescriptive. Cycle-phase kcal shifts are
+ * biology, not a behavior to fix — the point of surfacing it is so
+ * the user (and coach) can stop treating a normal luteal 200-kcal
+ * bump as an adherence failure.
+ *
+ * Severity always "info". Never warn — this is not a mistake.
+ */
+export function detectCyclePhaseKcalDrift(
+  meals: { eaten_at: string; kcal_low: number; kcal_high: number }[],
+  prefs: Partial<CyclePrefs> | null | undefined,
+  periods: PeriodEntry[]
+): Pattern | null {
+  if (!prefs?.enabled || !prefs.share_with_coach) return null;
+  if (periods.length < 2) return null;
+  if (meals.length === 0) return null;
+
+  const avgCycle = averageCycleLength(periods, prefs.avg_cycle_length_days ?? 28);
+  const avgPeriod = averagePeriodLength(
+    periods,
+    prefs.avg_period_length_days ?? 5
+  );
+
+  // Sort periods ASC so we can binary-search-ish for "most recent
+  // period on or before this day" cheaply.
+  const sortedPeriods = [...periods].sort((a, b) =>
+    a.started_on.localeCompare(b.started_on)
+  );
+
+  // Aggregate meals per calendar day.
+  const perDay = new Map<string, { mid: number; date: Date }>();
+  for (const m of meals) {
+    const d = new Date(m.eaten_at);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const mid = (Number(m.kcal_low) + Number(m.kcal_high)) / 2;
+    const existing = perDay.get(key);
+    if (existing) existing.mid += mid;
+    else perDay.set(key, { mid, date: d });
+  }
+
+  const perPhase: Record<CyclePhase, number[]> = {
+    menstrual: [],
+    follicular: [],
+    ovulation: [],
+    luteal: [],
+    unknown: [],
+  };
+  for (const v of perDay.values()) {
+    const iso = isoDay(v.date);
+    // Find last period start <= this day.
+    let applicable: PeriodEntry | null = null;
+    for (let i = sortedPeriods.length - 1; i >= 0; i--) {
+      if (sortedPeriods[i]!.started_on <= iso) {
+        applicable = sortedPeriods[i]!;
+        break;
+      }
+    }
+    if (!applicable) continue;
+    const cycleDay = daysBetween(applicable.started_on, iso) + 1;
+    // If we're more than avg_cycle + 7 days out, the user probably
+    // missed logging a period — don't confidently assign a phase.
+    if (cycleDay < 1 || cycleDay > avgCycle + 7) continue;
+    const phase = phaseForDay(cycleDay, avgCycle, avgPeriod);
+    perPhase[phase].push(v.mid);
+  }
+
+  const validPhases: CyclePhase[] = (
+    ["menstrual", "follicular", "ovulation", "luteal"] as const
+  ).filter((p) => perPhase[p].length >= 3);
+  if (validPhases.length < 2) return null;
+
+  const avgByPhase = new Map<CyclePhase, number>();
+  for (const p of validPhases) {
+    const arr = perPhase[p];
+    avgByPhase.set(p, arr.reduce((s, n) => s + n, 0) / arr.length);
+  }
+
+  const overallMean =
+    [...avgByPhase.values()].reduce((s, n) => s + n, 0) / avgByPhase.size;
+  if (overallMean <= 0) return null;
+
+  let biggest: { phase: CyclePhase; delta: number } | null = null;
+  for (const [phase, avg] of avgByPhase) {
+    const delta = (avg - overallMean) / overallMean;
+    if (!biggest || Math.abs(delta) > Math.abs(biggest.delta)) {
+      biggest = { phase, delta };
+    }
+  }
+  if (!biggest || Math.abs(biggest.delta) < 0.15) return null;
+
+  const pct = Math.round(Math.abs(biggest.delta) * 100);
+  const phaseLabel =
+    biggest.phase[0]!.toUpperCase() + biggest.phase.slice(1);
+  const direction = biggest.delta > 0 ? "higher" : "lower";
+
+  return {
+    id: "cycle_phase_kcal_drift",
+    severity: "info", // biology, not a mistake — never warn
+    title: `${phaseLabel} phase averages ${pct}% ${direction} kcal`,
+    body: cyclePhaseBody(biggest.phase, biggest.delta),
+    evidence: {
+      phase: biggest.phase,
+      phase_avg_kcal: Math.round(avgByPhase.get(biggest.phase)!),
+      overall_avg_kcal: Math.round(overallMean),
+      delta_pct: Math.round(biggest.delta * 100),
+      days_in_phase: perPhase[biggest.phase].length,
+    },
+  };
+}
+
+function cyclePhaseBody(phase: CyclePhase, delta: number): string {
+  const higher = delta > 0;
+  if (phase === "luteal" && higher) {
+    return "Normal luteal-phase pattern — basal metabolic rate rises slightly and hunger cues follow. An extra ~150–250 kcal here is usually the right call rather than fighting it.";
+  }
+  if (phase === "menstrual" && !higher) {
+    return "Appetite often dips during the menstrual phase. If energy feels flat, iron-forward meals help — not restriction.";
+  }
+  if (phase === "follicular" && higher) {
+    return "Follicular phase running high — usually driven by more training capacity + higher activity, not a behavior gap.";
+  }
+  return "Worth noticing so it doesn't read as an adherence problem when it's just biology.";
+}
+
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function daysBetween(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  const da = new Date(ay!, (am ?? 1) - 1, ad ?? 1).getTime();
+  const db = new Date(by!, (bm ?? 1) - 1, bd ?? 1).getTime();
+  return Math.round((db - da) / 86_400_000);
 }
 
 function fmtHM(min: number): string {
