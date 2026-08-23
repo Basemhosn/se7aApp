@@ -33,7 +33,8 @@ export interface Pattern {
     | "ramadan_drift"
     | "cycle_phase_kcal_drift"
     | "cycle_phase_workout_capacity"
-    | "cycle_phase_micro_drift";
+    | "cycle_phase_micro_drift"
+    | "cycle_phase_pr_clustering";
   severity: PatternSeverity;
   title: string;
   body: string;
@@ -782,6 +783,189 @@ export function detectCyclePhaseMicroDrift(
       delta_pct: Math.round(headline.delta * 100),
       phase_avg: Math.round(headline.phase_avg),
       secondary_count: secondaries.length,
+    },
+  };
+}
+
+// ── Cycle-phase PR clustering ────────────────────────────────────
+/**
+ * "6 of your last 9 PRs happened in your follicular window." Walks
+ * every session in chronological order, computes each set's
+ * estimated 1RM (Brzycki), and records a PR whenever a set exceeds
+ * the running max for that lift. Buckets PRs by cycle phase, then
+ * flags a phase whose PR rate (PRs / sessions in that phase) is
+ * >=1.5× the overall rate.
+ *
+ * Conservative gates because per-lift PR data is noisy at small
+ * sample:
+ *   - ≥8 total PRs across all lifts in the window
+ *   - ≥3 PRs in the phase being flagged
+ *   - Rate ratio ≥1.5 (not the 1.15 the other detectors use)
+ *
+ * Reports the top 3 lifts contributing to the phase's PR count so
+ * the user can see which movements are driving the cluster.
+ */
+export function detectCyclePhasePrClustering(
+  workouts: { completed_at: string; exercises: unknown }[],
+  prefs: Partial<CyclePrefs> | null | undefined,
+  periods: PeriodEntry[]
+): Pattern | null {
+  if (!prefs?.enabled || !prefs.share_with_coach) return null;
+  if (periods.length < 2) return null;
+  if (workouts.length < 8) return null;
+
+  const avgCycle = averageCycleLength(
+    periods,
+    prefs.avg_cycle_length_days ?? 28
+  );
+  const avgPeriod = averagePeriodLength(
+    periods,
+    prefs.avg_period_length_days ?? 5
+  );
+  const sortedPeriods = [...periods].sort((a, b) =>
+    a.started_on.localeCompare(b.started_on)
+  );
+
+  // Sort ASC so PR detection walks the timeline correctly.
+  const sortedWorkouts = [...workouts].sort(
+    (a, b) =>
+      new Date(a.completed_at).getTime() -
+      new Date(b.completed_at).getTime()
+  );
+
+  const runningMax = new Map<string, number>(); // exercise → best est_1RM
+  const prsByPhase: Record<CyclePhase, { exercise: string }[]> = {
+    menstrual: [],
+    follicular: [],
+    ovulation: [],
+    luteal: [],
+    unknown: [],
+  };
+  const sessionsByPhase: Record<CyclePhase, number> = {
+    menstrual: 0,
+    follicular: 0,
+    ovulation: 0,
+    luteal: 0,
+    unknown: 0,
+  };
+
+  for (const w of sortedWorkouts) {
+    const d = new Date(w.completed_at);
+    const iso = isoDay(d);
+    let applicable: PeriodEntry | null = null;
+    for (let i = sortedPeriods.length - 1; i >= 0; i--) {
+      if (sortedPeriods[i]!.started_on <= iso) {
+        applicable = sortedPeriods[i]!;
+        break;
+      }
+    }
+    if (!applicable) continue;
+    const cycleDay = daysBetween(applicable.started_on, iso) + 1;
+    if (cycleDay < 1 || cycleDay > avgCycle + 7) continue;
+    const phase = phaseForDay(cycleDay, avgCycle, avgPeriod);
+    if (phase === "unknown") continue;
+    sessionsByPhase[phase] += 1;
+
+    // Per-session best 1RM per lift, then compare to running max.
+    const sessionBest = new Map<string, number>();
+    if (!Array.isArray(w.exercises)) continue;
+    for (const ex of w.exercises as {
+      name?: string;
+      sets?: { weight_kg?: number; reps?: number }[];
+    }[]) {
+      const name = ex?.name?.trim();
+      if (!name) continue;
+      if (!Array.isArray(ex.sets)) continue;
+      for (const s of ex.sets) {
+        const weight = Number(s?.weight_kg);
+        const reps = Number(s?.reps);
+        if (!Number.isFinite(weight) || weight <= 0) continue;
+        if (!Number.isFinite(reps) || reps <= 0 || reps > 30) continue;
+        // Brzycki with 30-rep cap for stability at high-rep sets.
+        const est =
+          reps === 1 ? weight : weight * (36 / (37 - Math.min(reps, 30)));
+        if (!Number.isFinite(est)) continue;
+        const prev = sessionBest.get(name) ?? 0;
+        if (est > prev) sessionBest.set(name, est);
+      }
+    }
+
+    for (const [name, best] of sessionBest) {
+      const prev = runningMax.get(name) ?? 0;
+      // First-ever entry for a lift isn't a "PR" — it's just the
+      // starting baseline. Only count exceedances of an existing max.
+      if (prev === 0) {
+        runningMax.set(name, best);
+        continue;
+      }
+      if (best > prev) {
+        prsByPhase[phase].push({ exercise: name });
+        runningMax.set(name, best);
+      }
+    }
+  }
+
+  const totalPrs =
+    prsByPhase.menstrual.length +
+    prsByPhase.follicular.length +
+    prsByPhase.ovulation.length +
+    prsByPhase.luteal.length;
+  const totalSessions =
+    sessionsByPhase.menstrual +
+    sessionsByPhase.follicular +
+    sessionsByPhase.ovulation +
+    sessionsByPhase.luteal;
+  if (totalPrs < 8 || totalSessions === 0) return null;
+
+  const overallRate = totalPrs / totalSessions;
+  if (overallRate <= 0) return null;
+
+  let best: { phase: CyclePhase; ratio: number; prCount: number } | null =
+    null;
+  const phaseKeys: CyclePhase[] = [
+    "menstrual",
+    "follicular",
+    "ovulation",
+    "luteal",
+  ];
+  for (const p of phaseKeys) {
+    const sessions = sessionsByPhase[p];
+    const prs = prsByPhase[p].length;
+    if (sessions === 0 || prs < 3) continue;
+    const rate = prs / sessions;
+    const ratio = rate / overallRate;
+    if (!best || ratio > best.ratio) {
+      best = { phase: p, ratio, prCount: prs };
+    }
+  }
+  if (!best || best.ratio < 1.5) return null;
+
+  // Top 3 lifts contributing to this phase's PR count.
+  const perLiftCount = new Map<string, number>();
+  for (const pr of prsByPhase[best.phase]) {
+    perLiftCount.set(pr.exercise, (perLiftCount.get(pr.exercise) ?? 0) + 1);
+  }
+  const topLifts = [...perLiftCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, n]) => `${name} (${n})`)
+    .join(", ");
+
+  const phaseLabel =
+    best.phase[0]!.toUpperCase() + best.phase.slice(1);
+  const sharePct = Math.round((best.prCount / totalPrs) * 100);
+
+  return {
+    id: "cycle_phase_pr_clustering",
+    severity: "info",
+    title: `PRs cluster in your ${phaseLabel.toLowerCase()} window`,
+    body: `${best.prCount} of your last ${totalPrs} PRs (${sharePct}%) landed during the ${best.phase} phase — ${Math.round(best.ratio * 100)}% of the baseline rate. Top contributors: ${topLifts || "mixed lifts"}. Program heavy attempts to land in this window when you can.`,
+    evidence: {
+      phase: best.phase,
+      phase_prs: best.prCount,
+      total_prs: totalPrs,
+      rate_ratio_pct: Math.round(best.ratio * 100),
+      share_pct: sharePct,
     },
   };
 }

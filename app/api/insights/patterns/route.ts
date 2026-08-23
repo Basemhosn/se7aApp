@@ -3,6 +3,7 @@ import { getRouteClient } from "@/lib/supabase/server";
 import {
   detectCyclePhaseKcalDrift,
   detectCyclePhaseMicroDrift,
+  detectCyclePhasePrClustering,
   detectCyclePhaseWorkoutCapacity,
   detectDayOfWeekKcalBias,
   detectFiberSodiumDays,
@@ -170,6 +171,17 @@ export async function GET(request: Request) {
         sugar_g_high: m.sugar_g_high as number | null,
         fiber_g_high: m.fiber_g_high as number | null,
         saturated_fat_g_high: m.saturated_fat_g_high as number | null,
+      })),
+      (profile?.cycle_prefs ?? null) as Partial<CyclePrefs> | null,
+      (periodsRes.data ?? []).map((p) => ({
+        started_on: String(p.started_on),
+        ended_on: p.ended_on ? String(p.ended_on) : null,
+      }))
+    ),
+    detectCyclePhasePrClustering(
+      workouts.map((w) => ({
+        completed_at: w.completed_at as string,
+        exercises: w.exercises as unknown,
       })),
       (profile?.cycle_prefs ?? null) as Partial<CyclePrefs> | null,
       (periodsRes.data ?? []).map((p) => ({

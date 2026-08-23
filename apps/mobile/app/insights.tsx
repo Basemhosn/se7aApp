@@ -35,6 +35,7 @@ const ICON_FOR_ID: Record<string, keyof typeof Ionicons.glyphMap> = {
   cycle_phase_kcal_drift: "sync",
   cycle_phase_workout_capacity: "barbell",
   cycle_phase_micro_drift: "nutrition",
+  cycle_phase_pr_clustering: "trophy",
 };
 
 export default function Insights() {
