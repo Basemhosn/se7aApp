@@ -18,6 +18,17 @@ export const plateItemSchema = z.object({
   carb_g_high: z.number().min(0).max(600),
   fat_g_low: z.number().min(0).max(300),
   fat_g_high: z.number().min(0).max(400),
+  // Micronutrients — optional because legacy scans + manual entries
+  // don't have them, but the plate scan prompt (v2) is expected to
+  // emit these for every item.
+  sodium_mg_low: z.number().min(0).max(20000).optional(),
+  sodium_mg_high: z.number().min(0).max(20000).optional(),
+  fiber_g_low: z.number().min(0).max(100).optional(),
+  fiber_g_high: z.number().min(0).max(100).optional(),
+  sugar_g_low: z.number().min(0).max(500).optional(),
+  sugar_g_high: z.number().min(0).max(500).optional(),
+  saturated_fat_g_low: z.number().min(0).max(300).optional(),
+  saturated_fat_g_high: z.number().min(0).max(300).optional(),
 });
 
 export const plateScanResultSchema = z.object({
@@ -38,11 +49,25 @@ export type PlateScanResult = z.infer<typeof plateScanResultSchema>;
 export function normalizePlateScan(r: PlateScanResult): PlateScanResult {
   const fix = (lo: number, hi: number): [number, number] =>
     lo <= hi ? [lo, hi] : [hi, lo];
+  const fixOpt = (
+    lo: number | undefined,
+    hi: number | undefined
+  ): [number | undefined, number | undefined] => {
+    if (lo == null || hi == null) return [lo, hi];
+    return lo <= hi ? [lo, hi] : [hi, lo];
+  };
   r.items = r.items.map((it) => {
     const [kl, kh] = fix(it.kcal_low, it.kcal_high);
     const [pl, ph] = fix(it.protein_g_low, it.protein_g_high);
     const [cl, ch] = fix(it.carb_g_low, it.carb_g_high);
     const [fl, fh] = fix(it.fat_g_low, it.fat_g_high);
+    const [sodL, sodH] = fixOpt(it.sodium_mg_low, it.sodium_mg_high);
+    const [fibL, fibH] = fixOpt(it.fiber_g_low, it.fiber_g_high);
+    const [sugL, sugH] = fixOpt(it.sugar_g_low, it.sugar_g_high);
+    const [satL, satH] = fixOpt(
+      it.saturated_fat_g_low,
+      it.saturated_fat_g_high
+    );
     return {
       ...it,
       kcal_low: kl,
@@ -53,6 +78,14 @@ export function normalizePlateScan(r: PlateScanResult): PlateScanResult {
       carb_g_high: ch,
       fat_g_low: fl,
       fat_g_high: fh,
+      sodium_mg_low: sodL,
+      sodium_mg_high: sodH,
+      fiber_g_low: fibL,
+      fiber_g_high: fibH,
+      sugar_g_low: sugL,
+      sugar_g_high: sugH,
+      saturated_fat_g_low: satL,
+      saturated_fat_g_high: satH,
     };
   });
   return r;

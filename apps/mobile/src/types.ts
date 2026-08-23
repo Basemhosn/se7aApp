@@ -28,6 +28,10 @@ export interface Profile {
   daily_protein_g: number | null;
   daily_carb_g: number | null;
   daily_fat_g: number | null;
+  daily_sodium_mg: number | null;
+  daily_fiber_g: number | null;
+  daily_sugar_g: number | null;
+  daily_saturated_fat_g: number | null;
   onboarded_at: string | null;
 }
 
@@ -46,6 +50,14 @@ export interface MealItemRow {
   meal_slot: MealSlot | null;
   scan_id?: string | null;
   photo_url?: string | null;
+  sodium_mg_low?: number | null;
+  sodium_mg_high?: number | null;
+  fiber_g_low?: number | null;
+  fiber_g_high?: number | null;
+  sugar_g_low?: number | null;
+  sugar_g_high?: number | null;
+  saturated_fat_g_low?: number | null;
+  saturated_fat_g_high?: number | null;
   kcal_low: number;
   kcal_high: number;
   protein_g_low: number;
@@ -62,6 +74,10 @@ export interface DailyTotals {
   protein_g: MacroRange;
   carb_g: MacroRange;
   fat_g: MacroRange;
+  sodium_mg: MacroRange;
+  fiber_g: MacroRange;
+  sugar_g: MacroRange;
+  saturated_fat_g: MacroRange;
 }
 
 export interface LedgerTodayResponse {

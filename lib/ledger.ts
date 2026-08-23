@@ -16,6 +16,14 @@ export interface MealItemRow {
   carb_g_high: number;
   fat_g_low: number;
   fat_g_high: number;
+  sodium_mg_low?: number | null;
+  sodium_mg_high?: number | null;
+  fiber_g_low?: number | null;
+  fiber_g_high?: number | null;
+  sugar_g_low?: number | null;
+  sugar_g_high?: number | null;
+  saturated_fat_g_low?: number | null;
+  saturated_fat_g_high?: number | null;
   /** Populated by the API route when it enriches with signed Storage URLs. */
   photo_url?: string | null;
 }
@@ -31,6 +39,10 @@ export interface DailyTotals {
   protein_g: MacroRange;
   carb_g: MacroRange;
   fat_g: MacroRange;
+  sodium_mg: MacroRange;
+  fiber_g: MacroRange;
+  sugar_g: MacroRange;
+  saturated_fat_g: MacroRange;
 }
 
 export interface RemainingBudget {
@@ -62,7 +74,7 @@ export async function getTodayTotals(
   const { data, error } = await supabase
     .from("meal_items")
     .select(
-      "id, name, portion_estimate, source, confidence, eaten_at, scan_id, meal_slot, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high"
+      "id, name, portion_estimate, source, confidence, eaten_at, scan_id, meal_slot, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high, sodium_mg_low, sodium_mg_high, fiber_g_low, fiber_g_high, sugar_g_low, sugar_g_high, saturated_fat_g_low, saturated_fat_g_high"
     )
     .eq("user_id", userId)
     .gte("eaten_at", dayStart)
@@ -79,6 +91,16 @@ export async function getTodayTotals(
     protein_g: { low: sum("protein_g_low"), high: sum("protein_g_high") },
     carb_g: { low: sum("carb_g_low"), high: sum("carb_g_high") },
     fat_g: { low: sum("fat_g_low"), high: sum("fat_g_high") },
+    // Micronutrient sums quietly ignore null cells (sum() coerces to
+    // 0), so a mixed day of new+legacy items still totals correctly
+    // for the items that have data.
+    sodium_mg: { low: sum("sodium_mg_low"), high: sum("sodium_mg_high") },
+    fiber_g: { low: sum("fiber_g_low"), high: sum("fiber_g_high") },
+    sugar_g: { low: sum("sugar_g_low"), high: sum("sugar_g_high") },
+    saturated_fat_g: {
+      low: sum("saturated_fat_g_low"),
+      high: sum("saturated_fat_g_high"),
+    },
   };
 }
 

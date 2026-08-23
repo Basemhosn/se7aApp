@@ -43,6 +43,8 @@ interface ProfileRow {
   daily_protein_g?: number | null;
   daily_carb_g?: number | null;
   daily_fat_g?: number | null;
+  daily_sodium_mg?: number | null;
+  daily_fiber_g?: number | null;
   training_experience?: string | null;
   equipment_access?: string | null;
   days_per_week?: number | null;
@@ -76,14 +78,14 @@ export async function buildCoachContext(
     supabase
       .from("profiles")
       .select(
-        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs, cycle_prefs, goal_weight_kg, goal_rate_kg_per_week"
+        "display_name, sex, weight_kg, height_cm, goal, activity_level, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, daily_sodium_mg, daily_fiber_g, training_experience, equipment_access, days_per_week, injuries, ramadan_prefs, cycle_prefs, goal_weight_kg, goal_rate_kg_per_week"
       )
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
       .from("meal_items")
       .select(
-        "name, meal_slot, kcal_low, kcal_high, protein_g_low, protein_g_high"
+        "name, meal_slot, kcal_low, kcal_high, protein_g_low, protein_g_high, sodium_mg_low, sodium_mg_high, fiber_g_low, fiber_g_high"
       )
       .eq("user_id", userId)
       .gte("eaten_at", startOfToday.toISOString())
@@ -281,6 +283,35 @@ export async function buildCoachContext(
   }
   if (waterMl > 0) {
     parts.push(`Water today: ${waterMl} ml.`);
+  }
+
+  // Micronutrient status — only surface signals that matter (over-
+  // sodium, over-sugar, low fiber). Silence when values are absent
+  // (legacy items pre-v2 plate prompt) or comfortably in range, so
+  // the coach doesn't fill its context window with nothing.
+  const sodiumHi = todayMeals.reduce(
+    (s, m) => s + Number((m as { sodium_mg_high?: number }).sodium_mg_high ?? 0),
+    0
+  );
+  const fiberHi = todayMeals.reduce(
+    (s, m) => s + Number((m as { fiber_g_high?: number }).fiber_g_high ?? 0),
+    0
+  );
+  const microBits: string[] = [];
+  const sodiumTarget = profile?.daily_sodium_mg ?? null;
+  const fiberTarget = profile?.daily_fiber_g ?? null;
+  if (sodiumHi > 0 && sodiumTarget && sodiumHi > sodiumTarget) {
+    microBits.push(
+      `sodium ${Math.round(sodiumHi)}mg — over ${sodiumTarget}mg target`
+    );
+  }
+  if (fiberHi > 0 && fiberTarget && fiberHi < fiberTarget * 0.5) {
+    microBits.push(
+      `fiber only ${Math.round(fiberHi)}g of ${fiberTarget}g target`
+    );
+  }
+  if (microBits.length > 0) {
+    parts.push(`Micros: ${microBits.join("; ")}.`);
   }
   if (fasting) {
     const hrs = Math.floor(

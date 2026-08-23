@@ -319,6 +319,8 @@ export default function Home() {
         <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
+      <MicrosRow profile={profile} totals={ledger.totals} />
+
       <MealSlotGrid items={ledger.totals.items} />
 
       {streak &&
@@ -724,6 +726,109 @@ function RamadanBanner({
           Fajr {status.today?.fajr} · Maghrib {status.today?.maghrib}
         </Text>
       </View>
+    </View>
+  );
+}
+
+/**
+ * Compact micronutrient strip below the macros row.
+ * Hides when the day has no micros yet (legacy items still logging
+ * before the plate-scan v2 prompt landed) — showing all zeros would
+ * misread as "hit zero sodium today" which is bad noise.
+ */
+function MicrosRow({
+  profile,
+  totals,
+}: {
+  profile: import("@/types").Profile;
+  totals: import("@/types").DailyTotals;
+}) {
+  const anyData =
+    totals.sodium_mg.high > 0 ||
+    totals.fiber_g.high > 0 ||
+    totals.sugar_g.high > 0 ||
+    totals.saturated_fat_g.high > 0;
+  if (!anyData) return null;
+  return (
+    <View style={styles.microsRow}>
+      <MicroCell
+        label="SODIUM"
+        low={totals.sodium_mg.low}
+        high={totals.sodium_mg.high}
+        target={profile.daily_sodium_mg}
+        unit="mg"
+        overWarn
+      />
+      <View style={styles.microDivider} />
+      <MicroCell
+        label="FIBER"
+        low={totals.fiber_g.low}
+        high={totals.fiber_g.high}
+        target={profile.daily_fiber_g}
+        unit="g"
+      />
+      <View style={styles.microDivider} />
+      <MicroCell
+        label="SUGAR"
+        low={totals.sugar_g.low}
+        high={totals.sugar_g.high}
+        target={profile.daily_sugar_g}
+        unit="g"
+        overWarn
+      />
+      <View style={styles.microDivider} />
+      <MicroCell
+        label="SAT FAT"
+        low={totals.saturated_fat_g.low}
+        high={totals.saturated_fat_g.high}
+        target={profile.daily_saturated_fat_g}
+        unit="g"
+        overWarn
+      />
+    </View>
+  );
+}
+
+function MicroCell({
+  label,
+  low,
+  high,
+  target,
+  unit,
+  overWarn,
+}: {
+  label: string;
+  low: number;
+  high: number;
+  target: number | null;
+  unit: string;
+  overWarn?: boolean;
+}) {
+  // Show the mid-range for the number (matches how kcal cards elsewhere
+  // read); tint red when we're over the target on an over-warn metric
+  // (sodium/sugar/sat fat), green when comfortably under the target on
+  // fiber (which we want to hit, not avoid).
+  const mid = (low + high) / 2;
+  const overTarget = target !== null && high > target;
+  const underFiber =
+    !overWarn && target !== null && high < target * 0.5;
+  const tint = overTarget
+    ? colors.coral
+    : underFiber
+      ? colors.dim
+      : colors.ink;
+  return (
+    <View style={styles.microCell}>
+      <Text style={[styles.microLabel, overTarget && { color: colors.coral }]}>
+        {label}
+      </Text>
+      <Text style={[styles.microValue, { color: tint }]}>
+        {Math.round(mid).toLocaleString()}
+        <Text style={styles.microUnit}> {unit}</Text>
+      </Text>
+      {target !== null && (
+        <Text style={styles.microTarget}>/ {target.toLocaleString()}</Text>
+      )}
     </View>
   );
 }
@@ -1160,6 +1265,47 @@ const styles = StyleSheet.create({
   macros: {
     flexDirection: "row",
     gap: spacing.sm,
+  },
+  microsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  microCell: {
+    flex: 1,
+    alignItems: "center",
+    gap: 2,
+  },
+  microDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: colors.line,
+  },
+  microLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 0.8,
+  },
+  microValue: {
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  microUnit: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+  },
+  microTarget: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
   },
   slotGrid: {
     gap: spacing.sm,
