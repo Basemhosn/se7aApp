@@ -29,6 +29,8 @@ export const maxDuration = 120;
  *    AND user has weight_kg set on profile. "Weekly weigh-in?"
  *  - plan_your_week (Sunday local 10:00, Pro only) — no meal_plan row
  *    for this week yet. "Sunday planning session?"
+ *  - weekly_wrapped (Monday local 08:00) — user has any activity last
+ *    week worth recapping. "Your week is wrapped."
  */
 
 const DAY_MS = 86_400_000;
@@ -96,6 +98,7 @@ export async function GET(request: Request) {
     lunch_nudge: 0,
     weigh_in: 0,
     plan_your_week: 0,
+    weekly_wrapped: 0,
   };
 
   for (const userId of userIds) {
@@ -201,6 +204,24 @@ export async function GET(request: Request) {
             });
           }
           stats.plan_your_week += 1;
+        }
+      }
+    }
+
+    // ── Rule 5: weekly_wrapped (Monday local 08:00) ────────────────────
+    if (prefs.weekly_recap !== false && dow === 0 && hour === 8) {
+      const decision = await evalWeeklyWrapped(admin, userId, tz, now);
+      if (decision.fire) {
+        if (await claimNotification(admin, userId, "weekly_wrapped", today)) {
+          for (const tok of tokens) {
+            messages.push({
+              to: tok.expo_token,
+              title: "Your week is wrapped.",
+              body: decision.teaser,
+              data: { kind: "weekly_wrapped" },
+            });
+          }
+          stats.weekly_wrapped += 1;
         }
       }
     }
@@ -319,6 +340,79 @@ async function evalWeighIn(
     (now.getTime() - new Date(latest.logged_at as string).getTime()) / DAY_MS
   );
   return days >= 5 ? { fire: true, daysStale: days } : { fire: false };
+}
+
+/**
+ * Weekly wrapped fires Monday 8am local when the user had *some*
+ * activity in the just-completed Mon–Sun. We check meals + workouts +
+ * weight_logs in a single window — if all three are empty, they had
+ * a fully quiet week and a "your week is wrapped" push would be
+ * hollow. Teaser picks the loudest signal so the notification body
+ * has a concrete hook to open into.
+ */
+async function evalWeeklyWrapped(
+  admin: ReturnType<typeof getAdminClient>,
+  userId: string,
+  tz: number,
+  now: Date
+): Promise<{ fire: false } | { fire: true; teaser: string }> {
+  const localNow = new Date(now.getTime() + tz * 60_000);
+  const weekStart = new Date(localNow);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  weekStart.setUTCDate(weekStart.getUTCDate() - 7); // Monday of last week
+  const weekEnd = new Date(weekStart.getTime() + 7 * DAY_MS);
+  const startIso = new Date(
+    weekStart.getTime() - tz * 60_000
+  ).toISOString();
+  const endIso = new Date(weekEnd.getTime() - tz * 60_000).toISOString();
+
+  const [mealsRes, workoutsRes, weightsRes] = await Promise.all([
+    admin
+      .from("meal_items")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("eaten_at", startIso)
+      .lt("eaten_at", endIso),
+    admin
+      .from("workout_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("completed_at", startIso)
+      .lt("completed_at", endIso),
+    admin
+      .from("weight_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("logged_at", startIso)
+      .lt("logged_at", endIso),
+  ]);
+
+  const meals = mealsRes.count ?? 0;
+  const workouts = workoutsRes.count ?? 0;
+  const weighins = weightsRes.count ?? 0;
+  if (meals + workouts + weighins === 0) return { fire: false };
+
+  // Teaser prioritizes workouts (users emotionally react to it more
+  // than meal counts), then meal-log days, then a fallback.
+  if (workouts > 0) {
+    return {
+      fire: true,
+      teaser:
+        workouts === 1
+          ? "You crushed 1 session — see the rest of the numbers."
+          : `You logged ${workouts} workouts. See the rest of the numbers.`,
+    };
+  }
+  if (meals > 0) {
+    return {
+      fire: true,
+      teaser: "Your logging streak, macros, and coach's take are in.",
+    };
+  }
+  return {
+    fire: true,
+    teaser: "Numbers, streaks, and the coach's take on your week.",
+  };
 }
 
 async function evalPlanYourWeek(
