@@ -244,13 +244,6 @@ export function hintForPhase(
   }
 }
 
-// ── date helpers ────────────────────────────────────────────────────────
-
-function dateFromIso(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, d ?? 1);
-}
-
 function clampCycle(n: number): number {
   return clampInt(n, MIN_CYCLE, MAX_CYCLE);
 }
