@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
-import { computeRemaining, enrichWithPhotos, getTodayTotals } from "@/lib/ledger";
+import { computeRemaining, enrichWithPhotos, getDayTotals } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Ledger for a specific day. Defaults to today; accepts ?date=YYYY-MM-DD
+ * so the Home tab can page backward/forward through days without a new
+ * endpoint. Path stays "today" for existing callers (mobile ledger
+ * hook, dashboard page, etc.) that never pass a date.
+ */
 export async function GET(request: Request) {
   const supabase = getRouteClient(request);
   const {
@@ -13,6 +19,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const dateParam = searchParams.get("date");
+  const dateIso =
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : undefined;
+
   const [{ data: profile }, totals] = await Promise.all([
     supabase
       .from("profiles")
@@ -21,7 +32,7 @@ export async function GET(request: Request) {
       )
       .eq("user_id", user.id)
       .single(),
-    getTodayTotals(supabase, user.id),
+    getDayTotals(supabase, user.id, dateIso),
   ]);
 
   const enrichedItems = await enrichWithPhotos(supabase, totals.items);

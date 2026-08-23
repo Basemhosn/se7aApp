@@ -114,6 +114,11 @@ export default function Home() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
+  // Offset in days from today. 0 = today, -1 = yesterday, +1 = tomorrow.
+  // Chip taps shift this; ledger refetches for the new day. All the
+  // "always today" widgets (streak, cardio, sleep, FAB) stay put and
+  // only render when viewOffset === 0.
+  const [viewOffset, setViewOffset] = useState(0);
   const [workout, setWorkout] = useState<CurrentWorkoutResponse | null>(null);
   const [water, setWater] = useState<WaterTodayResponse | null>(null);
   const [dayStatus, setDayStatus] = useState<DayStatusResponse | null>(null);
@@ -123,9 +128,19 @@ export default function Home() {
   const [sleep, setSleep] = useState<SleepTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const viewDateIso = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + viewOffset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, [viewOffset]);
+  const isToday = viewOffset === 0;
+
   const load = useCallback(async () => {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
+    const ledgerPath = isToday
+      ? "/api/ledger/today"
+      : `/api/ledger/today?date=${viewDateIso}`;
     const [
       { data: profileData },
       ledgerRes,
@@ -142,7 +157,7 @@ export default function Home() {
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle(),
-      api<LedgerTodayResponse>("/api/ledger/today"),
+      api<LedgerTodayResponse>(ledgerPath),
       api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
         active: false,
       })),
@@ -175,7 +190,7 @@ export default function Home() {
     setCardio(cardioRes);
     setSleep(sleepRes);
     setLoading(false);
-  }, [user]);
+  }, [user, isToday, viewDateIso]);
 
   const addWater = async (ml: number) => {
     if (!water) return;
@@ -207,10 +222,20 @@ export default function Home() {
 
   const displayName = profile.display_name || user?.email?.split("@")[0] || "";
   const nowDate = new Date();
-  const y = new Date(nowDate);
-  y.setDate(y.getDate() - 1);
-  const yesterdayIso = fmtDateIso(y);
-  const tomorrowRoute = { pathname: "/meal-plan" as const };
+  const viewedDate = new Date();
+  viewedDate.setDate(viewedDate.getDate() + viewOffset);
+  const viewedLabel =
+    viewOffset === 0
+      ? "Today"
+      : viewOffset === -1
+        ? "Yesterday"
+        : viewOffset === 1
+          ? "Tomorrow"
+          : viewedDate.toLocaleDateString(undefined, {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
 
   return (
     <Screen>
@@ -243,39 +268,46 @@ export default function Home() {
 
       <View style={styles.dayPickerRow}>
         <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/calendar" as const,
-              params: { open: yesterdayIso },
-            })
-          }
+          onPress={() => setViewOffset((v) => v - 1)}
           style={styles.dayChip}
+          hitSlop={6}
         >
           <Ionicons name="chevron-back" size={14} color={colors.dim} />
-          <Text style={styles.dayChipText}>Yesterday</Text>
+          <Text style={styles.dayChipText}>Prev</Text>
         </Pressable>
-        <View style={[styles.dayChip, styles.dayChipOn]}>
-          <Text style={[styles.dayChipText, styles.dayChipTextOn]}>Today</Text>
-        </View>
         <Pressable
-          onPress={() => router.push(tomorrowRoute)}
-          style={styles.dayChip}
+          onPress={() => viewOffset !== 0 && setViewOffset(0)}
+          style={[styles.dayChip, styles.dayChipOn]}
+          hitSlop={6}
         >
-          <Text style={styles.dayChipText}>Tomorrow</Text>
+          <Text style={[styles.dayChipText, styles.dayChipTextOn]}>
+            {viewedLabel}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setViewOffset((v) => v + 1)}
+          style={styles.dayChip}
+          hitSlop={6}
+        >
+          <Text style={styles.dayChipText}>Next</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.dim} />
         </Pressable>
       </View>
 
-      {ramadan?.active && ramadan.today && (
+      {isToday && ramadan?.active && ramadan.today && (
         <RamadanBanner status={ramadan} />
       )}
 
       <Text style={styles.dayLabel}>
-        {dayStatus?.kind === "lift"
-          ? t("home.lift_day_remaining")
-          : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
-            ? t("home.rest_day_remaining")
-            : t("home.remaining_today")}
+        {isToday
+          ? dayStatus?.kind === "lift"
+            ? t("home.lift_day_remaining")
+            : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
+              ? t("home.rest_day_remaining")
+              : t("home.remaining_today")
+          : viewOffset < 0
+            ? "What you logged"
+            : "Nothing planned yet"}
       </Text>
 
       <View style={styles.ringRow}>
@@ -323,7 +355,8 @@ export default function Home() {
 
       <MealSlotGrid items={ledger.totals.items} />
 
-      {streak &&
+      {isToday &&
+        streak &&
         (streak.current_days > 0 ||
           streak.days_this_week > 0 ||
           (streak.freezable_days.length > 0 &&
@@ -336,7 +369,8 @@ export default function Home() {
           />
         )}
 
-      {cardio &&
+      {isToday &&
+        cardio &&
         (cardio.activity.steps > 0 ||
           cardio.activity.active_kcal > 0 ||
           cardio.sessions.length > 0) && (
@@ -372,7 +406,7 @@ export default function Home() {
           </Pressable>
         )}
 
-      {sleep?.last_night && (
+      {isToday && sleep?.last_night && (
         <View style={styles.cardioRow}>
           <View style={styles.cardioStat}>
             <Ionicons name="moon" size={16} color="#8b7dd6" />
@@ -434,40 +468,44 @@ export default function Home() {
         </View>
       )}
 
-      <Pressable
-        onPress={() => router.push("/meals-suggest")}
-        style={styles.suggestCard}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.gold }]}>
-            WHAT SHOULD I EAT?
-          </Text>
-          <Text style={styles.suggestTitle}>Ask SE7A</Text>
-          <Text style={styles.suggestSub}>
-            AI picks 3 dishes that fit your remaining budget.
-          </Text>
-        </View>
-        <Text style={styles.suggestArrow}>→</Text>
-      </Pressable>
+      {isToday && (
+        <Pressable
+          onPress={() => router.push("/meals-suggest")}
+          style={styles.suggestCard}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.kicker, { color: colors.gold }]}>
+              WHAT SHOULD I EAT?
+            </Text>
+            <Text style={styles.suggestTitle}>Ask SE7A</Text>
+            <Text style={styles.suggestSub}>
+              AI picks 3 dishes that fit your remaining budget.
+            </Text>
+          </View>
+          <Text style={styles.suggestArrow}>→</Text>
+        </Pressable>
+      )}
 
-      <Pressable
-        onPress={() => router.push("/meal-plan")}
-        style={styles.planCard}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.mint }]}>
-            PLAN YOUR WEEK
-          </Text>
-          <Text style={styles.suggestTitle}>7-day meal plan</Text>
-          <Text style={styles.suggestSub}>
-            Hits your macros. Auto-shopping list included.
-          </Text>
-        </View>
-        <Text style={[styles.suggestArrow, { color: colors.mint }]}>→</Text>
-      </Pressable>
+      {isToday && (
+        <Pressable
+          onPress={() => router.push("/meal-plan")}
+          style={styles.planCard}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.kicker, { color: colors.mint }]}>
+              PLAN YOUR WEEK
+            </Text>
+            <Text style={styles.suggestTitle}>7-day meal plan</Text>
+            <Text style={styles.suggestSub}>
+              Hits your macros. Auto-shopping list included.
+            </Text>
+          </View>
+          <Text style={[styles.suggestArrow, { color: colors.mint }]}>→</Text>
+        </Pressable>
+      )}
 
       {/* Weekly Wrapped — surface on Mon-Wed while last week's recap is fresh. */}
-      {isWrappedWindow(nowDate) && (
+      {isToday && isWrappedWindow(nowDate) && (
         <Pressable
           onPress={() => router.push("/weekly-wrapped")}
           style={styles.wrappedCard}
@@ -485,7 +523,7 @@ export default function Home() {
         </Pressable>
       )}
 
-      {fasting?.active ? (
+      {isToday && fasting?.active ? (
         <Pressable
           onPress={() => router.push("/fasting")}
           style={styles.fastingCard}
@@ -500,7 +538,7 @@ export default function Home() {
         </Pressable>
       ) : null}
 
-      {workout?.active && workout.next_session && workout.program && (
+      {isToday && workout?.active && workout.next_session && workout.program && (
         <Pressable
           onPress={() =>
             router.push({
@@ -529,7 +567,7 @@ export default function Home() {
         </Pressable>
       )}
 
-      {water && (
+      {isToday && water && (
         <WaterRing
           totalMl={water.total_ml}
           targetMl={water.target_ml}
@@ -537,22 +575,25 @@ export default function Home() {
         />
       )}
 
-      {!fasting?.active && (
+      {isToday && !fasting?.active && (
         <Pressable onPress={() => router.push("/fasting")} style={styles.miniLink}>
           <Text style={styles.miniLinkLabel}>{t("home.start_fast")}</Text>
           <Text style={styles.miniLinkArrow}>→</Text>
         </Pressable>
       )}
 
-      <Pressable onPress={() => router.push("/onboarding")} style={styles.redoRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.redoLabel}>{t("home.change_my_plan")}</Text>
-          <Text style={styles.redoSub}>{t("home.change_my_plan_sub")}</Text>
-        </View>
-        <Text style={styles.redoArrow}>→</Text>
-      </Pressable>
+      {isToday && (
+        <Pressable onPress={() => router.push("/onboarding")} style={styles.redoRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.redoLabel}>{t("home.change_my_plan")}</Text>
+            <Text style={styles.redoSub}>{t("home.change_my_plan_sub")}</Text>
+          </View>
+          <Text style={styles.redoArrow}>→</Text>
+        </Pressable>
+      )}
 
-      <QuickLogFab
+      {isToday && (
+        <QuickLogFab
         actions={[
           {
             key: "voice",
@@ -605,6 +646,7 @@ export default function Home() {
           },
         ]}
       />
+      )}
     </Screen>
   );
 }

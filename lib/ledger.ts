@@ -58,19 +58,59 @@ function startOfDayUtc(d: Date = new Date()): Date {
   return out;
 }
 
+function nextDayUtc(d: Date): Date {
+  const out = new Date(d);
+  out.setUTCDate(out.getUTCDate() + 1);
+  return out;
+}
+
 /**
- * Pull today's meal_items for a user and aggregate into ranges.
- * Caller is responsible for auth — pass an already-authenticated client.
+ * Pull a specific day's meal_items for a user and aggregate into ranges.
+ * When `dateIso` is omitted, defaults to today — same behavior as the
+ * original getTodayTotals (kept as an alias below for existing callers).
  *
  * TODO(phase-2): respect the user's timezone instead of UTC. The Gulf
  * launch is GST (+04), so a UTC midnight cutoff is acceptable now but
  * will eventually surprise users at the day boundary.
  */
+export async function getDayTotals(
+  supabase: SupabaseClient,
+  userId: string,
+  dateIso?: string
+): Promise<DailyTotals> {
+  const base = dateIso
+    ? dateIsoToDate(dateIso)
+    : new Date();
+  const start = startOfDayUtc(base);
+  const end = nextDayUtc(start);
+  return getRangeTotals(supabase, userId, start, end);
+}
+
+function dateIsoToDate(iso: string): Date {
+  // YYYY-MM-DD → Date at 00:00 UTC of that day.
+  const [y, m, d] = iso.split("-").map(Number);
+  const out = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
+  return out;
+}
+
+/**
+ * Alias — existing callers still use getTodayTotals. Keeps the API
+ * surface unchanged while getDayTotals becomes the primary export.
+ */
 export async function getTodayTotals(
   supabase: SupabaseClient,
   userId: string
 ): Promise<DailyTotals> {
-  const dayStart = startOfDayUtc().toISOString();
+  return getDayTotals(supabase, userId);
+}
+
+async function getRangeTotals(
+  supabase: SupabaseClient,
+  userId: string,
+  start: Date,
+  end: Date
+): Promise<DailyTotals> {
+  const dayStart = start.toISOString();
   const { data, error } = await supabase
     .from("meal_items")
     .select(
@@ -78,6 +118,7 @@ export async function getTodayTotals(
     )
     .eq("user_id", userId)
     .gte("eaten_at", dayStart)
+    .lt("eaten_at", end.toISOString())
     .order("eaten_at", { ascending: true });
   if (error) throw error;
 
