@@ -36,6 +36,18 @@ export const plannedMealSchema = z.object({
   carb_g_high: z.number().min(0).max(500),
   fat_g_low: z.number().min(0).max(300),
   fat_g_high: z.number().min(0).max(300),
+  // Micronutrients (meal_plan.v3_micros). Optional for backward
+  // compat with plans generated pre-bump; new plans populate them.
+  // When a plan meal is logged via /api/meal-plan/log, these carry
+  // through to the meal_item row so today's totals stay accurate.
+  sodium_mg_low: z.number().min(0).max(20000).optional(),
+  sodium_mg_high: z.number().min(0).max(20000).optional(),
+  fiber_g_low: z.number().min(0).max(100).optional(),
+  fiber_g_high: z.number().min(0).max(100).optional(),
+  sugar_g_low: z.number().min(0).max(500).optional(),
+  sugar_g_high: z.number().min(0).max(500).optional(),
+  saturated_fat_g_low: z.number().min(0).max(300).optional(),
+  saturated_fat_g_high: z.number().min(0).max(300).optional(),
   ingredients: z.array(ingredientSchema).min(0).max(20),
   recipe_id: z.string().nullable().optional(),
   logged_meal_item_id: z.number().nullable().optional(),

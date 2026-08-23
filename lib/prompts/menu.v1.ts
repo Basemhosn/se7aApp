@@ -48,6 +48,26 @@ Hard rules:
     Account for typical Gulf cooking richness (ghee, olive oil, dates
     as sweetener) in the ranges — lean toward the higher end when a
     dish is described as traditional or "grandma-style."
+
+11. MICRONUTRIENTS — emit these for every dish (optional but preferred):
+    - sodium_mg_low / sodium_mg_high (milligrams). Restaurant food
+      skews saltier than home cooking: broths, marinades, cured
+      meats, cheese platters, and pickled sides are the biggest
+      contributors. Machboos/kabsa dishes often clear 1000-1600 mg;
+      grilled seafood with light seasoning ~400-700 mg; salads with
+      cheese and olives ~600-1000 mg.
+    - fiber_g_low / fiber_g_high (grams). Rice + meat plates trend
+      low (2-4 g); legume/veg dishes (foul, lentil soup, tabbouleh)
+      trend higher (6-12 g). Whole-grain breads add a few grams.
+    - sugar_g_low / sugar_g_high (grams, TOTAL sugar). Traditional
+      desserts (kunafa, luqaimat, baklava, basbousa, umm ali) are
+      20-50+ g per serving. Karak / mint lemonade / laban with
+      sugar / smoothies are stealth contributors.
+    - saturated_fat_g_low / saturated_fat_g_high (grams). Ghee-heavy
+      rice dishes, cheese plates, and lamb dishes trend high. Grilled
+      chicken/fish trend low.
+    All four are RANGES with high >= low. Omit only if you truly
+    cannot estimate (e.g. an unidentifiable specialty).
 `.trim();
 
 export function menuUserPrompt(budget: {

@@ -71,6 +71,16 @@ export async function POST(request: Request) {
       carb_g_high: meal.carb_g_high,
       fat_g_low: meal.fat_g_low,
       fat_g_high: meal.fat_g_high,
+      // Carry planner-estimated micros through (nulls for legacy plans
+      // generated before mealPlan.v3_micros landed).
+      sodium_mg_low: meal.sodium_mg_low ?? null,
+      sodium_mg_high: meal.sodium_mg_high ?? null,
+      fiber_g_low: meal.fiber_g_low ?? null,
+      fiber_g_high: meal.fiber_g_high ?? null,
+      sugar_g_low: meal.sugar_g_low ?? null,
+      sugar_g_high: meal.sugar_g_high ?? null,
+      saturated_fat_g_low: meal.saturated_fat_g_low ?? null,
+      saturated_fat_g_high: meal.saturated_fat_g_high ?? null,
       confidence: "high",
     })
     .select("id")

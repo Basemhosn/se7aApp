@@ -50,6 +50,18 @@ Rules — do not break these:
     "Machboos day is calorie-heavy; keep breakfast light" or "Ramadan-
     friendly plan — heavier meals timed for iftar").
 
+12. MICRONUTRIENTS — for every meal, also emit:
+    - sodium_mg_low / sodium_mg_high (milligrams)
+    - fiber_g_low / fiber_g_high (grams)
+    - sugar_g_low / sugar_g_high (grams, TOTAL)
+    - saturated_fat_g_low / saturated_fat_g_high (grams)
+    Same honest-ranges rule as macros: high >= low. Optional if you
+    truly cannot estimate, but strongly preferred so weekly plans
+    can be validated against sodium/fiber targets. Anchors: rice-
+    heavy Gulf meals trend high sodium + low fiber; legume dishes
+    (foul, lentil soup, harees with veg) trend higher fiber; ghee-
+    or dates-heavy dishes carry saturated fat + sugar respectively.
+
 RAMADAN MODE (only when the user context says specific days are Ramadan
 days — for those days ONLY, override the normal rules above):
 - Two required meals per Ramadan day, using the existing slot vocabulary:
@@ -81,4 +93,4 @@ days — for those days ONLY, override the normal rules above):
   slot is suhoor, dinner slot is iftar."
 `.trim();
 
-export const MEAL_PLAN_PROMPT_VERSION = "meal_plan.v2_ramadan";
+export const MEAL_PLAN_PROMPT_VERSION = "meal_plan.v3_micros";
