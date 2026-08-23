@@ -29,6 +29,10 @@ import { router } from "expo-router";
 // so it's registered before the first push arrives.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    // shouldShowAlert is the pre-SDK-52 field; shouldShowBanner +
+    // shouldShowList replaced it. Keep both so the handler validates
+    // against whichever NotificationBehavior version is installed.
+    shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true,

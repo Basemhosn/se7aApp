@@ -750,45 +750,56 @@ function MicrosRow({
   profile: import("@/types").Profile;
   totals: import("@/types").DailyTotals;
 }) {
+  // Defensive: an older deployed backend can respond without the
+  // micronutrient totals, in which case totals.sodium_mg / etc. are
+  // undefined even though the type says otherwise. Zero-fallback so
+  // the client renders nothing rather than crashing the whole Home
+  // tab via the ErrorBoundary.
+  const zeroRange = { low: 0, high: 0 };
+  const sodium = totals.sodium_mg ?? zeroRange;
+  const fiber = totals.fiber_g ?? zeroRange;
+  const sugar = totals.sugar_g ?? zeroRange;
+  const satFat = totals.saturated_fat_g ?? zeroRange;
+
   const anyData =
-    totals.sodium_mg.high > 0 ||
-    totals.fiber_g.high > 0 ||
-    totals.sugar_g.high > 0 ||
-    totals.saturated_fat_g.high > 0;
+    sodium.high > 0 ||
+    fiber.high > 0 ||
+    sugar.high > 0 ||
+    satFat.high > 0;
   if (!anyData) return null;
   return (
     <View style={styles.microsRow}>
       <MicroCell
         label="SODIUM"
-        low={totals.sodium_mg.low}
-        high={totals.sodium_mg.high}
-        target={profile.daily_sodium_mg}
+        low={sodium.low}
+        high={sodium.high}
+        target={profile.daily_sodium_mg ?? null}
         unit="mg"
         overWarn
       />
       <View style={styles.microDivider} />
       <MicroCell
         label="FIBER"
-        low={totals.fiber_g.low}
-        high={totals.fiber_g.high}
-        target={profile.daily_fiber_g}
+        low={fiber.low}
+        high={fiber.high}
+        target={profile.daily_fiber_g ?? null}
         unit="g"
       />
       <View style={styles.microDivider} />
       <MicroCell
         label="SUGAR"
-        low={totals.sugar_g.low}
-        high={totals.sugar_g.high}
-        target={profile.daily_sugar_g}
+        low={sugar.low}
+        high={sugar.high}
+        target={profile.daily_sugar_g ?? null}
         unit="g"
         overWarn
       />
       <View style={styles.microDivider} />
       <MicroCell
         label="SAT FAT"
-        low={totals.saturated_fat_g.low}
-        high={totals.saturated_fat_g.high}
-        target={profile.daily_saturated_fat_g}
+        low={satFat.low}
+        high={satFat.high}
+        target={profile.daily_saturated_fat_g ?? null}
         unit="g"
         overWarn
       />
