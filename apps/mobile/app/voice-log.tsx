@@ -200,7 +200,7 @@ export default function VoiceLog() {
       await api("/api/ledger/add", {
         method: "POST",
         body: JSON.stringify({
-          source: "manual",
+          source: "voice",
           meal_slot: slot,
           items: picked.map((it) => ({ ...it })),
         }),

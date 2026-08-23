@@ -80,7 +80,7 @@ export interface DailyTotals {
   saturated_fat_g: MacroRange;
 }
 
-export interface LedgerTodayResponse {
+export interface LedgerDayResponse {
   totals: DailyTotals;
   remaining: {
     kcal: MacroRange;
@@ -89,6 +89,11 @@ export interface LedgerTodayResponse {
     fat_g: MacroRange;
   };
 }
+/** @deprecated Use LedgerDayResponse — same shape, clearer name now
+ *  that the endpoint accepts a ?date param. Kept as an alias so a
+ *  future in-flight branch that still references the old name doesn't
+ *  break on rebase. Safe to drop after one release. */
+export type LedgerTodayResponse = LedgerDayResponse;
 
 export interface PlateItem {
   name: string;

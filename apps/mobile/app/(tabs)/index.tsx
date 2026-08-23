@@ -24,7 +24,7 @@ import { usePushRegistration } from "@/lib/usePushRegistration";
 import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
 import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
-import type { LedgerTodayResponse, Profile } from "@/types";
+import type { LedgerDayResponse, Profile } from "@/types";
 import type { Program, Session } from "@/lib/programs";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -114,7 +114,7 @@ export default function Home() {
   useRamadanScheduling(ramadan);
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
+  const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
   // Offset in days from today. 0 = today, -1 = yesterday, +1 = tomorrow.
   // Chip taps shift this; ledger refetches for the new day. All the
   // "always today" widgets (streak, cardio, sleep, FAB) stay put and
@@ -176,7 +176,7 @@ export default function Home() {
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle(),
-      api<LedgerTodayResponse>(ledgerPath),
+      api<LedgerDayResponse>(ledgerPath),
       api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
         active: false,
       })),
@@ -363,7 +363,7 @@ export default function Home() {
           <SideStat
             label="ITEMS"
             value={String(ledger.totals.items.length)}
-            unit={ledger.totals.items.length === 1 ? "logged" : "logged"}
+            unit="logged"
             tint={colors.dim}
           />
         </View>

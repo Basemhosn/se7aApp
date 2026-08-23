@@ -97,7 +97,7 @@ export function normalizePlateScan(r: PlateScanResult): PlateScanResult {
  */
 export const ledgerAddSchema = z.object({
   scan_id: z.string().uuid().optional(),
-  source: z.enum(["plate_scan", "menu_scan", "manual", "barcode"]),
+  source: z.enum(["plate_scan", "menu_scan", "manual", "barcode", "voice"]),
   meal_slot: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
   // Restaurant tag applied to every item in this write. Optional so
   // home meals + manual logs skip it. Empty string coerces to null so

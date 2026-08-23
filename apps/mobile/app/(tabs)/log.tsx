@@ -16,7 +16,7 @@ import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import { useEntitlement } from "@/lib/EntitlementContext";
-import type { LedgerTodayResponse } from "@/types";
+import type { LedgerDayResponse } from "@/types";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface RecentItem {
@@ -52,7 +52,7 @@ function slotForNow(): "breakfast" | "lunch" | "dinner" | "snack" {
 export default function Log() {
   const { t } = useTranslation();
   const { ent } = useEntitlement();
-  const [ledger, setLedger] = useState<LedgerTodayResponse | null>(null);
+  const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [relogBusy, setRelogBusy] = useState<number | null>(null);
@@ -60,7 +60,7 @@ export default function Log() {
   const load = useCallback(async () => {
     try {
       const [today, rec] = await Promise.all([
-        api<LedgerTodayResponse>("/api/ledger/today"),
+        api<LedgerDayResponse>("/api/ledger/today"),
         api<RecentResponse>("/api/ledger/recent?limit=12").catch(() => ({
           items: [] as RecentItem[],
         })),

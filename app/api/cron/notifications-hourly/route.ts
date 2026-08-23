@@ -172,11 +172,14 @@ export async function GET(request: Request) {
       const decision = await evalWeighIn(admin, userId, now);
       if (decision.fire) {
         if (await claimNotification(admin, userId, "weigh_in", today)) {
+          const body = decision.firstTime
+            ? "First weigh-in kicks off your trend — takes 5 seconds."
+            : `Trend is ${decision.daysStale} days stale — one weigh-in re-tunes your targets.`;
           for (const tok of tokens) {
             messages.push({
               to: tok.expo_token,
               title: "Weekly weigh-in?",
-              body: `Trend is ${decision.daysStale} days stale — one weigh-in re-tunes your targets.`,
+              body,
               data: { kind: "weigh_in" },
             });
           }
@@ -327,7 +330,11 @@ async function evalWeighIn(
   admin: ReturnType<typeof getAdminClient>,
   userId: string,
   now: Date
-): Promise<{ fire: false } | { fire: true; daysStale: number }> {
+): Promise<
+  | { fire: false }
+  | { fire: true; firstTime: true }
+  | { fire: true; firstTime: false; daysStale: number }
+> {
   const { data: latest } = await admin
     .from("weight_logs")
     .select("logged_at")
@@ -335,11 +342,13 @@ async function evalWeighIn(
     .order("logged_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!latest) return { fire: true, daysStale: 999 };
+  if (!latest) return { fire: true, firstTime: true };
   const days = Math.floor(
     (now.getTime() - new Date(latest.logged_at as string).getTime()) / DAY_MS
   );
-  return days >= 5 ? { fire: true, daysStale: days } : { fire: false };
+  return days >= 5
+    ? { fire: true, firstTime: false, daysStale: days }
+    : { fire: false };
 }
 
 /**
