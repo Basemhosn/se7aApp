@@ -55,10 +55,14 @@ export async function GET(request: Request) {
   since.setDate(since.getDate() - days);
 
   const columns = macroColumns(macro);
+  // Static literal select — Supabase's typed .select() rejects
+  // interpolated column names because it parses the string at
+  // compile time. Cheaper to pull the whole macro row (small) than
+  // fight the parser.
   const { data, error } = await supabase
     .from("meal_items")
     .select(
-      `name, eaten_at, ${columns.low}, ${columns.high}`
+      "name, eaten_at, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high"
     )
     .eq("user_id", user.id)
     .gte("eaten_at", since.toISOString())

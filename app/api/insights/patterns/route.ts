@@ -5,9 +5,11 @@ import {
   detectFiberSodiumDays,
   detectLateNightEating,
   detectPostWorkoutSleepDrop,
+  detectRamadanDrift,
   detectWeekendCardioDip,
   type Pattern,
 } from "@/lib/patterns";
+import type { RamadanPrefs } from "@/lib/ramadan";
 
 export const runtime = "nodejs";
 
@@ -59,7 +61,9 @@ export async function GET(request: Request) {
         .gte("day", sinceDay),
       supabase
         .from("profiles")
-        .select("daily_sodium_mg, daily_fiber_g")
+        .select(
+          "daily_sodium_mg, daily_fiber_g, daily_kcal_target, ramadan_prefs"
+        )
         .eq("user_id", user.id)
         .maybeSingle(),
     ]);
@@ -104,6 +108,15 @@ export async function GET(request: Request) {
         sodium_mg: profile?.daily_sodium_mg ?? null,
         fiber_g: profile?.daily_fiber_g ?? null,
       }
+    ),
+    detectRamadanDrift(
+      meals.map((m) => ({
+        eaten_at: m.eaten_at as string,
+        kcal_low: Number(m.kcal_low),
+        kcal_high: Number(m.kcal_high),
+      })),
+      (profile?.ramadan_prefs ?? null) as Partial<RamadanPrefs> | null,
+      profile?.daily_kcal_target ?? null
     ),
   ].filter((p): p is Pattern => p !== null);
 

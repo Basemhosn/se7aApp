@@ -11,6 +11,8 @@
  * that fires on 3 data points reads as astrology, not insight.
  */
 
+import { isRamadanActiveForPrefs, type RamadanPrefs } from "./ramadan";
+
 export type PatternSeverity = "info" | "warn";
 
 export interface Pattern {
@@ -19,7 +21,8 @@ export interface Pattern {
     | "late_night_eating"
     | "post_workout_sleep_drop"
     | "weekend_cardio_dip"
-    | "fiber_sodium_days";
+    | "fiber_sodium_days"
+    | "ramadan_drift";
   severity: PatternSeverity;
   title: string;
   body: string;
@@ -286,6 +289,74 @@ export function detectFiberSodiumDays(
       matching_days: bothDays,
       total_days: perDay.size,
       rate_pct: Math.round(rate * 100),
+    },
+  };
+}
+
+// ── Ramadan drift ────────────────────────────────────────────────
+/**
+ * "During Ramadan you average 22% over your kcal target." Iftar makes
+ * this the single most common drift for Gulf users on a cut. Only
+ * fires when the user's ramadan_prefs resolve to "active" for at least
+ * 5 of the days in the window AND they have a daily_kcal_target to
+ * compare against.
+ *
+ * Uses the same isRamadanActiveForPrefs() that the /ramadan/status
+ * endpoint uses, so a user who explicitly disabled Ramadan mode gets
+ * skipped even during actual Ramadan dates.
+ */
+export function detectRamadanDrift(
+  meals: { eaten_at: string; kcal_low: number; kcal_high: number }[],
+  prefs: Partial<RamadanPrefs> | null | undefined,
+  dailyKcalTarget: number | null
+): Pattern | null {
+  if (!dailyKcalTarget || dailyKcalTarget <= 0) return null;
+  if (meals.length === 0) return null;
+
+  // Group meals by calendar day, then filter to days the user's prefs
+  // say were Ramadan. Using the DATE (not the meal timestamp) lets a
+  // suhoor eaten at 04:00 count against the wake day of Ramadan, not
+  // the previous calendar day — which is how users think of it.
+  const perDay = new Map<string, { mid: number; date: Date }>();
+  for (const m of meals) {
+    const d = new Date(m.eaten_at);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const mid = (Number(m.kcal_low) + Number(m.kcal_high)) / 2;
+    const existing = perDay.get(key);
+    if (existing) existing.mid += mid;
+    else perDay.set(key, { mid, date: d });
+  }
+
+  const ramadanDayKcal: number[] = [];
+  for (const v of perDay.values()) {
+    if (isRamadanActiveForPrefs(prefs as RamadanPrefs, v.date)) {
+      ramadanDayKcal.push(v.mid);
+    }
+  }
+  if (ramadanDayKcal.length < 5) return null;
+
+  const avg =
+    ramadanDayKcal.reduce((s, n) => s + n, 0) / ramadanDayKcal.length;
+  const deltaPct = (avg - dailyKcalTarget) / dailyKcalTarget;
+  if (Math.abs(deltaPct) < 0.15) return null;
+
+  const over = deltaPct > 0;
+  const pct = Math.round(Math.abs(deltaPct) * 100);
+
+  return {
+    id: "ramadan_drift",
+    severity: Math.abs(deltaPct) > 0.25 ? "warn" : "info",
+    title: over
+      ? `Ramadan days run ${pct}% over target`
+      : `Ramadan days run ${pct}% under target`,
+    body: over
+      ? `Averaging ~${Math.round(avg)} kcal on Ramadan days vs your ${dailyKcalTarget} kcal target. Iftar overshoot is the usual culprit — a soup + salad opener before the main plate usually resets the pace.`
+      : `Averaging ~${Math.round(avg)} kcal on Ramadan days vs your ${dailyKcalTarget} kcal target. Under-eating during Ramadan tanks energy and slows recovery — try adding a suhoor with slow carbs + protein.`,
+    evidence: {
+      ramadan_days_logged: ramadanDayKcal.length,
+      ramadan_avg_kcal: Math.round(avg),
+      target_kcal: dailyKcalTarget,
+      delta_pct: Math.round(deltaPct * 100),
     },
   };
 }

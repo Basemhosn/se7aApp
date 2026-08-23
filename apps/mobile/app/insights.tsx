@@ -31,6 +31,7 @@ const ICON_FOR_ID: Record<string, keyof typeof Ionicons.glyphMap> = {
   post_workout_sleep_drop: "bed",
   weekend_cardio_dip: "walk",
   fiber_sodium_days: "leaf",
+  ramadan_drift: "moon",
 };
 
 export default function Insights() {
