@@ -4,7 +4,8 @@
     "log": "LOG",
     "progress": "PROGRESS",
     "calendar": "CALENDAR",
-    "coach": "COACH"
+    "coach": "COACH",
+    "more": "MORE"
   },
   "common": {
     "back": "Back",
