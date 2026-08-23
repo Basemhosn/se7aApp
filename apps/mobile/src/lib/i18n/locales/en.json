@@ -90,6 +90,30 @@
       "planned_suffix": "· planned",
       "item_one": "item",
       "item_other": "items"
+    },
+    "streak_card": {
+      "kicker_today_logged": "STREAK · TODAY LOGGED",
+      "kicker_yesterday_missed": "STREAK · YESTERDAY MISSED",
+      "kicker_n_missed": "STREAK · {{count}} DAYS MISSED",
+      "kicker_log_today": "STREAK · LOG TODAY TO KEEP IT",
+      "unit_day_one": "day",
+      "unit_day_other": "days",
+      "week_progress": "{{count}}/7 this week",
+      "best_suffix": " · best {{count}}",
+      "freeze_budget_suffix": " · ❄ {{available}}/{{total}}",
+      "btn_saving": "Saving…",
+      "btn_save_yesterday": "❄ Save yesterday's streak",
+      "btn_restore_gap": "❄ Restore {{count}}-day gap · {{count}} freezes",
+      "prompt_save_title": "Save your streak?",
+      "prompt_restore_title": "Restore {{count}}-day gap?",
+      "prompt_save_body_one": "Use 1 of {{available}} freeze this month to protect yesterday.",
+      "prompt_save_body_other": "Use 1 of {{available}} freezes this month to protect yesterday.",
+      "prompt_restore_body": "Uses {{cost}} of {{available}} freezes this month to cover the last {{count}} missed days in one go.",
+      "prompt_cancel": "Cancel",
+      "prompt_use_one": "Use freeze",
+      "prompt_use_many": "Use {{count}} freezes",
+      "error_title": "Couldn't apply freeze",
+      "error_body": "Try again in a moment."
     }
   },
   "log": {

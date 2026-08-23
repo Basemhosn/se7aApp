@@ -437,6 +437,7 @@ export default function Home() {
             streak.freezes_available_this_month > 0)) && (
           <StreakCard
             streak={streak}
+            t={t}
             onFrozen={() => {
               load().catch(() => {});
             }}
@@ -1019,9 +1020,11 @@ function MealSlotGrid({
 function StreakCard({
   streak,
   onFrozen,
+  t,
 }: {
   streak: StreakResponse;
   onFrozen: () => void;
+  t: (key: string, opts?: Record<string, string | number>) => string;
 }) {
   const [freezing, setFreezing] = useState(false);
   // Yesterday (in the user's local tz) in YYYY-MM-DD, matching how the
@@ -1063,16 +1066,28 @@ function StreakCard({
     const budgetRemaining = streak.freezes_available_this_month;
     const title =
       restoreCount === 1
-        ? "Save your streak?"
-        : `Restore ${restoreCount}-day gap?`;
+        ? t("home.streak_card.prompt_save_title")
+        : t("home.streak_card.prompt_restore_title", { count: restoreCount });
     const body =
       restoreCount === 1
-        ? `Use 1 of ${budgetRemaining} freeze${budgetRemaining === 1 ? "" : "s"} this month to protect yesterday.`
-        : `Uses ${cost} of ${budgetRemaining} freezes this month to cover the last ${restoreCount} missed days in one go.`;
+        ? t(
+            budgetRemaining === 1
+              ? "home.streak_card.prompt_save_body_one"
+              : "home.streak_card.prompt_save_body_other",
+            { available: budgetRemaining }
+          )
+        : t("home.streak_card.prompt_restore_body", {
+            cost,
+            available: budgetRemaining,
+            count: restoreCount,
+          });
     Alert.alert(title, body, [
-      { text: "Cancel", style: "cancel" },
+      { text: t("home.streak_card.prompt_cancel"), style: "cancel" },
       {
-        text: restoreCount === 1 ? "Use freeze" : `Use ${cost} freezes`,
+        text:
+          restoreCount === 1
+            ? t("home.streak_card.prompt_use_one")
+            : t("home.streak_card.prompt_use_many", { count: cost }),
         style: "default",
         onPress: async () => {
           setFreezing(true);
@@ -1087,7 +1102,10 @@ function StreakCard({
             });
             onFrozen();
           } catch {
-            Alert.alert("Couldn't apply freeze", "Try again in a moment.");
+            Alert.alert(
+              t("home.streak_card.error_title"),
+              t("home.streak_card.error_body")
+            );
           } finally {
             setFreezing(false);
           }
@@ -1106,12 +1124,12 @@ function StreakCard({
       <View style={{ flex: 1 }}>
         <Text style={styles.streakKicker}>
           {streak.todays_status === "logged"
-            ? "STREAK · TODAY LOGGED"
+            ? t("home.streak_card.kicker_today_logged")
             : canRestore && streak.current_days === 0
               ? restoreCount === 1
-                ? "STREAK · YESTERDAY MISSED"
-                : `STREAK · ${restoreCount} DAYS MISSED`
-              : "STREAK · LOG TODAY TO KEEP IT"}
+                ? t("home.streak_card.kicker_yesterday_missed")
+                : t("home.streak_card.kicker_n_missed", { count: restoreCount })
+              : t("home.streak_card.kicker_log_today")}
         </Text>
         <View style={styles.streakNumRow}>
           <Text style={styles.streakFlame}>
@@ -1123,15 +1141,24 @@ function StreakCard({
           </Text>
           <Text style={styles.streakNum}>{streak.current_days}</Text>
           <Text style={styles.streakUnit}>
-            {streak.current_days === 1 ? "day" : "days"}
+            {t(
+              streak.current_days === 1
+                ? "home.streak_card.unit_day_one"
+                : "home.streak_card.unit_day_other"
+            )}
           </Text>
         </View>
         <Text style={styles.streakSub}>
-          {streak.days_this_week}/7 this week
+          {t("home.streak_card.week_progress", {
+            count: streak.days_this_week,
+          })}
           {streak.longest_days > streak.current_days &&
-            ` · best ${streak.longest_days}`}
+            t("home.streak_card.best_suffix", { count: streak.longest_days })}
           {streak.freezes_monthly_budget > 0 &&
-            ` · ❄ ${streak.freezes_available_this_month}/${streak.freezes_monthly_budget}`}
+            t("home.streak_card.freeze_budget_suffix", {
+              available: streak.freezes_available_this_month,
+              total: streak.freezes_monthly_budget,
+            })}
         </Text>
         {canRestore && (
           <Pressable
@@ -1141,10 +1168,12 @@ function StreakCard({
           >
             <Text style={styles.streakFreezeBtnText}>
               {freezing
-                ? "Saving…"
+                ? t("home.streak_card.btn_saving")
                 : restoreCount === 1
-                  ? "❄ Save yesterday's streak"
-                  : `❄ Restore ${restoreCount}-day gap · ${restoreCount} freezes`}
+                  ? t("home.streak_card.btn_save_yesterday")
+                  : t("home.streak_card.btn_restore_gap", {
+                      count: restoreCount,
+                    })}
             </Text>
           </Pressable>
         )}

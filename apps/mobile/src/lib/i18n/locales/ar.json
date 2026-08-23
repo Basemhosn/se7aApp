@@ -90,6 +90,30 @@
       "planned_suffix": "· مخطط",
       "item_one": "عنصر",
       "item_other": "عناصر"
+    },
+    "streak_card": {
+      "kicker_today_logged": "السلسلة · سُجّل اليوم",
+      "kicker_yesterday_missed": "السلسلة · فاتك أمس",
+      "kicker_n_missed": "السلسلة · فاتك {{count}} أيام",
+      "kicker_log_today": "السلسلة · سجّل اليوم للحفاظ عليها",
+      "unit_day_one": "يوم",
+      "unit_day_other": "أيام",
+      "week_progress": "{{count}}/7 هذا الأسبوع",
+      "best_suffix": " · الأفضل {{count}}",
+      "freeze_budget_suffix": " · ❄ {{available}}/{{total}}",
+      "btn_saving": "جاري الحفظ…",
+      "btn_save_yesterday": "❄ أنقذ سلسلة الأمس",
+      "btn_restore_gap": "❄ استعد {{count}} أيام · {{count}} تجميدات",
+      "prompt_save_title": "أنقذ سلسلتك؟",
+      "prompt_restore_title": "استعد {{count}} أيام؟",
+      "prompt_save_body_one": "استخدم 1 من {{available}} تجميد هذا الشهر لحماية أمس.",
+      "prompt_save_body_other": "استخدم 1 من {{available}} تجميدات هذا الشهر لحماية أمس.",
+      "prompt_restore_body": "يستخدم {{cost}} من {{available}} تجميدات هذا الشهر لتغطية آخر {{count}} أيام فائتة مرة واحدة.",
+      "prompt_cancel": "إلغاء",
+      "prompt_use_one": "استخدم تجميد",
+      "prompt_use_many": "استخدم {{count}} تجميدات",
+      "error_title": "تعذّر تطبيق التجميد",
+      "error_body": "حاول مرة أخرى بعد قليل."
     }
   },
   "log": {
