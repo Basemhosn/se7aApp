@@ -208,6 +208,12 @@ export default function More() {
           isArabic={isArabic}
         />
         <MoreRow
+          icon="sparkles-outline"
+          label={isArabic ? "الأنماط" : "Patterns"}
+          hint={isArabic ? "ما لاحظه SE7A" : "What SE7A noticed"}
+          onPress={() => router.push("/insights")}
+        />
+        <MoreRow
           icon="calendar-outline"
           label={isArabic ? "التقويم" : "Calendar"}
           onPress={() => router.push("/calendar")}
