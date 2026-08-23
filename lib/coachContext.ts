@@ -6,6 +6,7 @@ import {
   type CyclePrefs,
 } from "./cycle";
 import { bandForScore, coachHintForBand } from "./recovery";
+import { isoDay as dayKey } from "./dateKeys";
 
 /**
  * Coach context assembler — pulls the user's recent state into a single
@@ -546,10 +547,6 @@ function topPrs(
   return [...byName.values()]
     .sort((a, b) => b.est_1rm - a.est_1rm)
     .slice(0, 3);
-}
-
-function dayKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function linearRegression(

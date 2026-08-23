@@ -15,6 +15,8 @@
  * fertility with precision. Aviva Romm's numbers, not a clinic's.
  */
 
+import { isoDay } from "./dateKeys";
+
 export type CyclePhase =
   | "menstrual"
   | "follicular"
@@ -255,10 +257,6 @@ function addDays(iso: string, delta: number): string {
 function dateFromIso(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y!, (m ?? 1) - 1, d ?? 1);
-}
-
-function isoDay(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function clampCycle(n: number): number {

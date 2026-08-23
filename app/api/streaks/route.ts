@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
+import { isoDay, localDayKey } from "@/lib/dateKeys";
 
 export const runtime = "nodejs";
 
@@ -152,15 +153,6 @@ export async function GET(request: Request) {
 function clamp(n: number, lo: number, hi: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(lo, Math.min(hi, n));
-}
-
-function localDayKey(d: Date, tzOffsetMin: number): string {
-  const shifted = new Date(d.getTime() + tzOffsetMin * 60_000);
-  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
-}
-
-function isoDay(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function offsetDays(d: Date, delta: number): Date {

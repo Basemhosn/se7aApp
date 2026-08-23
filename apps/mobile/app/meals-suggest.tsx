@@ -15,7 +15,7 @@ import { BackButton } from "@/components/BackButton";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
-import { slotForNow } from "@/lib/slot";
+import { SLOTS, slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Suggestion {
@@ -40,8 +40,6 @@ interface SuggestResponse {
     kcal: { low: number; high: number };
   };
 }
-
-const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
 
 export default function MealsSuggest() {
   const params = useLocalSearchParams<{ slot?: MealSlot }>();

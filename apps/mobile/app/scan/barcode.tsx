@@ -24,7 +24,7 @@ import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
-import { slotForNow } from "@/lib/slot";
+import { SLOTS, slotForNow } from "@/lib/slot";
 
 interface NormalizedProduct {
   code: string;
@@ -47,8 +47,6 @@ interface LookupResponse {
 }
 
 type Phase = "scanning" | "looking-up" | "review" | "saving";
-
-const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
 
 export default function BarcodeScan() {
   const { t, i18n } = useTranslation();

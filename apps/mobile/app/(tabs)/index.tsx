@@ -26,6 +26,7 @@ import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerDayResponse, Profile } from "@/types";
 import type { Program, Session } from "@/lib/programs";
+import { SLOTS, SLOT_META } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface CurrentWorkoutResponse {
@@ -908,22 +909,6 @@ function MicroCell({
   );
 }
 
-const SLOT_META: Record<
-  "breakfast" | "lunch" | "dinner" | "snack",
-  { icon: keyof typeof Ionicons.glyphMap; tint: string; label: string }
-> = {
-  breakfast: { icon: "sunny", tint: colors.gold, label: "BREAKFAST" },
-  lunch: { icon: "restaurant", tint: colors.coral, label: "LUNCH" },
-  dinner: { icon: "moon", tint: "#8b7dd6", label: "DINNER" },
-  snack: { icon: "leaf", tint: colors.mint, label: "SNACK" },
-};
-
-const SLOTS: Array<"breakfast" | "lunch" | "dinner" | "snack"> = [
-  "breakfast",
-  "lunch",
-  "dinner",
-  "snack",
-];
 
 /**
  * Meal-slot log grid — one row per slot (Breakfast/Lunch/Dinner/Snack).
@@ -983,7 +968,7 @@ function MealSlotGrid({
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.slotLabel, { color: meta.tint }]}>
-                {meta.label}
+                {meta.en}
                 {planned && rows.length > 0 ? "  · planned" : ""}
               </Text>
               {rows.length > 0 ? (

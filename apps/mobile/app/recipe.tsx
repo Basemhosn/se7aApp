@@ -14,7 +14,7 @@ import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
-import { slotForNow } from "@/lib/slot";
+import { SLOTS, slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Ingredient {
@@ -45,8 +45,6 @@ interface Recipe {
   tags: string[];
   notes?: string;
 }
-
-const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
 
 export default function RecipePage() {
   const { i18n, t } = useTranslation();

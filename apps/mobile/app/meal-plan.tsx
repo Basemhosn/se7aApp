@@ -24,8 +24,10 @@ import {
   rateLimitMessage,
 } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
+import { SLOT_META } from "@/lib/slot";
+import type { MealSlot } from "@/types";
 
-type Slot = "breakfast" | "lunch" | "dinner" | "snack";
+type Slot = MealSlot;
 
 interface PlannedMeal {
   slot: Slot;
@@ -72,16 +74,6 @@ const DAY_LABELS_AR = [
   "السبت",
   "الأحد",
 ];
-
-const SLOT_META: Record<
-  Slot,
-  { icon: keyof typeof Ionicons.glyphMap; tint: string; en: string; ar: string }
-> = {
-  breakfast: { icon: "sunny", tint: colors.gold, en: "BREAKFAST", ar: "الفطور" },
-  lunch: { icon: "restaurant", tint: colors.coral, en: "LUNCH", ar: "الغداء" },
-  dinner: { icon: "moon", tint: "#8b7dd6", en: "DINNER", ar: "العشاء" },
-  snack: { icon: "leaf", tint: colors.mint, en: "SNACK", ar: "وجبة خفيفة" },
-};
 
 function mondayOf(date: Date): string {
   const d = new Date(date);

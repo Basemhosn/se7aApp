@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getRouteClient } from "@/lib/supabase/server";
+import { localDayKey } from "@/lib/dateKeys";
 import {
   FREEZE_MAX_BACKDATE_DAYS,
   MONTHLY_FREEZE_BUDGET,
@@ -184,11 +185,6 @@ export async function POST(request: Request) {
     freezes_used_this_month: nextUsed,
     freezes_available_this_month: Math.max(0, MONTHLY_FREEZE_BUDGET - nextUsed),
   });
-}
-
-function localDayKey(d: Date, tzOffsetMin: number): string {
-  const shifted = new Date(d.getTime() + tzOffsetMin * 60_000);
-  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
 
 function offsetDays(d: Date, delta: number): Date {

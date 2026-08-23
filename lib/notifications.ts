@@ -75,14 +75,9 @@ export async function claimNotification(
   return false;
 }
 
-/**
- * Convert a UTC Date to a local YYYY-MM-DD string for the given user's
- * timezone offset (minutes from UTC, e.g. Dubai = +240).
- */
-export function localDayKey(d: Date, tzOffsetMin: number): string {
-  const shifted = new Date(d.getTime() + tzOffsetMin * 60_000);
-  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
-}
+// Re-export from the canonical location for backward compat with
+// callers that still import localDayKey from "@/lib/notifications".
+export { localDayKey } from "./dateKeys";
 
 /** Local hour 0–23 for the given user timezone. */
 export function localHour(d: Date, tzOffsetMin: number): number {
