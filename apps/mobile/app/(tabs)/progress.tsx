@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -382,6 +382,8 @@ export default function Progress() {
         </View>
       )}
 
+      <TopFoods days={days} />
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("progress.log_weighin")}</Text>
         <Text style={styles.cardSub}>
@@ -601,6 +603,138 @@ function weightDeltaTint(
   return colors.dim;
 }
 
+type TopFoodsMacro = "kcal" | "protein" | "carb" | "fat";
+
+interface TopFoodsResponse {
+  days: number;
+  macro: TopFoodsMacro;
+  unit: string;
+  total_all: number;
+  foods: Array<{
+    name: string;
+    total_low: number;
+    total_high: number;
+    times_logged: number;
+    last_logged_at: string;
+    avg_per_serving_low: number;
+    avg_per_serving_high: number;
+    share_pct: number;
+  }>;
+}
+
+const TOP_MACRO_META: Record<
+  TopFoodsMacro,
+  { label: string; tint: string }
+> = {
+  kcal: { label: "Calories", tint: colors.gold },
+  protein: { label: "Protein", tint: colors.mint },
+  carb: { label: "Carbs", tint: colors.coral },
+  fat: { label: "Fat", tint: "#8b7dd6" },
+};
+
+/**
+ * "What's driving your calories/protein/carbs/fat?" card. Same time
+ * window as the parent Progress screen (30/60/90D chips) so users see
+ * the offenders that match the trend they're looking at.
+ */
+function TopFoods({ days }: { days: number }) {
+  const [macro, setMacro] = useState<TopFoodsMacro>("kcal");
+  const [data, setData] = useState<TopFoodsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api<TopFoodsResponse>(
+      `/api/insights/top-foods?days=${days}&macro=${macro}&limit=5`
+    )
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [days, macro]);
+
+  const meta = TOP_MACRO_META[macro];
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHead}>
+        <Text style={styles.cardTitle}>
+          Foods driving your {meta.label.toLowerCase()}
+        </Text>
+      </View>
+      <Text style={styles.cardSub}>
+        Highest contributors over the last {days} days.
+      </Text>
+      <View style={styles.rangeRow}>
+        {(Object.keys(TOP_MACRO_META) as TopFoodsMacro[]).map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => setMacro(m)}
+            style={[styles.rangeChip, macro === m && styles.rangeChipOn]}
+          >
+            <Text
+              style={[
+                styles.rangeText,
+                macro === m && styles.rangeTextOn,
+              ]}
+            >
+              {TOP_MACRO_META[m].label.toUpperCase()}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {loading ? (
+        <ActivityIndicator
+          color={colors.gold}
+          style={{ marginVertical: spacing.md }}
+        />
+      ) : !data || data.foods.length === 0 ? (
+        <Text style={styles.topFoodsEmpty}>
+          Not enough logged data yet — log a few meals and check back.
+        </Text>
+      ) : (
+        <>
+          {data.foods.map((f, i) => (
+            <View key={i} style={styles.topFoodRow}>
+              <View style={styles.topFoodRank}>
+                <Text
+                  style={[styles.topFoodRankText, { color: meta.tint }]}
+                >
+                  {i + 1}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.topFoodName}>{f.name}</Text>
+                <Text style={styles.topFoodMeta}>
+                  {f.times_logged}× · {Math.round(f.avg_per_serving_low)}–
+                  {Math.round(f.avg_per_serving_high)} {data.unit} per serving
+                </Text>
+              </View>
+              <View style={styles.topFoodShare}>
+                <Text
+                  style={[styles.topFoodShareVal, { color: meta.tint }]}
+                >
+                  {f.share_pct}%
+                </Text>
+                <Text style={styles.topFoodShareUnit}>share</Text>
+              </View>
+            </View>
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
+
 function ProjStat({
   label,
   value,
@@ -812,6 +946,61 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
     alignItems: "flex-end",
+  },
+  topFoodsEmpty: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    marginVertical: spacing.md,
+    textAlign: "center",
+  },
+  topFoodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  topFoodRank: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topFoodRankText: {
+    fontFamily: font.displayBold,
+    fontSize: 13,
+  },
+  topFoodName: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  topFoodMeta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  topFoodShare: {
+    alignItems: "flex-end",
+    minWidth: 42,
+  },
+  topFoodShareVal: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+  },
+  topFoodShareUnit: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 0.8,
   },
   label: {
     fontFamily: font.mono,
