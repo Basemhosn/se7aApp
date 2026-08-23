@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
@@ -39,6 +40,7 @@ const ICON_FOR_ID: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function Insights() {
+  const { t } = useTranslation();
   const [data, setData] = useState<PatternsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,12 +63,12 @@ export default function Insights() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
         <BackButton />
-        <Text style={styles.kicker}>INSIGHTS</Text>
-        <Text style={styles.title}>Patterns SE7A noticed</Text>
+        <Text style={styles.kicker}>{t("insights.kicker")}</Text>
+        <Text style={styles.title}>{t("insights.title")}</Text>
         <Text style={styles.sub}>
           {data
-            ? `Last ${data.window_days} days of your data — no AI, just math.`
-            : "Loading…"}
+            ? t("insights.sub", { days: data.window_days })
+            : t("insights.loading")}
         </Text>
 
         {loading ? (
@@ -77,10 +79,7 @@ export default function Insights() {
         ) : !data || data.patterns.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="hourglass" size={32} color={colors.dim} />
-            <Text style={styles.emptyText}>
-              Nothing to surface yet. Two or three weeks of consistent
-              logging usually turns up something.
-            </Text>
+            <Text style={styles.emptyText}>{t("insights.empty")}</Text>
           </View>
         ) : (
           data.patterns.map((p, i) => {

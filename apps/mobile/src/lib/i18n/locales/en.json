@@ -52,7 +52,45 @@
     "n_exercises_program": "{{count}} exercises · {{program}}",
     "start_fast": "Start a fast",
     "change_my_plan": "Change my plan",
-    "change_my_plan_sub": "Redo the intake if your goal, equipment, or schedule shifted."
+    "change_my_plan_sub": "Redo the intake if your goal, equipment, or schedule shifted.",
+    "day_picker": {
+      "prev": "Prev",
+      "next": "Next",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "tomorrow": "Tomorrow"
+    },
+    "day_label": {
+      "what_you_logged": "What you logged",
+      "planned_for_day": "Planned for the day",
+      "nothing_planned": "Nothing planned yet"
+    },
+    "ring": {
+      "target": "TARGET",
+      "eaten": "EATEN",
+      "planned": "PLANNED",
+      "items": "ITEMS",
+      "logged": "logged",
+      "planned_unit": "planned",
+      "remaining_kicker": "REMAINING",
+      "planned_kicker": "PLANNED",
+      "over_kicker": "OVER TODAY"
+    },
+    "micros": {
+      "sodium": "SODIUM",
+      "fiber": "FIBER",
+      "sugar": "SUGAR",
+      "sat_fat": "SAT FAT"
+    },
+    "slot_card": {
+      "nothing_logged": "Nothing logged · tap to add",
+      "not_planned": "Not planned",
+      "log_cta": "LOG",
+      "view_cta": "VIEW",
+      "planned_suffix": "· planned",
+      "item_one": "item",
+      "item_other": "items"
+    }
   },
   "log": {
     "title": "Log",
@@ -443,6 +481,35 @@
       "picked": "✓ picked",
       "meta": "{{days}} days / week · {{exp}} · {{eq}}"
     }
+  },
+  "insights": {
+    "kicker": "INSIGHTS",
+    "title": "Patterns SE7A noticed",
+    "sub": "Last {{days}} days of your data — no AI, just math.",
+    "loading": "Loading…",
+    "empty": "Nothing to surface yet. Two or three weeks of consistent logging usually turns up something."
+  },
+  "voice_log": {
+    "kicker": "VOICE LOG",
+    "title": "Say what you ate",
+    "sub": "e.g. \"chicken shawarma and a laban\"",
+    "tap_to_record": "Tap to record",
+    "recording_hint": "Tap to stop and process",
+    "processing": "Reading what you said…",
+    "cancel": "Cancel",
+    "what_we_heard": "WHAT WE HEARD",
+    "items_title": "Items",
+    "empty_items": "We didn't catch any items — try again.",
+    "record_again": "Record again",
+    "log_cta": "Log {{count}} to {{slot}} · {{low}}–{{high}} kcal",
+    "pick_at_least_one": "Pick at least one item",
+    "permission_needed_title": "Microphone permission needed",
+    "permission_needed_body": "Open Settings → SE7A to enable microphone access.",
+    "generic_error_title": "Error",
+    "generic_error_body": "Try again",
+    "couldnt_start": "Couldn't start recording.",
+    "couldnt_process": "Couldn't process the recording.",
+    "couldnt_save": "Couldn't save — try again."
   },
   "language": {
     "title": "Language",

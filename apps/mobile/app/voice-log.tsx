@@ -61,7 +61,7 @@ interface VoiceLogResponse {
 type Phase = "idle" | "recording" | "transcribing" | "review" | "saving";
 
 export default function VoiceLog() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const isArabic = i18n.language === "ar";
   const params = useLocalSearchParams<{ slot?: string }>();
   const initialSlot: MealSlot =

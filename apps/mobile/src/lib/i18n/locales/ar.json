@@ -52,7 +52,45 @@
     "n_exercises_program": "{{count}} تمارين · {{program}}",
     "start_fast": "ابدأ صيامًا",
     "change_my_plan": "غيّر خطتي",
-    "change_my_plan_sub": "أعد الإعداد إذا تغيّر هدفك أو معداتك أو جدولك."
+    "change_my_plan_sub": "أعد الإعداد إذا تغيّر هدفك أو معداتك أو جدولك.",
+    "day_picker": {
+      "prev": "السابق",
+      "next": "التالي",
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "tomorrow": "غداً"
+    },
+    "day_label": {
+      "what_you_logged": "ما سجلته",
+      "planned_for_day": "مخطط لهذا اليوم",
+      "nothing_planned": "لا شيء مخطط بعد"
+    },
+    "ring": {
+      "target": "الهدف",
+      "eaten": "المأكول",
+      "planned": "مخطط",
+      "items": "العناصر",
+      "logged": "مسجل",
+      "planned_unit": "مخطط",
+      "remaining_kicker": "المتبقي",
+      "planned_kicker": "مخطط",
+      "over_kicker": "تجاوزت اليوم"
+    },
+    "micros": {
+      "sodium": "الصوديوم",
+      "fiber": "الألياف",
+      "sugar": "السكر",
+      "sat_fat": "دهون مشبعة"
+    },
+    "slot_card": {
+      "nothing_logged": "لم يُسجّل شيء · اضغط للإضافة",
+      "not_planned": "غير مخطط",
+      "log_cta": "سجّل",
+      "view_cta": "عرض",
+      "planned_suffix": "· مخطط",
+      "item_one": "عنصر",
+      "item_other": "عناصر"
+    }
   },
   "log": {
     "title": "السجل",
@@ -443,6 +481,35 @@
       "picked": "✓ مختارة",
       "meta": "{{days}} أيام / أسبوع · {{exp}} · {{eq}}"
     }
+  },
+  "insights": {
+    "kicker": "الأنماط",
+    "title": "أنماط لاحظها SE7A",
+    "sub": "بيانات آخر {{days}} يوم — لا ذكاء اصطناعي، فقط رياضيات.",
+    "loading": "جاري التحميل…",
+    "empty": "لا يوجد شيء لعرضه بعد. أسبوعين أو ثلاثة من التسجيل المنتظم عادةً يكشفان أنماطاً."
+  },
+  "voice_log": {
+    "kicker": "سجّل بالصوت",
+    "title": "قل ماذا أكلت",
+    "sub": "مثال: «شاورما دجاج ولبن»",
+    "tap_to_record": "اضغط للتسجيل",
+    "recording_hint": "اضغط للإيقاف والتحويل",
+    "processing": "جاري القراءة…",
+    "cancel": "إلغاء",
+    "what_we_heard": "ما سمعناه",
+    "items_title": "العناصر",
+    "empty_items": "لم نتعرف على شيء — حاول مجدداً.",
+    "record_again": "سجّل مرة أخرى",
+    "log_cta": "سجّل {{count}} في {{slot}} · {{low}}–{{high}} سعرة",
+    "pick_at_least_one": "اختر عنصراً واحداً على الأقل",
+    "permission_needed_title": "أذن بالميكروفون",
+    "permission_needed_body": "افتح الإعدادات لتفعيل الميكروفون لـ SE7A.",
+    "generic_error_title": "خطأ",
+    "generic_error_body": "أعد المحاولة",
+    "couldnt_start": "تعذّر بدء التسجيل.",
+    "couldnt_process": "تعذّرت معالجة التسجيل.",
+    "couldnt_save": "تعذّر الحفظ — حاول مجدداً."
   },
   "language": {
     "title": "اللغة",

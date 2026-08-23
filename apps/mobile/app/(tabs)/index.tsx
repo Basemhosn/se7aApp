@@ -246,11 +246,11 @@ export default function Home() {
   viewedDate.setDate(viewedDate.getDate() + viewOffset);
   const viewedLabel =
     viewOffset === 0
-      ? "Today"
+      ? t("home.day_picker.today")
       : viewOffset === -1
-        ? "Yesterday"
+        ? t("home.day_picker.yesterday")
         : viewOffset === 1
-          ? "Tomorrow"
+          ? t("home.day_picker.tomorrow")
           : viewedDate.toLocaleDateString(undefined, {
               weekday: "short",
               month: "short",
@@ -335,7 +335,7 @@ export default function Home() {
             hitSlop={6}
           >
             <Ionicons name="chevron-back" size={14} color={colors.dim} />
-            <Text style={styles.dayChipText}>Prev</Text>
+            <Text style={styles.dayChipText}>{t("home.day_picker.prev")}</Text>
           </Pressable>
           <Pressable
             onPress={() => viewOffset !== 0 && setViewOffset(0)}
@@ -351,7 +351,7 @@ export default function Home() {
             style={styles.dayChip}
             hitSlop={6}
           >
-            <Text style={styles.dayChipText}>Next</Text>
+            <Text style={styles.dayChipText}>{t("home.day_picker.next")}</Text>
             <Ionicons name="chevron-forward" size={14} color={colors.dim} />
           </Pressable>
         </View>
@@ -368,10 +368,10 @@ export default function Home() {
               ? t("home.rest_day_remaining")
               : t("home.remaining_today")
           : viewOffset < 0
-            ? "What you logged"
+            ? t("home.day_label.what_you_logged")
             : hasFuturePlan
-              ? "Planned for the day"
-              : "Nothing planned yet"}
+              ? t("home.day_label.planned_for_day")
+              : t("home.day_label.nothing_planned")}
       </Text>
 
       <View style={styles.ringRow}>
@@ -384,27 +384,31 @@ export default function Home() {
         />
         <View style={styles.ringSide}>
           <SideStat
-            label="TARGET"
+            label={t("home.ring.target")}
             value={String(
               dayStatus?.adjusted_target ?? profile.daily_kcal_target
             )}
-            unit="kcal"
+            unit={t("common.kcal")}
             tint={colors.dim}
           />
           <SideStat
-            label={hasFuturePlan ? "PLANNED" : "EATEN"}
+            label={hasFuturePlan ? t("home.ring.planned") : t("home.ring.eaten")}
             value={
               displayItemCount === 0
                 ? "—"
                 : `${Math.round(displayKcal.low)}–${Math.round(displayKcal.high)}`
             }
-            unit="kcal"
+            unit={t("common.kcal")}
             tint={colors.gold}
           />
           <SideStat
-            label="ITEMS"
+            label={t("home.ring.items")}
             value={String(displayItemCount)}
-            unit={hasFuturePlan ? "planned" : "logged"}
+            unit={
+              hasFuturePlan
+                ? t("home.ring.planned_unit")
+                : t("home.ring.logged")
+            }
             tint={colors.dim}
           />
         </View>
@@ -417,11 +421,12 @@ export default function Home() {
         <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
-      <MicrosRow profile={profile} totals={ledger.totals} />
+      <MicrosRow profile={profile} totals={ledger.totals} t={t} />
 
       <MealSlotGrid
         items={hasFuturePlan ? plannedAsItems : ledger.totals.items}
         planned={hasFuturePlan}
+        t={t}
       />
 
       {isToday &&
@@ -804,9 +809,11 @@ function RamadanBanner({
 function MicrosRow({
   profile,
   totals,
+  t,
 }: {
   profile: import("@/types").Profile;
   totals: import("@/types").DailyTotals;
+  t: (key: string) => string;
 }) {
   // Defensive: an older deployed backend can respond without the
   // micronutrient totals, in which case totals.sodium_mg / etc. are
@@ -828,7 +835,7 @@ function MicrosRow({
   return (
     <View style={styles.microsRow}>
       <MicroCell
-        label="SODIUM"
+        label={t("home.micros.sodium")}
         low={sodium.low}
         high={sodium.high}
         target={profile.daily_sodium_mg ?? null}
@@ -837,7 +844,7 @@ function MicrosRow({
       />
       <View style={styles.microDivider} />
       <MicroCell
-        label="FIBER"
+        label={t("home.micros.fiber")}
         low={fiber.low}
         high={fiber.high}
         target={profile.daily_fiber_g ?? null}
@@ -845,7 +852,7 @@ function MicrosRow({
       />
       <View style={styles.microDivider} />
       <MicroCell
-        label="SUGAR"
+        label={t("home.micros.sugar")}
         low={sugar.low}
         high={sugar.high}
         target={profile.daily_sugar_g ?? null}
@@ -854,7 +861,7 @@ function MicrosRow({
       />
       <View style={styles.microDivider} />
       <MicroCell
-        label="SAT FAT"
+        label={t("home.micros.sat_fat")}
         low={satFat.low}
         high={satFat.high}
         target={profile.daily_saturated_fat_g ?? null}
@@ -921,12 +928,14 @@ function MicroCell({
 function MealSlotGrid({
   items,
   planned = false,
+  t,
 }: {
   items: import("@/types").MealItemRow[];
   /** True when the items came from a future-day meal plan preview.
    *  Swaps empty-state copy + CTA labels so the row reads as "here's
    *  what's on the plan" rather than "log this now." */
   planned?: boolean;
+  t: (key: string) => string;
 }) {
   const bySlot = new Map<
     "breakfast" | "lunch" | "dinner" | "snack",
@@ -969,26 +978,36 @@ function MealSlotGrid({
             <View style={{ flex: 1 }}>
               <Text style={[styles.slotLabel, { color: meta.tint }]}>
                 {meta.en}
-                {planned && rows.length > 0 ? "  · planned" : ""}
+                {planned && rows.length > 0
+                  ? "  " + t("home.slot_card.planned_suffix")
+                  : ""}
               </Text>
               {rows.length > 0 ? (
                 <Text style={styles.slotStat}>
                   {Math.round(kcalLow)}–{Math.round(kcalHigh)}
-                  <Text style={styles.slotUnit}> kcal · </Text>
+                  <Text style={styles.slotUnit}> {t("common.kcal")} · </Text>
                   {rows.length}
                   <Text style={styles.slotUnit}>
                     {" "}
-                    {rows.length === 1 ? "item" : "items"}
+                    {rows.length === 1
+                      ? t("home.slot_card.item_one")
+                      : t("home.slot_card.item_other")}
                   </Text>
                 </Text>
               ) : (
                 <Text style={styles.slotEmpty}>
-                  {planned ? "Not planned" : "Nothing logged · tap to add"}
+                  {planned
+                    ? t("home.slot_card.not_planned")
+                    : t("home.slot_card.nothing_logged")}
                 </Text>
               )}
             </View>
             <Text style={styles.slotCta}>
-              {planned ? "VIEW" : rows.length > 0 ? "+" : "LOG"}
+              {planned
+                ? t("home.slot_card.view_cta")
+                : rows.length > 0
+                  ? "+"
+                  : t("home.slot_card.log_cta")}
             </Text>
           </Pressable>
         );
