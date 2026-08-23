@@ -10,8 +10,12 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
+import { openHealthConnectSettings } from "react-native-health-connect";
+import { requestHealthKitAuth } from "@/lib/healthkit";
+import { requestHealthConnectAuth } from "@/lib/healthConnect";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -27,6 +31,7 @@ import { restorePurchases, hasProEntitlement } from "@/lib/rc";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 const WEB_BASE = "https://se7a.vercel.app";
+const HEALTH_CONNECTED_KEY = "se7a_health_connected";
 
 // Strava integration is fully implemented but hidden from the UI while
 // Strava's Nov 2024 API terms require a paid Enterprise contract for
@@ -400,6 +405,7 @@ export default function Settings() {
       </Section>
 
       <Section title={isArabic ? "التكاملات" : "Integrations"}>
+        <HealthRow isArabic={isArabic} />
         {STRAVA_ENABLED && (
           <IntegrationRow
             provider="strava"
@@ -1067,6 +1073,136 @@ function TimeField({
   );
 }
 
+/**
+ * On-device health store row — Apple Health on iOS, Health Connect on
+ * Android. Different from IntegrationRow: no OAuth (permissions are
+ * native), no server-side "connected" concept (data flows client-side
+ * via useHealthSync), and no per-provider sync button (background sync
+ * runs on Home mount).
+ *
+ * "Connected" is a cached flag in AsyncStorage set on the first
+ * successful auth prompt. Users can revoke in system settings and
+ * we won't know until the next auth call fails silently — the
+ * "Manage in system settings" link makes that path obvious.
+ */
+function HealthRow({ isArabic }: { isArabic: boolean }) {
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const supported = Platform.OS === "ios" || Platform.OS === "android";
+  const platformName =
+    Platform.OS === "ios"
+      ? isArabic
+        ? "Apple Health"
+        : "Apple Health"
+      : Platform.OS === "android"
+        ? isArabic
+          ? "Health Connect"
+          : "Health Connect"
+        : isArabic
+          ? "الصحة"
+          : "Health";
+
+  useEffect(() => {
+    if (!supported) return;
+    AsyncStorage.getItem(HEALTH_CONNECTED_KEY)
+      .then((v) => setConnected(v === "1"))
+      .catch(() => setConnected(false));
+  }, [supported]);
+
+  const authorize = async () => {
+    setBusy(true);
+    try {
+      const ok =
+        Platform.OS === "ios"
+          ? await requestHealthKitAuth()
+          : Platform.OS === "android"
+            ? await requestHealthConnectAuth()
+            : false;
+      if (ok) {
+        await AsyncStorage.setItem(HEALTH_CONNECTED_KEY, "1");
+        setConnected(true);
+        Alert.alert(
+          isArabic ? "تم" : "Connected",
+          isArabic
+            ? "سيتم مزامنة الوزن والخطوات والتمارين والنوم تلقائياً."
+            : "Weight, steps, workouts, and sleep will sync automatically."
+        );
+      } else {
+        Alert.alert(
+          isArabic ? "لم يتم المنح" : "Not granted",
+          isArabic
+            ? Platform.OS === "ios"
+              ? "افتح إعدادات > الخصوصية والأمان > الصحة > SE7A لتفعيل الأذونات."
+              : "افتح Health Connect لتفعيل الأذونات."
+            : Platform.OS === "ios"
+              ? "Open Settings > Privacy & Security > Health > SE7A to grant permissions."
+              : "Open the Health Connect app to grant permissions."
+        );
+      }
+    } catch {
+      /* silent */
+    }
+    setBusy(false);
+  };
+
+  const openSystemSettings = () => {
+    if (Platform.OS === "ios") {
+      Linking.openSettings().catch(() => {});
+    } else if (Platform.OS === "android") {
+      // openHealthConnectSettings is the official API and no-ops
+      // gracefully when the SDK isn't installed.
+      openHealthConnectSettings();
+    }
+  };
+
+  if (!supported) return null;
+
+  return (
+    <View style={styles.integRow}>
+      <View style={styles.integIcon}>
+        <Ionicons
+          name={connected ? "heart" : "heart-outline"}
+          size={20}
+          color={connected ? colors.coral : colors.dim}
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.integTitle}>{platformName}</Text>
+        <Text style={styles.integMeta}>
+          {connected === null
+            ? isArabic
+              ? "…"
+              : "…"
+            : connected
+              ? isArabic
+                ? "متصل · يزامن تلقائياً"
+                : "Connected · syncs automatically"
+              : isArabic
+                ? "اضغط للتفعيل"
+                : "Tap to enable"}
+        </Text>
+      </View>
+      {connected ? (
+        <Pressable
+          onPress={openSystemSettings}
+          disabled={busy}
+          hitSlop={6}
+        >
+          <Text style={styles.healthGhostBtn}>
+            {isArabic ? "الأذونات" : "Permissions"}
+          </Text>
+        </Pressable>
+      ) : (
+        <Pressable onPress={authorize} disabled={busy} hitSlop={6}>
+          <Text style={styles.integConnect}>
+            {busy ? "…" : isArabic ? "فعّل" : "ENABLE"}
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 function IntegrationRow({
   provider,
   displayName,
@@ -1469,6 +1605,18 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     alignItems: "center",
     justifyContent: "center",
+  },
+  healthGhostBtn: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    letterSpacing: 1.2,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel2,
   },
 });
 
