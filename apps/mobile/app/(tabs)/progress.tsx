@@ -384,6 +384,8 @@ export default function Progress() {
 
       <TopFoods days={days} />
 
+      <Nutrients days={days} />
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("progress.log_weighin")}</Text>
         <Text style={styles.cardSub}>
@@ -735,6 +737,127 @@ function TopFoods({ days }: { days: number }) {
   );
 }
 
+interface NutrientRow {
+  key: string;
+  label: string;
+  unit: string;
+  avg_low: number;
+  avg_high: number;
+  target: number | null;
+  polarity: "over_warn" | "want_hit" | "neutral";
+  pct_of_target: number | null;
+}
+
+interface NutrientsResponse {
+  days: number;
+  nutrients: NutrientRow[];
+}
+
+/**
+ * Nutrients card — daily-average of every tracked nutrient over the
+ * parent Progress window (7/30/90D). Ranges preserved. Coloring:
+ * coral for over-target on over-warn nutrients (sodium/sugar/sat fat),
+ * mint for hitting the target on want-hit nutrients (protein/fiber),
+ * neutral otherwise. Rows with no per-item data (all zeros) render
+ * as "—" so a legacy-only week doesn't misread as a real zero intake.
+ */
+function Nutrients({ days }: { days: number }) {
+  const [data, setData] = useState<NutrientsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api<NutrientsResponse>(`/api/insights/nutrients?days=${days}`)
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [days]);
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Nutrients</Text>
+      <Text style={styles.cardSub}>
+        Daily average over the last {days} days.
+      </Text>
+      {loading ? (
+        <ActivityIndicator
+          color={colors.gold}
+          style={{ marginVertical: spacing.md }}
+        />
+      ) : !data || data.nutrients.length === 0 ? (
+        <Text style={styles.topFoodsEmpty}>
+          Nothing tracked yet — log a few meals and check back.
+        </Text>
+      ) : (
+        <>
+          <View style={styles.nutrientHeaderRow}>
+            <Text style={[styles.nutrientHeaderCell, { flex: 2 }]}>
+              NUTRIENT
+            </Text>
+            <Text style={styles.nutrientHeaderCell}>DAILY AVG</Text>
+            <Text style={styles.nutrientHeaderCell}>TARGET</Text>
+            <Text style={styles.nutrientHeaderCell}>% </Text>
+          </View>
+          {data.nutrients.map((n) => {
+            const hasData = n.avg_high > 0;
+            const overTarget =
+              n.target !== null && n.avg_high > n.target;
+            const hitTarget =
+              n.target !== null && n.avg_high >= n.target;
+            const tint =
+              !hasData
+                ? colors.dim
+                : n.polarity === "over_warn" && overTarget
+                  ? colors.coral
+                  : n.polarity === "want_hit" && hitTarget
+                    ? colors.mint
+                    : n.polarity === "want_hit" &&
+                        n.target !== null &&
+                        n.avg_high < n.target * 0.5
+                      ? colors.coral
+                      : colors.ink;
+            return (
+              <View key={n.key} style={styles.nutrientRow}>
+                <Text style={[styles.nutrientName, { flex: 2 }]}>
+                  {n.label}
+                </Text>
+                <Text style={[styles.nutrientAvg, { color: tint }]}>
+                  {hasData
+                    ? `${fmtNutrient(n.avg_low, n.unit)}–${fmtNutrient(n.avg_high, n.unit)}`
+                    : "—"}
+                </Text>
+                <Text style={styles.nutrientTarget}>
+                  {n.target !== null ? fmtNutrient(n.target, n.unit) : "—"}
+                </Text>
+                <Text style={[styles.nutrientPct, { color: tint }]}>
+                  {n.pct_of_target !== null && hasData
+                    ? `${n.pct_of_target}%`
+                    : "—"}
+                </Text>
+              </View>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+}
+
+function fmtNutrient(n: number, unit: string): string {
+  if (unit === "mg") return String(Math.round(n));
+  return n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10);
+}
+
 function ProjStat({
   label,
   value,
@@ -1001,6 +1124,53 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: colors.dim,
     letterSpacing: 0.8,
+  },
+  nutrientHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+    marginTop: spacing.sm,
+  },
+  nutrientHeaderCell: {
+    flex: 1,
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 1.2,
+    textAlign: "right",
+  },
+  nutrientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  nutrientName: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  nutrientAvg: {
+    flex: 1,
+    fontFamily: font.mono,
+    fontSize: 12,
+    textAlign: "right",
+  },
+  nutrientTarget: {
+    flex: 1,
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    textAlign: "right",
+  },
+  nutrientPct: {
+    flex: 1,
+    fontFamily: font.displayBold,
+    fontSize: 13,
+    textAlign: "right",
   },
   label: {
     fontFamily: font.mono,
