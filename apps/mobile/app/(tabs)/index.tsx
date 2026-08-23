@@ -493,42 +493,6 @@ export default function Home() {
         </View>
       )}
 
-      {isToday && (
-        <Pressable
-          onPress={() => router.push("/meals-suggest")}
-          style={styles.suggestCard}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.kicker, { color: colors.gold }]}>
-              WHAT SHOULD I EAT?
-            </Text>
-            <Text style={styles.suggestTitle}>Ask SE7A</Text>
-            <Text style={styles.suggestSub}>
-              AI picks 3 dishes that fit your remaining budget.
-            </Text>
-          </View>
-          <Text style={styles.suggestArrow}>→</Text>
-        </Pressable>
-      )}
-
-      {isToday && (
-        <Pressable
-          onPress={() => router.push("/meal-plan")}
-          style={styles.planCard}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.kicker, { color: colors.mint }]}>
-              PLAN YOUR WEEK
-            </Text>
-            <Text style={styles.suggestTitle}>7-day meal plan</Text>
-            <Text style={styles.suggestSub}>
-              Hits your macros. Auto-shopping list included.
-            </Text>
-          </View>
-          <Text style={[styles.suggestArrow, { color: colors.mint }]}>→</Text>
-        </Pressable>
-      )}
-
       {/* Weekly Wrapped — surface on Mon-Wed while last week's recap is fresh. */}
       {isToday && isWrappedWindow(nowDate) && (
         <Pressable
@@ -598,23 +562,6 @@ export default function Home() {
           targetMl={water.target_ml}
           onAdd={addWater}
         />
-      )}
-
-      {isToday && !fasting?.active && (
-        <Pressable onPress={() => router.push("/fasting")} style={styles.miniLink}>
-          <Text style={styles.miniLinkLabel}>{t("home.start_fast")}</Text>
-          <Text style={styles.miniLinkArrow}>→</Text>
-        </Pressable>
-      )}
-
-      {isToday && (
-        <Pressable onPress={() => router.push("/onboarding")} style={styles.redoRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.redoLabel}>{t("home.change_my_plan")}</Text>
-            <Text style={styles.redoSub}>{t("home.change_my_plan_sub")}</Text>
-          </View>
-          <Text style={styles.redoArrow}>→</Text>
-        </Pressable>
       )}
 
       {isToday && (
@@ -1558,16 +1505,6 @@ const styles = StyleSheet.create({
     color: colors.dim,
     marginTop: 2,
   },
-  suggestCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
   ramadanBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1697,16 +1634,6 @@ const styles = StyleSheet.create({
     color: colors.gold,
     letterSpacing: 0.3,
   },
-  planCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.mint,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
   wrappedCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -1733,48 +1660,5 @@ const styles = StyleSheet.create({
     fontFamily: font.displayBold,
     fontSize: 26,
     color: colors.gold,
-  },
-  miniLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.sm,
-  },
-  miniLinkLabel: {
-    fontFamily: font.body,
-    fontSize: 14,
-    color: colors.dim,
-  },
-  miniLinkArrow: {
-    fontFamily: font.displayBold,
-    fontSize: 16,
-    color: colors.dim,
-  },
-  redoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
-  redoLabel: {
-    fontFamily: font.body,
-    fontSize: 14,
-    color: colors.ink,
-  },
-  redoSub: {
-    fontFamily: font.body,
-    fontSize: 12,
-    color: colors.dim,
-    marginTop: 2,
-    lineHeight: 17,
-  },
-  redoArrow: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
-    color: colors.dim,
   },
 });
