@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
 import {
   detectCyclePhaseKcalDrift,
+  detectCyclePhaseWorkoutCapacity,
   detectDayOfWeekKcalBias,
   detectFiberSodiumDays,
   detectLateNightEating,
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
         .gte("eaten_at", sinceIso),
       supabase
         .from("workout_sessions")
-        .select("completed_at")
+        .select("completed_at, exercises")
         .eq("user_id", user.id)
         .gte("completed_at", sinceIso),
       supabase
@@ -143,6 +144,17 @@ export async function GET(request: Request) {
         eaten_at: m.eaten_at as string,
         kcal_low: Number(m.kcal_low),
         kcal_high: Number(m.kcal_high),
+      })),
+      (profile?.cycle_prefs ?? null) as Partial<CyclePrefs> | null,
+      (periodsRes.data ?? []).map((p) => ({
+        started_on: String(p.started_on),
+        ended_on: p.ended_on ? String(p.ended_on) : null,
+      }))
+    ),
+    detectCyclePhaseWorkoutCapacity(
+      workouts.map((w) => ({
+        completed_at: w.completed_at as string,
+        exercises: w.exercises as unknown,
       })),
       (profile?.cycle_prefs ?? null) as Partial<CyclePrefs> | null,
       (periodsRes.data ?? []).map((p) => ({

@@ -31,7 +31,8 @@ export interface Pattern {
     | "weekend_cardio_dip"
     | "fiber_sodium_days"
     | "ramadan_drift"
-    | "cycle_phase_kcal_drift";
+    | "cycle_phase_kcal_drift"
+    | "cycle_phase_workout_capacity";
   severity: PatternSeverity;
   title: string;
   body: string;
@@ -492,6 +493,158 @@ export function detectCyclePhaseKcalDrift(
       days_in_phase: perPhase[biggest.phase].length,
     },
   };
+}
+
+// ── Cycle-phase workout capacity ─────────────────────────────────
+/**
+ * "Your follicular sessions land 22% more volume than your menstrual
+ * ones." Uses total session volume (Σ weight_kg × reps across all
+ * sets) as the capacity signal — captures intensity + workload
+ * without picking a single lift. Same double-gate as cycle-phase
+ * kcal drift (opted in + share_with_coach).
+ *
+ * Same phase-bucket rules: ≥3 sessions per phase to include; skip
+ * days more than avg_cycle + 7 out from the last logged period.
+ *
+ * Copy names the underlying physiology briefly so the pattern reads
+ * as "use this to program your training" instead of "you're
+ * underperforming." Never warn — this is a real biological curve.
+ */
+export function detectCyclePhaseWorkoutCapacity(
+  workouts: { completed_at: string; exercises: unknown }[],
+  prefs: Partial<CyclePrefs> | null | undefined,
+  periods: PeriodEntry[]
+): Pattern | null {
+  if (!prefs?.enabled || !prefs.share_with_coach) return null;
+  if (periods.length < 2) return null;
+  if (workouts.length === 0) return null;
+
+  const avgCycle = averageCycleLength(
+    periods,
+    prefs.avg_cycle_length_days ?? 28
+  );
+  const avgPeriod = averagePeriodLength(
+    periods,
+    prefs.avg_period_length_days ?? 5
+  );
+  const sortedPeriods = [...periods].sort((a, b) =>
+    a.started_on.localeCompare(b.started_on)
+  );
+
+  const perPhase: Record<CyclePhase, number[]> = {
+    menstrual: [],
+    follicular: [],
+    ovulation: [],
+    luteal: [],
+    unknown: [],
+  };
+
+  for (const w of workouts) {
+    const volume = sessionVolume(w.exercises);
+    if (volume <= 0) continue; // no lifted volume — skip cardio-only rows
+
+    const d = new Date(w.completed_at);
+    const iso = isoDay(d);
+    let applicable: PeriodEntry | null = null;
+    for (let i = sortedPeriods.length - 1; i >= 0; i--) {
+      if (sortedPeriods[i]!.started_on <= iso) {
+        applicable = sortedPeriods[i]!;
+        break;
+      }
+    }
+    if (!applicable) continue;
+    const cycleDay = daysBetween(applicable.started_on, iso) + 1;
+    if (cycleDay < 1 || cycleDay > avgCycle + 7) continue;
+    const phase = phaseForDay(cycleDay, avgCycle, avgPeriod);
+    perPhase[phase].push(volume);
+  }
+
+  const validPhases: CyclePhase[] = (
+    ["menstrual", "follicular", "ovulation", "luteal"] as const
+  ).filter((p) => perPhase[p].length >= 3);
+  if (validPhases.length < 2) return null;
+
+  const avgByPhase = new Map<CyclePhase, number>();
+  for (const p of validPhases) {
+    const arr = perPhase[p];
+    avgByPhase.set(p, arr.reduce((s, n) => s + n, 0) / arr.length);
+  }
+
+  const overallMean =
+    [...avgByPhase.values()].reduce((s, n) => s + n, 0) / avgByPhase.size;
+  if (overallMean <= 0) return null;
+
+  let biggest: { phase: CyclePhase; delta: number } | null = null;
+  for (const [phase, avg] of avgByPhase) {
+    const delta = (avg - overallMean) / overallMean;
+    if (!biggest || Math.abs(delta) > Math.abs(biggest.delta)) {
+      biggest = { phase, delta };
+    }
+  }
+  if (!biggest || Math.abs(biggest.delta) < 0.15) return null;
+
+  const pct = Math.round(Math.abs(biggest.delta) * 100);
+  const phaseLabel =
+    biggest.phase[0]!.toUpperCase() + biggest.phase.slice(1);
+  const direction = biggest.delta > 0 ? "more" : "less";
+
+  return {
+    id: "cycle_phase_workout_capacity",
+    severity: "info", // biology, not a mistake
+    title: `${phaseLabel} sessions land ${pct}% ${direction} volume`,
+    body: cyclePhaseCapacityBody(biggest.phase, biggest.delta),
+    evidence: {
+      phase: biggest.phase,
+      phase_avg_volume: Math.round(avgByPhase.get(biggest.phase)!),
+      overall_avg_volume: Math.round(overallMean),
+      delta_pct: Math.round(biggest.delta * 100),
+      sessions_in_phase: perPhase[biggest.phase].length,
+    },
+  };
+}
+
+/**
+ * Sum of weight × reps across every set of every exercise. Loose
+ * shape check because `exercises` is jsonb — any garbage entry is
+ * silently skipped rather than failing the whole detector.
+ */
+function sessionVolume(exercisesRaw: unknown): number {
+  if (!Array.isArray(exercisesRaw)) return 0;
+  let total = 0;
+  for (const ex of exercisesRaw as {
+    sets?: { weight_kg?: number; reps?: number }[];
+  }[]) {
+    const sets = ex?.sets;
+    if (!Array.isArray(sets)) continue;
+    for (const s of sets) {
+      const w = Number(s?.weight_kg);
+      const r = Number(s?.reps);
+      if (!Number.isFinite(w) || w <= 0) continue;
+      if (!Number.isFinite(r) || r <= 0) continue;
+      total += w * r;
+    }
+  }
+  return total;
+}
+
+function cyclePhaseCapacityBody(
+  phase: CyclePhase,
+  delta: number
+): string {
+  const higher = delta > 0;
+  if (phase === "follicular" && higher) {
+    return "Follicular estrogen supports peak lifting capacity for many women. Program heavy work + PR attempts here rather than fighting for them mid-luteal.";
+  }
+  if (phase === "menstrual" && !higher) {
+    return "Menstrual fatigue is expected — technique-focused sessions with lower volume land better than forcing a PR week here.";
+  }
+  if (phase === "luteal" && !higher) {
+    return "Luteal-phase dip is common — thermal load + progesterone raise perceived effort at the same weight. A planned deload aligns naturally with the late-luteal week.";
+  }
+  if (phase === "ovulation" && higher) {
+    return "Ovulation window can peak briefly — some women see a short PR-attempt window here. Note it in your program.";
+  }
+  return "Worth noticing so training programming can flex with your cycle rather than against it.";
 }
 
 function cyclePhaseBody(phase: CyclePhase, delta: number): string {

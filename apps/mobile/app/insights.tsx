@@ -33,6 +33,7 @@ const ICON_FOR_ID: Record<string, keyof typeof Ionicons.glyphMap> = {
   fiber_sodium_days: "leaf",
   ramadan_drift: "moon",
   cycle_phase_kcal_drift: "sync",
+  cycle_phase_workout_capacity: "barbell",
 };
 
 export default function Insights() {
