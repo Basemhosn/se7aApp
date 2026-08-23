@@ -28,6 +28,7 @@
         "NSPhotoLibraryUsageDescription": "SE7A reads photos from your library to analyze plates and menus.",
         "NSHealthShareUsageDescription": "SE7A reads your weight, body-fat percentage, steps, active energy, and workouts from Apple Health so your dashboard stays in sync automatically.",
         "NSHealthUpdateUsageDescription": "SE7A saves the weigh-ins you log back to Apple Health so both apps stay consistent.",
+        "NSMicrophoneUsageDescription": "SE7A uses the microphone so you can log meals by voice — hold to speak, and SE7A converts what you said into logged items.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {

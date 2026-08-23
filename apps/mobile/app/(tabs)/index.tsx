@@ -555,6 +555,13 @@ export default function Home() {
       <QuickLogFab
         actions={[
           {
+            key: "voice",
+            label: "Say what you ate",
+            icon: "mic-outline",
+            tint: colors.gold,
+            onPress: () => router.push("/voice-log"),
+          },
+          {
             key: "plate",
             label: "Scan a plate",
             icon: "camera-outline",
