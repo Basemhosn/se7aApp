@@ -80,6 +80,29 @@ export interface DailyTotals {
   saturated_fat_g: MacroRange;
 }
 
+export interface PlannedMealPreview {
+  slot: MealSlot;
+  name: string;
+  subtitle?: string;
+  portion: string;
+  kcal_low: number;
+  kcal_high: number;
+  protein_g_low: number;
+  protein_g_high: number;
+  carb_g_low: number;
+  carb_g_high: number;
+  fat_g_low: number;
+  fat_g_high: number;
+  sodium_mg_low?: number;
+  sodium_mg_high?: number;
+  fiber_g_low?: number;
+  fiber_g_high?: number;
+  sugar_g_low?: number;
+  sugar_g_high?: number;
+  saturated_fat_g_low?: number;
+  saturated_fat_g_high?: number;
+}
+
 export interface LedgerDayResponse {
   totals: DailyTotals;
   remaining: {
@@ -88,6 +111,8 @@ export interface LedgerDayResponse {
     carb_g: MacroRange;
     fat_g: MacroRange;
   };
+  /** Present only for future dates; empty for today + past. */
+  planned_items?: PlannedMealPreview[];
 }
 /** @deprecated Use LedgerDayResponse — same shape, clearer name now
  *  that the endpoint accepts a ?date param. Kept as an alias so a

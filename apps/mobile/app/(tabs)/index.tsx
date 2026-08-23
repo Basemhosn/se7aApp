@@ -256,6 +256,43 @@ export default function Home() {
               day: "numeric",
             });
 
+  // Future-day view: use planned_items from the meal plan (if any)
+  // as the display source for the ring + slot grid. Today + past use
+  // real meal_items via ledger.totals as before.
+  const plannedItems = ledger.planned_items ?? [];
+  const hasFuturePlan = viewOffset > 0 && plannedItems.length > 0;
+  const displayKcal = hasFuturePlan
+    ? plannedItems.reduce(
+        (acc, p) => ({
+          low: acc.low + Number(p.kcal_low ?? 0),
+          high: acc.high + Number(p.kcal_high ?? 0),
+        }),
+        { low: 0, high: 0 }
+      )
+    : ledger.totals.kcal;
+  const displayItemCount = hasFuturePlan
+    ? plannedItems.length
+    : ledger.totals.items.length;
+  // Shim planned_items into meal-item-like shape so MealSlotGrid can
+  // render them unchanged. Only the fields it reads matter.
+  const plannedAsItems = plannedItems.map((p, i) => ({
+    id: -1 - i, // negative ids so React keys don't collide with real items
+    name: p.name,
+    portion_estimate: p.portion,
+    source: "planned",
+    confidence: null,
+    eaten_at: new Date().toISOString(),
+    meal_slot: p.slot,
+    kcal_low: p.kcal_low,
+    kcal_high: p.kcal_high,
+    protein_g_low: p.protein_g_low,
+    protein_g_high: p.protein_g_high,
+    carb_g_low: p.carb_g_low,
+    carb_g_high: p.carb_g_high,
+    fat_g_low: p.fat_g_low,
+    fat_g_high: p.fat_g_high,
+  }));
+
   return (
     <Screen>
       <View style={styles.head}>
@@ -331,14 +368,16 @@ export default function Home() {
               : t("home.remaining_today")
           : viewOffset < 0
             ? "What you logged"
-            : "Nothing planned yet"}
+            : hasFuturePlan
+              ? "Planned for the day"
+              : "Nothing planned yet"}
       </Text>
 
       <View style={styles.ringRow}>
         <CalorieRing
           target={dayStatus?.adjusted_target ?? profile.daily_kcal_target ?? 2000}
-          eatenLow={Math.round(ledger.totals.kcal.low)}
-          eatenHigh={Math.round(ledger.totals.kcal.high)}
+          eatenLow={Math.round(displayKcal.low)}
+          eatenHigh={Math.round(displayKcal.high)}
           size={220}
         />
         <View style={styles.ringSide}>
@@ -351,19 +390,19 @@ export default function Home() {
             tint={colors.dim}
           />
           <SideStat
-            label="EATEN"
+            label={hasFuturePlan ? "PLANNED" : "EATEN"}
             value={
-              ledger.totals.items.length === 0
+              displayItemCount === 0
                 ? "—"
-                : `${Math.round(ledger.totals.kcal.low)}–${Math.round(ledger.totals.kcal.high)}`
+                : `${Math.round(displayKcal.low)}–${Math.round(displayKcal.high)}`
             }
             unit="kcal"
             tint={colors.gold}
           />
           <SideStat
             label="ITEMS"
-            value={String(ledger.totals.items.length)}
-            unit="logged"
+            value={String(displayItemCount)}
+            unit={hasFuturePlan ? "planned" : "logged"}
             tint={colors.dim}
           />
         </View>
@@ -378,7 +417,10 @@ export default function Home() {
 
       <MicrosRow profile={profile} totals={ledger.totals} />
 
-      <MealSlotGrid items={ledger.totals.items} />
+      <MealSlotGrid
+        items={hasFuturePlan ? plannedAsItems : ledger.totals.items}
+        planned={hasFuturePlan}
+      />
 
       {isToday &&
         streak &&
@@ -892,8 +934,13 @@ const SLOTS: Array<"breakfast" | "lunch" | "dinner" | "snack"> = [
  */
 function MealSlotGrid({
   items,
+  planned = false,
 }: {
   items: import("@/types").MealItemRow[];
+  /** True when the items came from a future-day meal plan preview.
+   *  Swaps empty-state copy + CTA labels so the row reads as "here's
+   *  what's on the plan" rather than "log this now." */
+  planned?: boolean;
 }) {
   const bySlot = new Map<
     "breakfast" | "lunch" | "dinner" | "snack",
@@ -919,10 +966,14 @@ function MealSlotGrid({
           <Pressable
             key={s}
             onPress={() =>
-              router.push({
-                pathname: "/meals-suggest" as const,
-                params: { slot: s },
-              })
+              router.push(
+                planned
+                  ? { pathname: "/meal-plan" as const }
+                  : {
+                      pathname: "/meals-suggest" as const,
+                      params: { slot: s },
+                    }
+              )
             }
             style={[styles.slotCard, { borderLeftColor: meta.tint }]}
           >
@@ -932,6 +983,7 @@ function MealSlotGrid({
             <View style={{ flex: 1 }}>
               <Text style={[styles.slotLabel, { color: meta.tint }]}>
                 {meta.label}
+                {planned && rows.length > 0 ? "  · planned" : ""}
               </Text>
               {rows.length > 0 ? (
                 <Text style={styles.slotStat}>
@@ -944,10 +996,14 @@ function MealSlotGrid({
                   </Text>
                 </Text>
               ) : (
-                <Text style={styles.slotEmpty}>Nothing logged · tap to add</Text>
+                <Text style={styles.slotEmpty}>
+                  {planned ? "Not planned" : "Nothing logged · tap to add"}
+                </Text>
               )}
             </View>
-            <Text style={styles.slotCta}>{rows.length > 0 ? "+" : "LOG"}</Text>
+            <Text style={styles.slotCta}>
+              {planned ? "VIEW" : rows.length > 0 ? "+" : "LOG"}
+            </Text>
           </Pressable>
         );
       })}
