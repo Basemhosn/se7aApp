@@ -3,7 +3,7 @@ import { generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { Redis } from "@upstash/redis";
 import { getRouteClient } from "@/lib/supabase/server";
-import { isoDay } from "@/lib/dateKeys";
+import { addDaysIso as addDays, isoDay } from "@/lib/dateKeys";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -551,13 +551,6 @@ function pickHero(input: {
     value: `${input.daysLogged}`,
     unit: "days logged",
   };
-}
-
-function addDays(iso: string, delta: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y!, (m ?? 1) - 1, d ?? 1);
-  dt.setDate(dt.getDate() + delta);
-  return isoDay(dt);
 }
 
 function dayName(iso: string): string {

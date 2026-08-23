@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
-import { isoDay, localDayKey } from "@/lib/dateKeys";
+import { isoDay, localDayKey, offsetDays } from "@/lib/dateKeys";
 
 export const runtime = "nodejs";
 
@@ -153,12 +153,6 @@ export async function GET(request: Request) {
 function clamp(n: number, lo: number, hi: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(lo, Math.min(hi, n));
-}
-
-function offsetDays(d: Date, delta: number): Date {
-  const n = new Date(d);
-  n.setDate(n.getDate() + delta);
-  return n;
 }
 
 function offsetDaysFromKey(key: string, delta: number): Date {

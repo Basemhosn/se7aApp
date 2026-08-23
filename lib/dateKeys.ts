@@ -22,3 +22,37 @@ export function localDayKey(d: Date, tzOffsetMin: number): string {
   const shifted = new Date(d.getTime() + tzOffsetMin * 60_000);
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
+
+/**
+ * Shift a Date object by N days (positive or negative). Preserves the
+ * local hour — uses setDate which handles month/year rollover.
+ */
+export function offsetDays(d: Date, delta: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + delta);
+  return out;
+}
+
+/**
+ * Add days to a YYYY-MM-DD string, returning YYYY-MM-DD. Callers that
+ * only work in ISO strings (streak walks, cycle math) skip a Date
+ * round-trip.
+ */
+export function addDaysIso(iso: string, delta: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y!, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() + delta);
+  return isoDay(dt);
+}
+
+/**
+ * Days between two YYYY-MM-DD strings (b - a). Positive when b is
+ * later. Same string-only interface as addDaysIso.
+ */
+export function daysBetweenIso(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  const da = new Date(ay!, (am ?? 1) - 1, ad ?? 1).getTime();
+  const db = new Date(by!, (bm ?? 1) - 1, bd ?? 1).getTime();
+  return Math.round((db - da) / 86_400_000);
+}

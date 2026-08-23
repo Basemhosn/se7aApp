@@ -12,7 +12,7 @@
  */
 
 import { isRamadanActiveForPrefs, type RamadanPrefs } from "./ramadan";
-import { isoDay } from "./dateKeys";
+import { daysBetweenIso as daysBetween, isoDay } from "./dateKeys";
 import {
   averageCycleLength,
   averagePeriodLength,
@@ -1076,14 +1076,6 @@ function cyclePhaseBody(phase: CyclePhase, delta: number): string {
     return "Follicular phase running high — usually driven by more training capacity + higher activity, not a behavior gap.";
   }
   return "Worth noticing so it doesn't read as an adherence problem when it's just biology.";
-}
-
-function daysBetween(a: string, b: string): number {
-  const [ay, am, ad] = a.split("-").map(Number);
-  const [by, bm, bd] = b.split("-").map(Number);
-  const da = new Date(ay!, (am ?? 1) - 1, ad ?? 1).getTime();
-  const db = new Date(by!, (bm ?? 1) - 1, bd ?? 1).getTime();
-  return Math.round((db - da) / 86_400_000);
 }
 
 function fmtHM(min: number): string {

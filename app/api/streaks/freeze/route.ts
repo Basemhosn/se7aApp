@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getRouteClient } from "@/lib/supabase/server";
-import { localDayKey } from "@/lib/dateKeys";
+import { localDayKey, offsetDays } from "@/lib/dateKeys";
 import {
   FREEZE_MAX_BACKDATE_DAYS,
   MONTHLY_FREEZE_BUDGET,
@@ -185,12 +185,6 @@ export async function POST(request: Request) {
     freezes_used_this_month: nextUsed,
     freezes_available_this_month: Math.max(0, MONTHLY_FREEZE_BUDGET - nextUsed),
   });
-}
-
-function offsetDays(d: Date, delta: number): Date {
-  const n = new Date(d);
-  n.setDate(n.getDate() + delta);
-  return n;
 }
 
 function utcInstantAtLocalStartOfDay(

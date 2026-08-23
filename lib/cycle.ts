@@ -15,7 +15,11 @@
  * fertility with precision. Aviva Romm's numbers, not a clinic's.
  */
 
-import { isoDay } from "./dateKeys";
+import {
+  addDaysIso as addDays,
+  daysBetweenIso as daysBetween,
+  isoDay,
+} from "./dateKeys";
 
 export type CyclePhase =
   | "menstrual"
@@ -241,18 +245,6 @@ export function hintForPhase(
 }
 
 // ── date helpers ────────────────────────────────────────────────────────
-
-function daysBetween(a: string, b: string): number {
-  const da = dateFromIso(a);
-  const db = dateFromIso(b);
-  return Math.round((db.getTime() - da.getTime()) / 86_400_000);
-}
-
-function addDays(iso: string, delta: number): string {
-  const d = dateFromIso(iso);
-  d.setDate(d.getDate() + delta);
-  return isoDay(d);
-}
 
 function dateFromIso(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
