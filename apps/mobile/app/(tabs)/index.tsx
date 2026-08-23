@@ -319,6 +319,8 @@ export default function Home() {
         <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
       </View>
 
+      <MealSlotGrid items={ledger.totals.items} />
+
       {streak &&
         (streak.current_days > 0 ||
           streak.days_this_week > 0 ||
@@ -726,6 +728,96 @@ function RamadanBanner({
   );
 }
 
+const SLOT_META: Record<
+  "breakfast" | "lunch" | "dinner" | "snack",
+  { icon: keyof typeof Ionicons.glyphMap; tint: string; label: string }
+> = {
+  breakfast: { icon: "sunny", tint: colors.gold, label: "BREAKFAST" },
+  lunch: { icon: "restaurant", tint: colors.coral, label: "LUNCH" },
+  dinner: { icon: "moon", tint: "#8b7dd6", label: "DINNER" },
+  snack: { icon: "leaf", tint: colors.mint, label: "SNACK" },
+};
+
+const SLOTS: Array<"breakfast" | "lunch" | "dinner" | "snack"> = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+];
+
+/**
+ * Meal-slot log grid — one row per slot (Breakfast/Lunch/Dinner/Snack).
+ * MyFitnessPal-style: shows kcal range + item count when the slot has
+ * items, or "Log" affordance when empty. Tap opens meals-suggest with
+ * the slot pre-selected, matching how the coach entry-flow is scoped.
+ *
+ * Bucketing is client-side from ledger.totals.items so no extra fetch.
+ */
+function MealSlotGrid({
+  items,
+}: {
+  items: import("@/types").MealItemRow[];
+}) {
+  const bySlot = new Map<
+    "breakfast" | "lunch" | "dinner" | "snack",
+    import("@/types").MealItemRow[]
+  >();
+  for (const s of SLOTS) bySlot.set(s, []);
+  for (const it of items) {
+    const slot = it.meal_slot;
+    if (!slot) continue;
+    if (bySlot.has(slot)) bySlot.get(slot)!.push(it);
+  }
+  return (
+    <View style={styles.slotGrid}>
+      {SLOTS.map((s) => {
+        const rows = bySlot.get(s) ?? [];
+        const meta = SLOT_META[s];
+        const kcalLow = rows.reduce((sum, r) => sum + Number(r.kcal_low ?? 0), 0);
+        const kcalHigh = rows.reduce(
+          (sum, r) => sum + Number(r.kcal_high ?? 0),
+          0
+        );
+        return (
+          <Pressable
+            key={s}
+            onPress={() =>
+              router.push({
+                pathname: "/meals-suggest" as const,
+                params: { slot: s },
+              })
+            }
+            style={[styles.slotCard, { borderLeftColor: meta.tint }]}
+          >
+            <View style={styles.slotIcon}>
+              <Ionicons name={meta.icon} size={16} color={meta.tint} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.slotLabel, { color: meta.tint }]}>
+                {meta.label}
+              </Text>
+              {rows.length > 0 ? (
+                <Text style={styles.slotStat}>
+                  {Math.round(kcalLow)}–{Math.round(kcalHigh)}
+                  <Text style={styles.slotUnit}> kcal · </Text>
+                  {rows.length}
+                  <Text style={styles.slotUnit}>
+                    {" "}
+                    {rows.length === 1 ? "item" : "items"}
+                  </Text>
+                </Text>
+              ) : (
+                <Text style={styles.slotEmpty}>Nothing logged · tap to add</Text>
+              )}
+            </View>
+            <Text style={styles.slotCta}>{rows.length > 0 ? "+" : "LOG"}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function StreakCard({
   streak,
   onFrozen,
@@ -1068,6 +1160,65 @@ const styles = StyleSheet.create({
   macros: {
     flexDirection: "row",
     gap: spacing.sm,
+  },
+  slotGrid: {
+    gap: spacing.sm,
+  },
+  slotCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  slotIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slotLabel: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+  },
+  slotStat: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  slotUnit: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    letterSpacing: 0.6,
+  },
+  slotEmpty: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  slotCta: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.2,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "rgba(246,183,60,0.10)",
   },
   macro: {
     flex: 1,

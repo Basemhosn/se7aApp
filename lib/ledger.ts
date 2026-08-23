@@ -62,7 +62,7 @@ export async function getTodayTotals(
   const { data, error } = await supabase
     .from("meal_items")
     .select(
-      "id, name, portion_estimate, source, confidence, eaten_at, scan_id, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high"
+      "id, name, portion_estimate, source, confidence, eaten_at, scan_id, meal_slot, kcal_low, kcal_high, protein_g_low, protein_g_high, carb_g_low, carb_g_high, fat_g_low, fat_g_high"
     )
     .eq("user_id", userId)
     .gte("eaten_at", dayStart)
