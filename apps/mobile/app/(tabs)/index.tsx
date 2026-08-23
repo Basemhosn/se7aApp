@@ -460,6 +460,25 @@ export default function Home() {
         <Text style={[styles.suggestArrow, { color: colors.mint }]}>→</Text>
       </Pressable>
 
+      {/* Weekly Wrapped — surface on Mon-Wed while last week's recap is fresh. */}
+      {isWrappedWindow(nowDate) && (
+        <Pressable
+          onPress={() => router.push("/weekly-wrapped")}
+          style={styles.wrappedCard}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.kicker, { color: colors.gold }]}>
+              LAST WEEK · WRAPPED
+            </Text>
+            <Text style={styles.suggestTitle}>See your recap</Text>
+            <Text style={styles.suggestSub}>
+              Numbers, streaks, and the coach's take on the week.
+            </Text>
+          </View>
+          <Text style={[styles.suggestArrow, { color: colors.gold }]}>→</Text>
+        </Pressable>
+      )}
+
       {fasting?.active ? (
         <Pressable
           onPress={() => router.push("/fasting")}
@@ -877,6 +896,16 @@ function recoveryBandColor(
   return colors.gold;
 }
 
+/**
+ * Wrapped is only surfaced on Mon–Wed local time — the recap covers
+ * the just-completed Mon–Sun week, and it feels stale by Thursday.
+ * Users can still open /weekly-wrapped directly outside this window.
+ */
+function isWrappedWindow(d: Date): boolean {
+  const dow = d.getDay(); // 0 = Sun, 1 = Mon, ...
+  return dow === 1 || dow === 2 || dow === 3;
+}
+
 const styles = StyleSheet.create({
   center: {
     flex: 1,
@@ -1291,6 +1320,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.mint,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  wrappedCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
     borderRadius: radius.lg,
     padding: spacing.md,
   },
