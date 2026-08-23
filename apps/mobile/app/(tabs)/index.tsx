@@ -20,6 +20,7 @@ import { useRamadan, useRamadanScheduling } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
+import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
 import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerTodayResponse, Profile } from "@/types";
@@ -105,6 +106,7 @@ export default function Home() {
   const { user } = useAuth();
   const { t } = useTranslation();
   usePushRegistration();
+  useNotificationDeepLinks();
   useHealthSync(user?.id);
   useWidgetToken(user?.id);
   const { status: ramadan } = useRamadan();
