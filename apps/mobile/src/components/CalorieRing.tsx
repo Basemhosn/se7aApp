@@ -19,11 +19,16 @@ export function CalorieRing({
   eatenLow,
   eatenHigh,
   size = 240,
+  planned = false,
 }: {
   target: number;
   eatenLow: number;
   eatenHigh: number;
   size?: number;
+  /** When true, ring reads as a plan preview: dashed outer rim, dimmer
+   *  arc, and the center label reads "PLANNED" with the planned total
+   *  (eatenLow/High are the planned range) instead of "REMAINING". */
+  planned?: boolean;
 }) {
   const stroke = 14;
   const r = (size - stroke) / 2;
@@ -42,6 +47,13 @@ export function CalorieRing({
   const over = eatenLow > target;
 
   const ringColor = over ? colors.coral : colors.gold;
+  // Planned mode: fade the arcs so the ring reads as a preview rather
+  // than actual state, and draw a dashed decorative rim just inside the
+  // stroke's outer edge to visually annotate it. The arc-length math
+  // stays untouched — this is pure visual dressing.
+  const lowOpacity = planned ? 0.55 : 1;
+  const highOpacity = planned ? 0.15 : 0.28;
+  const rimR = r + stroke / 2 + 2;
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
@@ -55,13 +67,28 @@ export function CalorieRing({
           strokeWidth={stroke}
           fill="none"
         />
+        {/* Dashed rim (planned mode only) — sits just outside the main
+            ring so the arc math is untouched. Reads as "this is a
+            preview outline." */}
+        {planned && (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={rimR}
+            stroke={ringColor}
+            strokeOpacity={0.5}
+            strokeWidth={1.5}
+            fill="none"
+            strokeDasharray="4 5"
+          />
+        )}
         {/* High-bound arc: dim shadow of the range */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           stroke={ringColor}
-          strokeOpacity={0.28}
+          strokeOpacity={highOpacity}
           strokeWidth={stroke}
           fill="none"
           strokeDasharray={c}
@@ -75,6 +102,7 @@ export function CalorieRing({
           cy={size / 2}
           r={r}
           stroke={ringColor}
+          strokeOpacity={lowOpacity}
           strokeWidth={stroke}
           fill="none"
           strokeDasharray={c}
@@ -86,16 +114,22 @@ export function CalorieRing({
 
       <View style={styles.center} pointerEvents="none">
         <Text style={styles.kicker}>
-          {over ? "OVER TODAY" : "REMAINING"}
+          {planned ? "PLANNED" : over ? "OVER TODAY" : "REMAINING"}
         </Text>
-        <Text style={[styles.big, over && { color: colors.coral }]}>
-          {over ? Math.round(eatenLow - target) : remainingMid}
+        <Text style={[styles.big, !planned && over && { color: colors.coral }]}>
+          {planned
+            ? Math.round((eatenLow + eatenHigh) / 2)
+            : over
+              ? Math.round(eatenLow - target)
+              : remainingMid}
         </Text>
         <Text style={styles.unit}>kcal</Text>
         <Text style={styles.range}>
-          {over
-            ? `+${Math.round(eatenLow - target)}–${Math.round(eatenHigh - target)}`
-            : `${remainingLow}–${remainingHigh}`}
+          {planned
+            ? `${Math.round(eatenLow)}–${Math.round(eatenHigh)}`
+            : over
+              ? `+${Math.round(eatenLow - target)}–${Math.round(eatenHigh - target)}`
+              : `${remainingLow}–${remainingHigh}`}
         </Text>
       </View>
     </View>

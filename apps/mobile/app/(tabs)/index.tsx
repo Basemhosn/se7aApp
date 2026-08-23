@@ -379,6 +379,7 @@ export default function Home() {
           eatenLow={Math.round(displayKcal.low)}
           eatenHigh={Math.round(displayKcal.high)}
           size={220}
+          planned={hasFuturePlan}
         />
         <View style={styles.ringSide}>
           <SideStat
