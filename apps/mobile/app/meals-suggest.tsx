@@ -15,6 +15,7 @@ import { BackButton } from "@/components/BackButton";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
+import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Suggestion {
@@ -41,14 +42,6 @@ interface SuggestResponse {
 }
 
 const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
-
-function slotForNow(): MealSlot {
-  const h = new Date().getHours();
-  if (h < 11) return "breakfast";
-  if (h < 16) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
-}
 
 export default function MealsSuggest() {
   const params = useLocalSearchParams<{ slot?: MealSlot }>();

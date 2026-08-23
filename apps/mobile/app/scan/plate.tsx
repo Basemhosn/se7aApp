@@ -16,6 +16,7 @@ import type {
   PlateItem,
   PlateScanResponse,
 } from "@/types";
+import { slotForNow } from "@/lib/slot";
 
 type Phase = "idle" | "analyzing" | "review" | "saving";
 
@@ -400,13 +401,6 @@ export default function PlateScan() {
   );
 }
 
-function slotForNow(): MealSlot {
-  const h = new Date().getHours();
-  if (h < 11) return "breakfast";
-  if (h < 16) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
-}
 
 /**
  * Extract a leading grams value from the AI's portion_estimate string

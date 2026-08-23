@@ -66,8 +66,7 @@ function nextDayUtc(d: Date): Date {
 
 /**
  * Pull a specific day's meal_items for a user and aggregate into ranges.
- * When `dateIso` is omitted, defaults to today — same behavior as the
- * original getTodayTotals (kept as an alias below for existing callers).
+ * When `dateIso` is omitted, defaults to today.
  *
  * TODO(phase-2): respect the user's timezone instead of UTC. The Gulf
  * launch is GST (+04), so a UTC midnight cutoff is acceptable now but
@@ -91,17 +90,6 @@ function dateIsoToDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   const out = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
   return out;
-}
-
-/**
- * Alias — existing callers still use getTodayTotals. Keeps the API
- * surface unchanged while getDayTotals becomes the primary export.
- */
-export async function getTodayTotals(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<DailyTotals> {
-  return getDayTotals(supabase, userId);
 }
 
 async function getRangeTotals(

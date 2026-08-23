@@ -14,6 +14,7 @@ import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
+import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Ingredient {
@@ -43,14 +44,6 @@ interface Recipe {
   steps: string[];
   tags: string[];
   notes?: string;
-}
-
-function slotForNow(): MealSlot {
-  const h = new Date().getHours();
-  if (h < 11) return "breakfast";
-  if (h < 16) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
 }
 
 const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];

@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import type { LedgerDayResponse } from "@/types";
+import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface RecentItem {
@@ -39,14 +40,6 @@ interface RecentItem {
 
 interface RecentResponse {
   items: RecentItem[];
-}
-
-function slotForNow(): "breakfast" | "lunch" | "dinner" | "snack" {
-  const h = new Date().getHours();
-  if (h < 11) return "breakfast";
-  if (h < 16) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
 }
 
 export default function Log() {

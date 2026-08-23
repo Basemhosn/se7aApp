@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { computeRemaining, getTodayTotals } from "@/lib/ledger";
+import { computeRemaining, getDayTotals } from "@/lib/ledger";
 
 export const runtime = "nodejs";
 
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const totals = await getTodayTotals(admin, profile.user_id);
+  const totals = await getDayTotals(admin, profile.user_id);
   const remaining = computeRemaining(totals, {
     daily_kcal_target: profile.daily_kcal_target,
     daily_protein_g: profile.daily_protein_g,

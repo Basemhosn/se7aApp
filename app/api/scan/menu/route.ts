@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { getRouteClient } from "@/lib/supabase/server";
-import { computeRemaining, getTodayTotals } from "@/lib/ledger";
+import { computeRemaining, getDayTotals } from "@/lib/ledger";
 import {
   menuScanResultSchema,
   normalizeMenuScan,
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       )
       .eq("user_id", user.id)
       .single(),
-    getTodayTotals(supabase, user.id),
+    getDayTotals(supabase, user.id),
   ]);
 
   const targetsKnown =

@@ -24,6 +24,7 @@ import type {
   MenuScanBudget,
   MenuScanResponse,
 } from "@/types";
+import { slotForNow } from "@/lib/slot";
 
 interface PastDish {
   name: string;
@@ -523,13 +524,6 @@ function DishSection({
   );
 }
 
-function slotForNow(): MealSlot {
-  const h = new Date().getHours();
-  if (h < 11) return "breakfast";
-  if (h < 16) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
-}
 
 function formatRelativeDate(iso: string): string {
   const now = new Date();

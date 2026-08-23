@@ -8,7 +8,7 @@ import {
 } from "@/lib/schemas/mealSuggest";
 import { MEAL_SUGGEST_SYSTEM_PROMPT } from "@/lib/prompts/mealSuggest.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
-import { computeRemaining, getTodayTotals } from "@/lib/ledger";
+import { computeRemaining, getDayTotals } from "@/lib/ledger";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       )
       .eq("user_id", user.id)
       .maybeSingle(),
-    getTodayTotals(supabase, user.id),
+    getDayTotals(supabase, user.id),
   ]);
 
   const remaining = computeRemaining(totals, {

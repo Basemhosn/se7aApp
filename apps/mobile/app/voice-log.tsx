@@ -24,6 +24,7 @@ import {
 import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
+import { slotForNow } from "@/lib/slot";
 
 interface VoiceLogItem {
   name: string;
@@ -376,13 +377,6 @@ export default function VoiceLog() {
   );
 }
 
-function slotForNow(): MealSlot {
-  const h = new Date().getHours();
-  if (h < 11) return "breakfast";
-  if (h < 16) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
-}
 
 const styles = StyleSheet.create({
   head: { marginTop: spacing.sm },

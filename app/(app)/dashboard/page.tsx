@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
-import { computeRemaining, getTodayTotals } from "@/lib/ledger";
+import { computeRemaining, getDayTotals } from "@/lib/ledger";
 import { signOut } from "../actions";
 import WeightLogForm from "./WeightLogForm";
 import DeleteAccount from "./DeleteAccount";
@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   if (!profile?.onboarded_at) redirect("/onboarding");
 
   const [todayTotals, recentWeightsRes] = await Promise.all([
-    getTodayTotals(supabase, user.id),
+    getDayTotals(supabase, user.id),
     supabase
       .from("weight_logs")
       .select("weight_kg, body_fat_pct, logged_at")
