@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -135,6 +136,24 @@ export default function Home() {
   }, [viewOffset]);
   const isToday = viewOffset === 0;
 
+  // Horizontal swipe on the hero area (day picker + ring) changes day.
+  // PanResponder is deliberately picky about claiming the gesture so
+  // vertical scrolling in the ScrollView below stays smooth — it only
+  // grabs when horizontal movement is clearly dominant (|dx| > 1.5·|dy|)
+  // and past a 15px threshold. Release with |dx| ≥ 50 commits the shift.
+  const swipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) =>
+          Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+        onPanResponderRelease: (_e, g) => {
+          if (g.dx <= -50) setViewOffset((v) => v + 1);
+          else if (g.dx >= 50) setViewOffset((v) => v - 1);
+        },
+      }),
+    []
+  );
+
   const load = useCallback(async () => {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
@@ -266,33 +285,38 @@ export default function Home() {
         </Pressable>
       </View>
 
-      <View style={styles.dayPickerRow}>
-        <Pressable
-          onPress={() => setViewOffset((v) => v - 1)}
-          style={styles.dayChip}
-          hitSlop={6}
-        >
-          <Ionicons name="chevron-back" size={14} color={colors.dim} />
-          <Text style={styles.dayChipText}>Prev</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => viewOffset !== 0 && setViewOffset(0)}
-          style={[styles.dayChip, styles.dayChipOn]}
-          hitSlop={6}
-        >
-          <Text style={[styles.dayChipText, styles.dayChipTextOn]}>
-            {viewedLabel}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setViewOffset((v) => v + 1)}
-          style={styles.dayChip}
-          hitSlop={6}
-        >
-          <Text style={styles.dayChipText}>Next</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.dim} />
-        </Pressable>
-      </View>
+      {/* Swipe-to-shift-day zone: day picker chips + label + ring.
+          PanResponder in the parent claims only clearly-horizontal drags
+          so vertical scroll below stays smooth. Chip taps still work
+          because taps don't move enough to trigger the responder. */}
+      <View {...swipeResponder.panHandlers}>
+        <View style={styles.dayPickerRow}>
+          <Pressable
+            onPress={() => setViewOffset((v) => v - 1)}
+            style={styles.dayChip}
+            hitSlop={6}
+          >
+            <Ionicons name="chevron-back" size={14} color={colors.dim} />
+            <Text style={styles.dayChipText}>Prev</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => viewOffset !== 0 && setViewOffset(0)}
+            style={[styles.dayChip, styles.dayChipOn]}
+            hitSlop={6}
+          >
+            <Text style={[styles.dayChipText, styles.dayChipTextOn]}>
+              {viewedLabel}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setViewOffset((v) => v + 1)}
+            style={styles.dayChip}
+            hitSlop={6}
+          >
+            <Text style={styles.dayChipText}>Next</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.dim} />
+          </Pressable>
+        </View>
 
       {isToday && ramadan?.active && ramadan.today && (
         <RamadanBanner status={ramadan} />
@@ -343,6 +367,7 @@ export default function Home() {
             tint={colors.dim}
           />
         </View>
+      </View>
       </View>
 
       <View style={styles.macros}>
