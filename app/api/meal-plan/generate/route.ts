@@ -107,7 +107,7 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
         },
         { role: "user", content: userMsg },
       ],
-      maxOutputTokens: 4000,
+      maxOutputTokens: 16000,
     });
     planObject = result.object;
   } catch (e) {

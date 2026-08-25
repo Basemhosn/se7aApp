@@ -20,9 +20,9 @@ export const mealSuggestionResultSchema = z.object({
   suggestions: z
     .array(
       z.object({
-        name: z.string().min(1).max(80),
-        portion: z.string().min(1).max(120),
-        reason: z.string().min(1).max(200),
+        name: z.string().min(1).max(120),
+        portion: z.string().min(1).max(400),
+        reason: z.string().min(1).max(400),
         kcal_low: z.number().int().min(0).max(3000),
         kcal_high: z.number().int().min(0).max(3000),
         protein_g_low: z.number().min(0).max(300),
@@ -35,7 +35,7 @@ export const mealSuggestionResultSchema = z.object({
     )
     .min(1)
     .max(4),
-  notes: z.string().max(300).optional(),
+  notes: z.string().max(500).optional(),
 });
 
 export type SuggestMealsInput = z.infer<typeof suggestMealsSchema>;

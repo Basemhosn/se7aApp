@@ -19,15 +19,15 @@ export const generatePlanSchema = z.object({
 });
 
 export const ingredientSchema = z.object({
-  name: z.string().min(1).max(80),
-  qty: z.string().min(1).max(60),
+  name: z.string().min(1).max(120),
+  qty: z.string().min(1).max(80),
 });
 
 export const plannedMealSchema = z.object({
   slot: mealSlotEnum,
-  name: z.string().min(1).max(80),
-  subtitle: z.string().max(80).optional(),
-  portion: z.string().min(1).max(120),
+  name: z.string().min(1).max(120),
+  subtitle: z.string().max(120).optional(),
+  portion: z.string().min(1).max(400),
   kcal_low: z.number().int().min(0).max(3000),
   kcal_high: z.number().int().min(0).max(3000),
   protein_g_low: z.number().min(0).max(300),
@@ -60,7 +60,7 @@ export const plannedDaySchema = z.object({
 
 export const mealPlanResultSchema = z.object({
   days: z.array(plannedDaySchema).length(7),
-  notes: z.array(z.string().max(300)).max(4).optional(),
+  notes: z.array(z.string().max(500)).max(4).optional(),
 });
 
 export const logPlanMealSchema = z.object({
