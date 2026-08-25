@@ -9,7 +9,7 @@ import { z } from "zod";
  */
 export const plateItemSchema = z.object({
   name: z.string().min(1).max(120),
-  portion_estimate: z.string().max(120),
+  portion_estimate: z.string().max(300),
   kcal_low: z.number().int().min(0).max(5000),
   kcal_high: z.number().int().min(0).max(6000),
   protein_g_low: z.number().min(0).max(300),
@@ -35,7 +35,7 @@ export const plateScanResultSchema = z.object({
   identifiable: z.boolean(),
   items: z.array(plateItemSchema).max(15),
   confidence: z.enum(["low", "medium", "high"]),
-  invisible_costs: z.array(z.string().max(200)).max(10),
+  invisible_costs: z.array(z.string().max(300)).max(10),
   notes: z.string().max(500).optional(),
 });
 

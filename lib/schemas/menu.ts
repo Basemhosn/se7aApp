@@ -2,9 +2,9 @@ import { z } from "zod";
 
 export const menuDishSchema = z.object({
   name: z.string().min(1).max(140),
-  description: z.string().max(280).optional(),
+  description: z.string().max(400).optional(),
   verdict: z.enum(["order", "consider", "skip"]),
-  reason: z.string().min(1).max(280),
+  reason: z.string().min(1).max(400),
   rank: z.number().int().min(1).max(40),
   kcal_low: z.number().int().min(0).max(5000),
   kcal_high: z.number().int().min(0).max(6000),
