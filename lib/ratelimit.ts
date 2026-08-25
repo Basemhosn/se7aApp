@@ -92,6 +92,48 @@ export async function checkBarcodeLimits(
   return { ok: true };
 }
 
+// Food-lookup rate limits sit between barcode and scan — LLM cost is
+// real but cache hits dominate, so the daily cap is generous enough
+// that typical logging never hits it.
+const foodBurst = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, "60 s"),
+  prefix: "rl:food:burst",
+  analytics: true,
+});
+const foodDaily = new Ratelimit({
+  redis,
+  limiter: Ratelimit.fixedWindow(200, "24 h"),
+  prefix: "rl:food:daily",
+  analytics: true,
+});
+
+export async function checkFoodLimits(
+  userId: string
+): Promise<ScanLimitResult> {
+  const [burst, daily] = await Promise.all([
+    foodBurst.limit(userId),
+    foodDaily.limit(userId),
+  ]);
+  if (!burst.success) {
+    return {
+      ok: false,
+      kind: "burst",
+      retryAfterSec: Math.max(1, Math.ceil((burst.reset - Date.now()) / 1000)),
+      limit: burst.limit,
+    };
+  }
+  if (!daily.success) {
+    return {
+      ok: false,
+      kind: "daily",
+      retryAfterSec: Math.max(1, Math.ceil((daily.reset - Date.now()) / 1000)),
+      limit: daily.limit,
+    };
+  }
+  return { ok: true };
+}
+
 export function rateLimitedResponse(result: Extract<ScanLimitResult, { ok: false }>) {
   const detail =
     result.kind === "burst"
