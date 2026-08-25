@@ -334,7 +334,7 @@ export default function Calendar() {
       {!isThisMonth && (
         <Pressable onPress={jumpToday} style={styles.todayPill}>
           <Ionicons name="return-up-back" size={14} color={colors.gold} />
-          <Text style={styles.todayPillLabel}>Jump to today</Text>
+          <Text style={styles.todayPillLabel}>{t("calendar.jump_today")}</Text>
         </Pressable>
       )}
 
@@ -343,16 +343,20 @@ export default function Calendar() {
           icon="checkmark-circle"
           tint={colors.mint}
           value={`${monthStats.logged}`}
-          unit={`/ ${monthStats.daysInMonth} days`}
-          label="LOGGED"
+          unit={t("calendar.stat_days_unit", { total: monthStats.daysInMonth })}
+          label={t("calendar.stat_logged")}
         />
         <View style={styles.statDivider} />
         <StatCell
           icon="barbell"
           tint={colors.gold}
           value={`${monthStats.workouts}`}
-          unit={monthStats.workouts === 1 ? "workout" : "workouts"}
-          label="LIFTED"
+          unit={
+            monthStats.workouts === 1
+              ? t("calendar.stat_workout")
+              : t("calendar.stat_workouts")
+          }
+          label={t("calendar.stat_lifted")}
         />
         <View style={styles.statDivider} />
         <StatCell

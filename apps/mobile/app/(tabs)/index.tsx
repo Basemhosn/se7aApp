@@ -538,7 +538,7 @@ export default function Home() {
                 ? formatHm(sleep.seven_day.avg_duration_minutes)
                 : "—"}
             </Text>
-            <Text style={styles.cardioLabel}>7-day avg</Text>
+            <Text style={styles.cardioLabel}>{t("home.sleep_7day_avg")}</Text>
           </View>
         </View>
       )}
@@ -551,11 +551,13 @@ export default function Home() {
         >
           <View style={{ flex: 1 }}>
             <Text style={[styles.kicker, { color: colors.gold }]}>
-              LAST WEEK · WRAPPED
+              {t("home.wrapped_card.kicker")}
             </Text>
-            <Text style={styles.suggestTitle}>See your recap</Text>
+            <Text style={styles.suggestTitle}>
+              {t("home.wrapped_card.title")}
+            </Text>
             <Text style={styles.suggestSub}>
-              Numbers, streaks, and the coach's take on the week.
+              {t("home.wrapped_card.sub")}
             </Text>
           </View>
           <Text style={[styles.suggestArrow, { color: colors.gold }]}>→</Text>

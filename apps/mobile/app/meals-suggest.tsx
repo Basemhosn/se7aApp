@@ -114,7 +114,7 @@ export default function MealsSuggest() {
       markDayDirty();
       router.replace("/");
     } catch (e) {
-      setErr((e as Error).message || "Couldn't log — try again.");
+      setErr((e as Error).message || t("meals_suggest.couldnt_log"));
       setLogging(null);
     }
   };
@@ -124,20 +124,23 @@ export default function MealsSuggest() {
       <View style={styles.head}>
         <BackButton />
       </View>
-      <Text style={styles.kicker}>WHAT SHOULD YOU EAT?</Text>
+      <Text style={styles.kicker}>{t("meals_suggest.kicker")}</Text>
       <Text style={styles.h1}>
         {slot === "breakfast"
-          ? "Breakfast options"
+          ? t("meals_suggest.title_breakfast")
           : slot === "lunch"
-            ? "Lunch options"
+            ? t("meals_suggest.title_lunch")
             : slot === "dinner"
-              ? "Dinner options"
-              : "Snack options"}
+              ? t("meals_suggest.title_dinner")
+              : t("meals_suggest.title_snack")}
       </Text>
       <Text style={styles.sub}>
         {data
-          ? `Fitted to your remaining budget · ${data.remaining.kcal.low}–${data.remaining.kcal.high} kcal left today.`
-          : "Loading suggestions from your remaining macros…"}
+          ? t("meals_suggest.sub_fitted", {
+              low: data.remaining.kcal.low,
+              high: data.remaining.kcal.high,
+            })
+          : t("meals_suggest.sub_loading")}
       </Text>
 
       <View style={styles.chipRow}>
@@ -159,7 +162,7 @@ export default function MealsSuggest() {
         <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
           <ActivityIndicator color={colors.gold} />
           <Text style={[styles.sub, { marginTop: spacing.sm }]}>
-            Thinking…
+            {t("meals_suggest.thinking")}
           </Text>
         </View>
       )}
@@ -182,7 +185,13 @@ export default function MealsSuggest() {
           <Text style={styles.reason}>{s.reason}</Text>
           <View style={{ height: spacing.sm }} />
           <Btn
-            label={logging === i ? "Logging…" : `Log to ${slot}`}
+            label={
+              logging === i
+                ? t("meals_suggest.logging")
+                : t("meals_suggest.log_cta", {
+                    slot: t(`common.meal_slot.${slot}`),
+                  })
+            }
             onPress={() => logSuggestion(s, i)}
             loading={logging === i}
             disabled={logging !== null}
@@ -192,14 +201,14 @@ export default function MealsSuggest() {
 
       {data?.notes && (
         <View style={styles.notesCard}>
-          <Text style={styles.notesLabel}>NOTE</Text>
+          <Text style={styles.notesLabel}>{t("meals_suggest.note")}</Text>
           <Text style={styles.notesBody}>{data.notes}</Text>
         </View>
       )}
 
       {!loading && data && (
         <Btn
-          label="Give me different options"
+          label={t("meals_suggest.give_different")}
           variant="ghost"
           onPress={() => load(slot)}
           disabled={logging !== null}

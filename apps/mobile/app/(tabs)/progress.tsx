@@ -220,23 +220,25 @@ export default function Progress() {
           />
           <View style={styles.heroSide}>
             <MiniStat
-              label="STREAK"
+              label={t("progress.ministat_streak")}
               value={streak ? String(streak.current_days) : "—"}
               unit={
-                streak && streak.current_days === 1 ? "day" : "days"
+                streak && streak.current_days === 1
+                  ? t("progress.unit_day")
+                  : t("progress.unit_days")
               }
               tint={colors.gold}
               icon="flame"
             />
             <MiniStat
-              label={days === 30 ? "30-DAY Δ" : `${days}-DAY Δ`}
+              label={t("progress.ministat_delta", { days })}
               value={weightDelta(trend?.points)}
               unit="kg"
               tint={weightDeltaTint(trend?.points)}
               icon="trending-down"
             />
             <MiniStat
-              label="LATEST"
+              label={t("progress.ministat_latest")}
               value={
                 trend && trend.points.length > 0
                   ? String(trend.points[trend.points.length - 1]!.weight_kg)
@@ -256,10 +258,13 @@ export default function Progress() {
 
       {prs && prs.prs.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.prKicker}>YOUR PRs</Text>
-          <Text style={styles.cardTitle}>Personal records</Text>
+          <Text style={styles.prKicker}>{t("progress.prs_kicker")}</Text>
+          <Text style={styles.cardTitle}>{t("progress.prs_title")}</Text>
           <Text style={styles.cardSub}>
-            Top {Math.min(5, prs.prs.length)} of {prs.count} tracked lifts.
+            {t("progress.prs_sub", {
+              shown: Math.min(5, prs.prs.length),
+              total: prs.count,
+            })}
           </Text>
           {prs.prs.slice(0, 5).map((pr) => (
             <View key={pr.exercise} style={styles.prRow}>
@@ -267,7 +272,8 @@ export default function Progress() {
                 <Text style={styles.prName}>{pr.exercise}</Text>
                 <Text style={styles.prMeta}>
                   {pr.best_weight_kg} kg × {pr.best_reps}
-                  {"  ·  "}est. 1RM {pr.est_1rm_kg} kg
+                  {"  ·  "}
+                  {t("progress.prs_meta_est_1rm", { value: pr.est_1rm_kg })}
                 </Text>
               </View>
               <Text style={styles.prDate}>{shortDate(pr.achieved_at)}</Text>

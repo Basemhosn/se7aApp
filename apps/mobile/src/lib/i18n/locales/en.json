@@ -91,6 +91,12 @@
       "item_one": "item",
       "item_other": "items"
     },
+    "wrapped_card": {
+      "kicker": "LAST WEEK · WRAPPED",
+      "title": "See your recap",
+      "sub": "Numbers, streaks, and the coach's take on the week."
+    },
+    "sleep_7day_avg": "7-day avg",
     "streak_card": {
       "kicker_today_logged": "STREAK · TODAY LOGGED",
       "kicker_yesterday_missed": "STREAK · YESTERDAY MISSED",
@@ -170,7 +176,16 @@
     "body_scan_sub": "Honest body-fat range + weeks-to-goal. Photo not stored.",
     "calendar_kicker": "CALENDAR",
     "calendar_title": "Day-by-day history",
-    "calendar_sub": "Every meal, workout, weigh-in, and water log in a month view."
+    "calendar_sub": "Every meal, workout, weigh-in, and water log in a month view.",
+    "ministat_streak": "STREAK",
+    "ministat_latest": "LATEST",
+    "ministat_delta": "{{days}}-DAY Δ",
+    "unit_day": "day",
+    "unit_days": "days",
+    "prs_kicker": "YOUR PRs",
+    "prs_title": "Personal records",
+    "prs_sub": "Top {{shown}} of {{total}} tracked lifts.",
+    "prs_meta_est_1rm": "est. 1RM {{value}} kg"
   },
   "coach": {
     "title": "Coach",
@@ -181,6 +196,33 @@
     "send": "Send",
     "error_load": "Couldn't load history.",
     "error_send": "Coach couldn't respond. Try again."
+  },
+  "meals_suggest": {
+    "kicker": "WHAT SHOULD YOU EAT?",
+    "title_breakfast": "Breakfast options",
+    "title_lunch": "Lunch options",
+    "title_dinner": "Dinner options",
+    "title_snack": "Snack options",
+    "sub_fitted": "Fitted to your remaining budget · {{low}}–{{high}} kcal left today.",
+    "sub_loading": "Loading suggestions from your remaining macros…",
+    "thinking": "Thinking…",
+    "note": "NOTE",
+    "log_cta": "Log to {{slot}}",
+    "logging": "Logging…",
+    "give_different": "Give me different options",
+    "couldnt_log": "Couldn't log — try again."
+  },
+  "recipe": {
+    "not_found": "Recipe not found.",
+    "sub_meta": "{{altName}} · {{min}} min · {{servings}} serving",
+    "sub_meta_plural": "{{altName}} · {{min}} min · {{servings}} servings",
+    "per_serving": "PER SERVING",
+    "ingredients": "Ingredients",
+    "steps": "Steps",
+    "note": "NOTE",
+    "log_to": "Log to",
+    "log_cta": "Log this to {{slot}}",
+    "logging": "Logging…"
   },
   "calendar": {
     "title_prefix": "CALENDAR",
@@ -193,7 +235,13 @@
     "n_exercises": "{{count}} exercises",
     "weighin": "WEIGH-IN",
     "water": "WATER · {{liters}} L",
-    "n_entries": "{{count}} entries"
+    "n_entries": "{{count}} entries",
+    "jump_today": "Jump to today",
+    "stat_logged": "LOGGED",
+    "stat_lifted": "LIFTED",
+    "stat_days_unit": "/ {{total}} days",
+    "stat_workout": "workout",
+    "stat_workouts": "workouts"
   },
   "fasting": {
     "kicker": "FASTING",

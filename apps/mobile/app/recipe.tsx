@@ -123,7 +123,7 @@ export default function RecipePage() {
         <View style={styles.head}>
           <BackButton />
         </View>
-        <Text style={styles.h1}>Recipe not found.</Text>
+        <Text style={styles.h1}>{t("recipe.not_found")}</Text>
       </Screen>
     );
   }
@@ -138,11 +138,18 @@ export default function RecipePage() {
       <Text style={styles.kicker}>{recipe.cuisine.toUpperCase()}</Text>
       <Text style={styles.h1}>{isArabic ? recipe.name_ar : recipe.name_en}</Text>
       <Text style={styles.sub}>
-        {isArabic ? recipe.name_en : recipe.name_ar} · {totalMin} min · {recipe.servings} serving
+        {t(
+          recipe.servings === 1 ? "recipe.sub_meta" : "recipe.sub_meta_plural",
+          {
+            altName: isArabic ? recipe.name_en : recipe.name_ar,
+            min: totalMin,
+            servings: recipe.servings,
+          }
+        )}
       </Text>
 
       <View style={styles.macroCard}>
-        <Text style={styles.macroKicker}>PER SERVING</Text>
+        <Text style={styles.macroKicker}>{t("recipe.per_serving")}</Text>
         <Text style={styles.macroKcal}>
           {recipe.kcal_low}–{recipe.kcal_high}
           <Text style={styles.macroKcalUnit}> kcal</Text>
@@ -155,9 +162,7 @@ export default function RecipePage() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionH}>
-          {isArabic ? "المكونات" : "Ingredients"}
-        </Text>
+        <Text style={styles.sectionH}>{t("recipe.ingredients")}</Text>
         {recipe.ingredients.map((ing, i) => (
           <View key={i} style={styles.ingRow}>
             <Text style={styles.ingName}>
@@ -169,9 +174,7 @@ export default function RecipePage() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionH}>
-          {isArabic ? "الخطوات" : "Steps"}
-        </Text>
+        <Text style={styles.sectionH}>{t("recipe.steps")}</Text>
         {recipe.steps.map((step, i) => (
           <View key={i} style={styles.stepRow}>
             <Text style={styles.stepNum}>{i + 1}</Text>
@@ -182,14 +185,12 @@ export default function RecipePage() {
 
       {recipe.notes && (
         <View style={styles.notesCard}>
-          <Text style={styles.notesLabel}>NOTE</Text>
+          <Text style={styles.notesLabel}>{t("recipe.note")}</Text>
           <Text style={styles.notesBody}>{recipe.notes}</Text>
         </View>
       )}
 
-      <Text style={styles.slotLabel}>
-        {isArabic ? "سجّل في" : "Log to"}
-      </Text>
+      <Text style={styles.slotLabel}>{t("recipe.log_to")}</Text>
       <View style={styles.chipRow}>
         {SLOTS.map((s) => (
           <Pressable
@@ -207,7 +208,11 @@ export default function RecipePage() {
       {!!err && <Text style={styles.err}>{err}</Text>}
 
       <Btn
-        label={logging ? "Logging…" : `Log this to ${slot}`}
+        label={
+          logging
+            ? t("recipe.logging")
+            : t("recipe.log_cta", { slot: t(`common.meal_slot.${slot}`) })
+        }
         onPress={logRecipe}
         loading={logging}
       />

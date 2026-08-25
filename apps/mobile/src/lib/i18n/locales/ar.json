@@ -91,6 +91,12 @@
       "item_one": "عنصر",
       "item_other": "عناصر"
     },
+    "wrapped_card": {
+      "kicker": "الأسبوع الماضي · الملخص",
+      "title": "شاهد ملخصك",
+      "sub": "الأرقام، السلاسل، ورأي المدرب في الأسبوع."
+    },
+    "sleep_7day_avg": "متوسط ٧ أيام",
     "streak_card": {
       "kicker_today_logged": "السلسلة · سُجّل اليوم",
       "kicker_yesterday_missed": "السلسلة · فاتك أمس",
@@ -170,7 +176,16 @@
     "body_scan_sub": "نطاق دهون صادق + أسابيع لبلوغ الهدف. لا نحفظ الصورة.",
     "calendar_kicker": "التقويم",
     "calendar_title": "سجل يومًا بيوم",
-    "calendar_sub": "كل وجبة، تمرين، قياس وزن، وشُرب ماء في عرض شهري."
+    "calendar_sub": "كل وجبة، تمرين، قياس وزن، وشُرب ماء في عرض شهري.",
+    "ministat_streak": "التتابع",
+    "ministat_latest": "الأحدث",
+    "ministat_delta": "Δ {{days}} يوم",
+    "unit_day": "يوم",
+    "unit_days": "أيام",
+    "prs_kicker": "أرقامك القياسية",
+    "prs_title": "الأرقام الشخصية",
+    "prs_sub": "أعلى {{shown}} من {{total}} تمرين متتبَّع.",
+    "prs_meta_est_1rm": "تقدير 1RM {{value}} كغ"
   },
   "coach": {
     "title": "المدرب",
@@ -181,6 +196,33 @@
     "send": "إرسال",
     "error_load": "تعذّر تحميل السجل.",
     "error_send": "المدرب لم يستطع الرد. حاول مجددًا."
+  },
+  "meals_suggest": {
+    "kicker": "ماذا يجب أن تأكل؟",
+    "title_breakfast": "خيارات الفطور",
+    "title_lunch": "خيارات الغداء",
+    "title_dinner": "خيارات العشاء",
+    "title_snack": "خيارات السناك",
+    "sub_fitted": "مضبوطة على ميزانيتك المتبقية · {{low}}–{{high}} سعرة متبقية اليوم.",
+    "sub_loading": "جارٍ تحميل الاقتراحات من ماكروك المتبقي…",
+    "thinking": "جارٍ التفكير…",
+    "note": "ملاحظة",
+    "log_cta": "سجّل في {{slot}}",
+    "logging": "جارٍ التسجيل…",
+    "give_different": "أعطني خيارات مختلفة",
+    "couldnt_log": "تعذّر التسجيل — حاول مجددًا."
+  },
+  "recipe": {
+    "not_found": "لم يتم العثور على الوصفة.",
+    "sub_meta": "{{altName}} · {{min}} دقيقة · {{servings}} حصة",
+    "sub_meta_plural": "{{altName}} · {{min}} دقيقة · {{servings}} حصص",
+    "per_serving": "لكل حصة",
+    "ingredients": "المكونات",
+    "steps": "الخطوات",
+    "note": "ملاحظة",
+    "log_to": "سجّل في",
+    "log_cta": "سجّل في {{slot}}",
+    "logging": "جارٍ التسجيل…"
   },
   "calendar": {
     "title_prefix": "التقويم",
@@ -193,7 +235,13 @@
     "n_exercises": "{{count}} تمارين",
     "weighin": "قياس الوزن",
     "water": "ماء · {{liters}} ل",
-    "n_entries": "{{count}} إدخالات"
+    "n_entries": "{{count}} إدخالات",
+    "jump_today": "العودة إلى اليوم",
+    "stat_logged": "مسجّل",
+    "stat_lifted": "تمرين",
+    "stat_days_unit": "/ {{total}} يوم",
+    "stat_workout": "تمرين",
+    "stat_workouts": "تمارين"
   },
   "fasting": {
     "kicker": "صيام",
