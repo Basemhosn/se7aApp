@@ -41,7 +41,7 @@ export default function BodyScan() {
       source === "camera"
         ? await ImagePicker.launchCameraAsync({ quality: 0.9 })
         : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ["images"],
             quality: 0.9,
           });
     if (r.canceled || !r.assets?.[0]) return;

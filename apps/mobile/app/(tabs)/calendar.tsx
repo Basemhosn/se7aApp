@@ -469,7 +469,7 @@ export default function Calendar() {
           style={styles.modalBg}
           onPress={() => setPickedDate(null)}
         >
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHead}>
               <Text style={styles.modalDate}>{pickedDate && niceDate(pickedDate)}</Text>
@@ -511,7 +511,10 @@ function DayDetailView({ detail }: { detail: DayDetail }) {
   }
 
   return (
-    <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator
+      contentContainerStyle={{ paddingBottom: spacing.md }}
+    >
       {detail.meals.length > 0 && (
         <View style={styles.detailSection}>
           <Text style={styles.detailKicker}>
@@ -849,6 +852,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: colors.line,
     gap: spacing.md,
+    maxHeight: "85%",
   },
   modalHead: {
     flexDirection: "row",
