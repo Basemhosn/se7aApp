@@ -114,60 +114,61 @@ export default function Log() {
 
       <HeroCta
         icon="camera"
+        kicker={t("log.hero_kicker")}
         title={t("log.cta_plate_title")}
         subtitle={t("log.cta_plate_sub")}
         onPress={() => router.push("/scan/plate")}
       />
 
-      <Text style={styles.sectionKicker}>QUICK LOG</Text>
+      <Text style={styles.sectionKicker}>{t("log.quick_kicker")}</Text>
       <View style={styles.rowGrid}>
         <TileCta
           icon="restaurant-outline"
-          label="Menu"
+          label={t("log.tile_menu")}
           tint={colors.mint}
           proBadge={!ent.is_pro}
           onPress={() => router.push("/scan/menu")}
         />
         <TileCta
           icon="barcode-outline"
-          label="Barcode"
+          label={t("log.tile_barcode")}
           tint={colors.gold}
           onPress={() => router.push("/scan/barcode")}
         />
         <TileCta
           icon="create-outline"
-          label="Manual"
+          label={t("log.tile_manual")}
           tint={colors.ink}
           onPress={() => router.push("/manual-meal")}
         />
       </View>
 
-      <Text style={styles.sectionKicker}>ASK SE7A</Text>
+      <Text style={styles.sectionKicker}>{t("log.ask_kicker")}</Text>
       <View style={styles.pairGrid}>
         <PairCta
           icon="sparkles"
-          kicker="WHAT TO EAT?"
-          title="Suggest a meal"
-          subtitle="3 dishes that fit your day."
+          kicker={t("log.suggest_kicker")}
+          title={t("log.suggest_title")}
+          subtitle={t("log.suggest_sub")}
           tint={colors.gold}
           onPress={() => router.push("/meals-suggest")}
         />
         <PairCta
           icon="calendar"
-          kicker="PLAN THE WEEK"
-          title="7-day plan"
-          subtitle="Auto shopping list."
+          kicker={t("log.plan_kicker")}
+          title={t("log.plan_title")}
+          subtitle={t("log.plan_sub")}
           tint={colors.gold}
           proBadge={!ent.is_pro}
           onPress={() => router.push("/meal-plan")}
         />
       </View>
 
-      <Text style={styles.sectionKicker}>BROWSE</Text>
+      <Text style={styles.sectionKicker}>{t("log.browse_kicker")}</Text>
       <BrowseCta
         icon="book-outline"
-        title="Gulf recipes"
-        subtitle="Machboos, kabsa, shawarma — with macros. Tap to log."
+        title={t("log.browse_recipes_title")}
+        subtitle={t("log.browse_recipes_sub")}
         onPress={() => router.push("/recipes")}
       />
 
@@ -274,11 +275,13 @@ export default function Log() {
 
 function HeroCta({
   icon,
+  kicker,
   title,
   subtitle,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
+  kicker: string;
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -289,7 +292,7 @@ function HeroCta({
         <Ionicons name={icon} size={30} color={colors.bg} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.heroKicker}>SNAP A PLATE</Text>
+        <Text style={styles.heroKicker}>{kicker}</Text>
         <Text style={styles.heroTitle}>{title}</Text>
         <Text style={styles.heroSub}>{subtitle}</Text>
       </View>

@@ -135,7 +135,22 @@
     "todays_log_sub": "{{items}} عناصر · {{low}}–{{high}} سعرة",
     "empty_title": "لا شيء مسجل اليوم بعد.",
     "empty_body": "اضغط أحد الأزرار أعلاه لإضافة أول وجبة.",
-    "couldnt_log": "تعذّر التسجيل"
+    "couldnt_log": "تعذّر التسجيل",
+    "hero_kicker": "صوّر الطبق",
+    "quick_kicker": "تسجيل سريع",
+    "tile_menu": "قائمة الطعام",
+    "tile_barcode": "الباركود",
+    "tile_manual": "يدويًا",
+    "ask_kicker": "اسأل SE7A",
+    "suggest_kicker": "ماذا تأكل؟",
+    "suggest_title": "اقترح وجبة",
+    "suggest_sub": "٣ أطباق تناسب يومك.",
+    "plan_kicker": "خطة الأسبوع",
+    "plan_title": "خطة ٧ أيام",
+    "plan_sub": "قائمة تسوّق تلقائية.",
+    "browse_kicker": "تصفّح",
+    "browse_recipes_title": "وصفات خليجية",
+    "browse_recipes_sub": "مجبوس، كبسة، شاورما — مع الماكرو. اضغط للتسجيل."
   },
   "progress": {
     "title": "التقدم",

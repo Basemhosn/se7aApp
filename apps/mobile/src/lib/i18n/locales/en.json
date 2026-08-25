@@ -135,7 +135,22 @@
     "todays_log_sub": "{{items}} items · {{low}}–{{high}} kcal",
     "empty_title": "Nothing logged yet today.",
     "empty_body": "Tap one of the buttons above to add your first meal.",
-    "couldnt_log": "Couldn't log"
+    "couldnt_log": "Couldn't log",
+    "hero_kicker": "SNAP A PLATE",
+    "quick_kicker": "QUICK LOG",
+    "tile_menu": "Menu",
+    "tile_barcode": "Barcode",
+    "tile_manual": "Manual",
+    "ask_kicker": "ASK SE7A",
+    "suggest_kicker": "WHAT TO EAT?",
+    "suggest_title": "Suggest a meal",
+    "suggest_sub": "3 dishes that fit your day.",
+    "plan_kicker": "PLAN THE WEEK",
+    "plan_title": "7-day plan",
+    "plan_sub": "Auto shopping list.",
+    "browse_kicker": "BROWSE",
+    "browse_recipes_title": "Gulf recipes",
+    "browse_recipes_sub": "Machboos, kabsa, shawarma — with macros. Tap to log."
   },
   "progress": {
     "title": "Progress",
