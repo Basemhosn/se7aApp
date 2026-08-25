@@ -316,7 +316,15 @@
     "fat_label": "FAT (G)",
     "cta_log_to": "Log to {{slot}}",
     "cta_need_name_kcal": "Add name + kcal",
-    "couldnt_save": "Couldn't save. Try again."
+    "couldnt_save": "Couldn't save. Try again.",
+    "or_manual": "OR TYPE IT IN",
+    "search": {
+      "placeholder": "Search foods, brands, restaurants…",
+      "go": "SEARCH",
+      "empty": "No matches — try a different phrasing or type it in below.",
+      "tap_to_fill": "TAP A RESULT TO PRE-FILL THE FORM",
+      "err_generic": "Search failed. Try again."
+    }
   },
   "scan": {
     "common": {

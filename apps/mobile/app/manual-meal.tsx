@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
@@ -12,10 +20,35 @@ import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
- * Manual meal entry — bypass the scan for foods you know cold. Writes to
- * meal_items with source='manual'. Only kcal is required; macros default
- * to zero if left blank.
+ * Manual meal entry. Users can either search the AI food database
+ * (MFP-style — tap a result to pre-fill) or type everything in by
+ * hand. The form is the source of truth for what actually gets saved;
+ * a search hit just populates the fields for the user to tweak.
  */
+
+interface LookupItem {
+  name: string;
+  portion: string;
+  kcal_low: number;
+  kcal_high: number;
+  protein_g_low: number;
+  protein_g_high: number;
+  carb_g_low: number;
+  carb_g_high: number;
+  fat_g_low: number;
+  fat_g_high: number;
+  confidence: "low" | "medium" | "high";
+}
+
+interface LookupResponse {
+  items: LookupItem[];
+  notes?: string;
+}
+
+const mid = (lo: number, hi: number) => Math.round((lo + hi) / 2);
+const midDec = (lo: number, hi: number) =>
+  Math.round(((lo + hi) / 2) * 10) / 10;
+
 export default function ManualMeal() {
   const { t } = useTranslation();
   const [name, setName] = useState("");
@@ -28,7 +61,41 @@ export default function ManualMeal() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<LookupItem[] | null>(null);
+  const [searchErr, setSearchErr] = useState("");
+
   const canSave = name.trim().length > 0 && Number(kcal) > 0 && !busy;
+
+  const search = async () => {
+    const q = query.trim();
+    if (q.length < 2 || searching) return;
+    setSearching(true);
+    setSearchErr("");
+    setResults(null);
+    try {
+      const res = await api<LookupResponse>("/api/food/lookup", {
+        method: "POST",
+        body: JSON.stringify({ query: q }),
+      });
+      setResults(res.items);
+    } catch (e) {
+      setSearchErr((e as Error).message || t("manual_meal.search.err_generic"));
+    }
+    setSearching(false);
+  };
+
+  const pickResult = (r: LookupItem) => {
+    setName(r.name);
+    setPortion(r.portion);
+    setKcal(String(mid(r.kcal_low, r.kcal_high)));
+    setProtein(String(midDec(r.protein_g_low, r.protein_g_high)));
+    setCarb(String(midDec(r.carb_g_low, r.carb_g_high)));
+    setFat(String(midDec(r.fat_g_low, r.fat_g_high)));
+    setResults(null);
+    setQuery("");
+  };
 
   const save = async () => {
     if (!canSave) return;
@@ -108,6 +175,76 @@ export default function ManualMeal() {
       <Text style={styles.kicker}>{t("manual_meal.kicker")}</Text>
       <Text style={styles.h1}>{t("manual_meal.title")}</Text>
       <Text style={styles.sub}>{t("manual_meal.sub")}</Text>
+
+      <View style={styles.searchWrap}>
+        <View style={styles.searchRow}>
+          <Ionicons name="search" size={16} color={colors.dim} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("manual_meal.search.placeholder")}
+            placeholderTextColor={colors.dim}
+            style={styles.searchInput}
+            returnKeyType="search"
+            onSubmitEditing={search}
+            autoCapitalize="none"
+          />
+          {query.length > 0 && !searching && (
+            <Pressable
+              onPress={search}
+              disabled={query.trim().length < 2}
+              style={styles.searchGo}
+              hitSlop={8}
+            >
+              <Text style={styles.searchGoText}>
+                {t("manual_meal.search.go")}
+              </Text>
+            </Pressable>
+          )}
+          {searching && <ActivityIndicator color={colors.gold} />}
+        </View>
+        {!!searchErr && <Text style={styles.searchErr}>{searchErr}</Text>}
+        {results && results.length === 0 && (
+          <Text style={styles.searchEmpty}>
+            {t("manual_meal.search.empty")}
+          </Text>
+        )}
+        {results && results.length > 0 && (
+          <View style={{ gap: spacing.xs }}>
+            {results.map((r, i) => (
+              <Pressable
+                key={`${r.name}-${i}`}
+                onPress={() => pickResult(r)}
+                style={styles.resultCard}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.resultName} numberOfLines={1}>
+                    {r.name}
+                  </Text>
+                  <Text style={styles.resultPortion} numberOfLines={1}>
+                    {r.portion}
+                  </Text>
+                </View>
+                <View style={styles.resultMacros}>
+                  <Text style={styles.resultKcal}>
+                    {r.kcal_low}–{r.kcal_high}
+                  </Text>
+                  <Text style={styles.resultKcalUnit}>{t("common.kcal")}</Text>
+                </View>
+              </Pressable>
+            ))}
+            <Text style={styles.searchHint}>
+              {t("manual_meal.search.tap_to_fill")}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>{t("manual_meal.or_manual")}</Text>
+        <View style={styles.dividerLine} />
+      </View>
 
       <Field label={t("manual_meal.name_label")}>
         <TextInput
@@ -211,6 +348,99 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.dim,
     lineHeight: 21,
+  },
+  searchWrap: { gap: spacing.sm, marginTop: spacing.sm },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 15,
+    paddingVertical: spacing.sm,
+  },
+  searchGo: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  searchGoText: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.gold,
+    letterSpacing: 1.2,
+  },
+  searchErr: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
+  searchEmpty: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 13,
+    fontStyle: "italic",
+  },
+  searchHint: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
+  resultCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  resultName: {
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  resultPortion: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
+  },
+  resultMacros: { alignItems: "flex-end" },
+  resultKcal: {
+    fontFamily: font.mono,
+    fontSize: 14,
+    color: colors.gold,
+  },
+  resultKcalUnit: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.2,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginVertical: spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.line,
+  },
+  dividerText: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.2,
   },
   label: {
     fontFamily: font.mono,
