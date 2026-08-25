@@ -593,5 +593,14 @@
     "restart_title": "Restart required",
     "restart_body": "Close SE7A and reopen it to see right-to-left layout changes.",
     "restart_ok": "OK"
+  },
+  "wrapped": {
+    "empty_title": "Weekly Wrapped",
+    "empty_sub": "Nothing to recap yet — log meals, workouts, or sleep this week and check back next Monday.",
+    "kicker": "WEEK OF {{range}}",
+    "title": "Your week, wrapped.",
+    "roast_kicker": "COACH'S TAKE",
+    "share_cta": "Share your week",
+    "share_header": "SE7A · Week of {{range}}"
   }
 }

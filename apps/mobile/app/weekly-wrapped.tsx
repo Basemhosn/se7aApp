@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
@@ -66,6 +67,7 @@ const SLIDE_ICON: Record<
 };
 
 export default function WeeklyWrapped() {
+  const { t, i18n } = useTranslation();
   const [data, setData] = useState<WrappedResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,8 +87,9 @@ export default function WeeklyWrapped() {
 
   const share = async () => {
     if (!data) return;
+    const range = formatWeekRange(data.week_start, data.week_end, i18n.language);
     const lines = [
-      `SE7A · Week of ${formatWeekRange(data.week_start, data.week_end)}`,
+      t("wrapped.share_header", { range }),
       "",
       `${data.hero.value} ${data.hero.unit} · ${data.hero.label.toLowerCase()}`,
       ...data.slides.slice(0, 4).map(
@@ -115,23 +118,26 @@ export default function WeeklyWrapped() {
     return (
       <Screen>
         <BackButton />
-        <Text style={styles.title}>Weekly Wrapped</Text>
-        <Text style={styles.sub}>
-          Nothing to recap yet — log meals, workouts, or sleep this week and
-          check back next Monday.
-        </Text>
+        <Text style={styles.title}>{t("wrapped.empty_title")}</Text>
+        <Text style={styles.sub}>{t("wrapped.empty_sub")}</Text>
       </Screen>
     );
   }
+
+  const weekRange = formatWeekRange(
+    data.week_start,
+    data.week_end,
+    i18n.language
+  );
 
   return (
     <Screen>
       <BackButton />
 
       <Text style={styles.kicker}>
-        WEEK OF {formatWeekRange(data.week_start, data.week_end).toUpperCase()}
+        {t("wrapped.kicker", { range: weekRange.toUpperCase() })}
       </Text>
-      <Text style={styles.title}>Your week, wrapped.</Text>
+      <Text style={styles.title}>{t("wrapped.title")}</Text>
 
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>{data.hero.label}</Text>
@@ -143,7 +149,7 @@ export default function WeeklyWrapped() {
 
       {data.roast.length > 0 && (
         <View style={styles.roastCard}>
-          <Text style={styles.roastKicker}>COACH'S TAKE</Text>
+          <Text style={styles.roastKicker}>{t("wrapped.roast_kicker")}</Text>
           <Text style={styles.roastText}>"{data.roast}"</Text>
         </View>
       )}
@@ -178,21 +184,25 @@ export default function WeeklyWrapped() {
 
       <Pressable style={styles.shareBtn} onPress={share}>
         <Ionicons name="share-outline" size={16} color={colors.bg} />
-        <Text style={styles.shareBtnText}>Share your week</Text>
+        <Text style={styles.shareBtnText}>{t("wrapped.share_cta")}</Text>
       </Pressable>
     </Screen>
   );
 }
 
-function formatWeekRange(startIso: string, endIso: string): string {
+function formatWeekRange(
+  startIso: string,
+  endIso: string,
+  locale: string
+): string {
   const start = dateFromIso(startIso);
   const end = dateFromIso(endIso);
   const sameMonth = start.getMonth() === end.getMonth();
-  const s = start.toLocaleDateString(undefined, {
+  const s = start.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
   });
-  const e = end.toLocaleDateString(undefined, {
+  const e = end.toLocaleDateString(locale, {
     month: sameMonth ? undefined : "short",
     day: "numeric",
   });
