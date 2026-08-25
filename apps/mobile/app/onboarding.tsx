@@ -299,10 +299,10 @@ export default function Onboarding() {
       <Btn
         label={
           trialBusy
-            ? "Working…"
+            ? t("onboarding.trial_working")
             : offering
-              ? "Start 7-day free trial"
-              : "Loading…"
+              ? t("onboarding.trial_cta")
+              : t("onboarding.trial_loading")
         }
         onPress={startTrial}
         loading={trialBusy || busy}
@@ -314,7 +314,7 @@ export default function Onboarding() {
         hitSlop={8}
         style={styles.skipLink}
       >
-        <Text style={styles.skipLinkText}>Continue on free</Text>
+        <Text style={styles.skipLinkText}>{t("onboarding.skip_free")}</Text>
       </Pressable>
     </>
   ) : (
@@ -656,13 +656,8 @@ export default function Onboarding() {
         <>
           {warnings.includes("kcal_floor_applied") && (
             <View style={styles.warnCard}>
-              <Text style={styles.warnKicker}>SAFETY NOTE</Text>
-              <Text style={styles.warnBody}>
-                Your goal rate would have taken you below a safe daily
-                calorie floor, so SE7A clamped it. You&apos;ll lose weight
-                slower than you asked — but sustainably. If you want faster
-                loss, work with a dietitian.
-              </Text>
+              <Text style={styles.warnKicker}>{t("onboarding.safety_kicker")}</Text>
+              <Text style={styles.warnBody}>{t("onboarding.safety_body")}</Text>
             </View>
           )}
           <PlanReveal
@@ -683,6 +678,7 @@ export default function Onboarding() {
 }
 
 function TrialOfferStep({ offering }: { offering: PurchasesOffering | null }) {
+  const { t } = useTranslation();
   const annual =
     offering?.availablePackages.find((p) =>
       p.product.identifier.toLowerCase().includes("annual")
@@ -699,28 +695,25 @@ function TrialOfferStep({ offering }: { offering: PurchasesOffering | null }) {
       <View style={styles.trialAvatar}>
         <Ionicons name="sparkles" size={40} color={colors.gold} />
       </View>
-      <Text style={styles.kicker}>SE7A · PRO</Text>
-      <Text style={styles.hero}>Try Pro free for 7 days.</Text>
-      <Text style={styles.heroSub}>
-        Meal plans, AI coach, unlimited scans. Cancel anytime — no charge
-        during the trial.
-      </Text>
+      <Text style={styles.kicker}>{t("onboarding.trial_kicker")}</Text>
+      <Text style={styles.hero}>{t("onboarding.trial_hero")}</Text>
+      <Text style={styles.heroSub}>{t("onboarding.trial_hero_sub")}</Text>
 
       <View style={styles.trialBenefits}>
         <TrialBenefit
           icon="restaurant-outline"
-          title="Weekly meal plans"
-          body="7-day plan + auto shopping list."
+          title={t("onboarding.trial_benefit_meals_title")}
+          body={t("onboarding.trial_benefit_meals_body")}
         />
         <TrialBenefit
           icon="chatbubbles-outline"
-          title="AI coach chat"
-          body="Answers about your logs, macros, PRs."
+          title={t("onboarding.trial_benefit_coach_title")}
+          body={t("onboarding.trial_benefit_coach_body")}
         />
         <TrialBenefit
           icon="scan-outline"
-          title="Menu + body scans"
-          body="Snap a menu, get macros. Body-fat range from a photo."
+          title={t("onboarding.trial_benefit_scans_title")}
+          body={t("onboarding.trial_benefit_scans_body")}
         />
       </View>
 
@@ -728,22 +721,32 @@ function TrialOfferStep({ offering }: { offering: PurchasesOffering | null }) {
         <View style={styles.priceCard}>
           {annual ? (
             <>
-              <Text style={styles.priceKicker}>ANNUAL · 7 DAYS FREE</Text>
+              <Text style={styles.priceKicker}>
+                {t("onboarding.trial_price_annual_kicker")}
+              </Text>
               <Text style={styles.priceValue}>
                 {annual.product.priceString}
-                <Text style={styles.pricePer}> / year after trial</Text>
+                <Text style={styles.pricePer}>
+                  {t("onboarding.trial_price_annual_per")}
+                </Text>
               </Text>
             </>
           ) : monthly ? (
             <>
-              <Text style={styles.priceKicker}>MONTHLY</Text>
+              <Text style={styles.priceKicker}>
+                {t("onboarding.trial_price_monthly_kicker")}
+              </Text>
               <Text style={styles.priceValue}>
                 {monthly.product.priceString}
-                <Text style={styles.pricePer}> / month</Text>
+                <Text style={styles.pricePer}>
+                  {t("onboarding.trial_price_monthly_per")}
+                </Text>
               </Text>
             </>
           ) : (
-            <Text style={styles.priceValue}>Pricing unavailable</Text>
+            <Text style={styles.priceValue}>
+              {t("onboarding.trial_price_unavailable")}
+            </Text>
           )}
         </View>
       ) : (
@@ -752,10 +755,7 @@ function TrialOfferStep({ offering }: { offering: PurchasesOffering | null }) {
         </View>
       )}
 
-      <Text style={styles.trialLegal}>
-        Subscription auto-renews at the end of the trial. Cancel any time
-        in Apple ID Settings before the trial ends to avoid charges.
-      </Text>
+      <Text style={styles.trialLegal}>{t("onboarding.trial_legal")}</Text>
     </View>
   );
 }
@@ -789,49 +789,52 @@ function WelcomeStep({
   name?: string;
   returning: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={{ gap: spacing.md, paddingTop: spacing.xl }}>
       <View style={styles.welcomeIconWrap}>
         <Ionicons name="sparkles" size={44} color={colors.gold} />
       </View>
       <Text style={styles.kicker}>
-        {returning ? "REDO YOUR PLAN" : "YOUR PLAN"}
+        {returning
+          ? t("onboarding.welcome_kicker_returning")
+          : t("onboarding.welcome_kicker_new")}
       </Text>
       <Text style={styles.hero}>
         {returning
-          ? `Life changed, ${name ?? "hey"}?`
+          ? t("onboarding.welcome_hero_returning", { name: name ?? "hey" })
           : name
-            ? `Hey ${name}.`
-            : "Let's build your plan."}
+            ? t("onboarding.welcome_hero_new", { name })
+            : t("onboarding.welcome_hero_new_no_name")}
       </Text>
       <Text style={styles.heroSub}>
         {returning
-          ? "Your current answers are prefilled — just change what's different and tap through the rest."
-          : "Eleven quick questions. We compute your calorie + macro targets and pick a workout plan that fits your week."}
+          ? t("onboarding.welcome_body_returning")
+          : t("onboarding.welcome_body_new")}
       </Text>
       {!returning && (
         <View style={styles.valueProps}>
           <ValueRow
             icon="stats-chart-outline"
-            title="Honest ranges, not fake precision"
-            body="Every kcal and macro shown as a low–high band."
+            title={t("onboarding.welcome_val_ranges_title")}
+            body={t("onboarding.welcome_val_ranges_body")}
           />
           <ValueRow
             icon="restaurant-outline"
-            title="Gulf-first recipes and portions"
-            body="Machboos, kabsa, shawarma — sized to your day."
+            title={t("onboarding.welcome_val_gulf_title")}
+            body={t("onboarding.welcome_val_gulf_body")}
           />
           <ValueRow
             icon="fitness-outline"
-            title="Workouts that fit your week"
-            body="We pick a plan for your equipment + days available."
+            title={t("onboarding.welcome_val_workouts_title")}
+            body={t("onboarding.welcome_val_workouts_body")}
           />
         </View>
       )}
       <Text style={[styles.sub, { marginTop: spacing.md }]}>
         {returning
-          ? "Fast — usually 20 seconds if not much has changed."
-          : "~90 seconds. You can change any of it any time."}
+          ? t("onboarding.welcome_footnote_returning")
+          : t("onboarding.welcome_footnote_new")}
       </Text>
     </View>
   );
