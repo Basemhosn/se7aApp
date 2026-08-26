@@ -14,6 +14,19 @@ function localeHeader(): Record<string, string> {
   return { "Accept-Language": lang };
 }
 
+/**
+ * Client's local timezone offset in minutes east of UTC (matches
+ * `-new Date().getTimezoneOffset()`; UAE = +240). Backend endpoints
+ * that compute "today's totals" read this to define the day window in
+ * the user's local time instead of UTC — required so meals logged
+ * between local midnight and local 04:00 stay on today's ring.
+ */
+function tzHeader(): Record<string, string> {
+  return {
+    "X-Tz-Offset-Min": String(-new Date().getTimezoneOffset()),
+  };
+}
+
 export class ApiError extends Error {
   status: number;
   details: unknown;
@@ -121,6 +134,7 @@ export async function api<T>(
   const headers = {
     "Content-Type": "application/json",
     ...localeHeader(),
+    ...tzHeader(),
     ...(await bearerHeader()),
     ...(init.headers ?? {}),
   };
@@ -154,6 +168,7 @@ export async function apiUpload<T>(
     body: form,
     headers: {
       ...localeHeader(),
+      ...tzHeader(),
       ...(await bearerHeader()),
     },
   });

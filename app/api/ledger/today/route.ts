@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
 import { computeRemaining, enrichWithPhotos, getDayTotals } from "@/lib/ledger";
 import type { PlannedMeal } from "@/lib/schemas/mealPlan";
+import { localDateIso, tzOffsetFromRequest } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,7 @@ export async function GET(request: Request) {
   const dateParam = searchParams.get("date");
   const dateIso =
     dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : undefined;
-  const tzOffsetParam = searchParams.get("tz_offset_min");
-  const tzOffsetMin = tzOffsetParam ? parseInt(tzOffsetParam, 10) : undefined;
-  const effectiveTzOffset =
-    typeof tzOffsetMin === "number" && Number.isFinite(tzOffsetMin)
-      ? tzOffsetMin
-      : undefined;
+  const effectiveTzOffset = tzOffsetFromRequest(request);
   const effectiveDateIso =
     dateIso ??
     (typeof effectiveTzOffset === "number"
@@ -80,15 +76,6 @@ export async function GET(request: Request) {
 function todayIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/**
- * Given a moment and a timezone offset (minutes east of UTC), return
- * the YYYY-MM-DD of the local calendar day at that moment.
- */
-function localDateIso(instant: Date, tzOffsetMin: number): string {
-  const shifted = new Date(instant.getTime() + tzOffsetMin * 60_000);
-  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**

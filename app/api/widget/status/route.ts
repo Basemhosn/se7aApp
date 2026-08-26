@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { computeRemaining, getDayTotals } from "@/lib/ledger";
+import { localDateIso, tzOffsetFromRequest } from "@/lib/tz";
 
 export const runtime = "nodejs";
 
@@ -43,7 +44,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const totals = await getDayTotals(admin, profile.user_id);
+  const tzOffsetMin = tzOffsetFromRequest(request);
+  const dateIso =
+    typeof tzOffsetMin === "number"
+      ? localDateIso(new Date(), tzOffsetMin)
+      : undefined;
+  const totals = await getDayTotals(admin, profile.user_id, dateIso, tzOffsetMin);
   const remaining = computeRemaining(totals, {
     daily_kcal_target: profile.daily_kcal_target,
     daily_protein_g: profile.daily_protein_g,

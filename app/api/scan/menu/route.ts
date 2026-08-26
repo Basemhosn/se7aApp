@@ -11,6 +11,7 @@ import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/a
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { requirePro } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
+import { localDateIso, tzOffsetFromRequest } from "@/lib/tz";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -53,7 +54,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Read what the user has left for today.
+  // Read what the user has left for today (in their local timezone).
+  const tzOffsetMin = tzOffsetFromRequest(request);
+  const dateIso =
+    typeof tzOffsetMin === "number"
+      ? localDateIso(new Date(), tzOffsetMin)
+      : undefined;
   const [{ data: profile }, totals] = await Promise.all([
     supabase
       .from("profiles")
@@ -62,7 +68,7 @@ export async function POST(request: Request) {
       )
       .eq("user_id", user.id)
       .single(),
-    getDayTotals(supabase, user.id),
+    getDayTotals(supabase, user.id, dateIso, tzOffsetMin),
   ]);
 
   const targetsKnown =

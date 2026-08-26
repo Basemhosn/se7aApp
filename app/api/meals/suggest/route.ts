@@ -10,6 +10,7 @@ import { MEAL_SUGGEST_SYSTEM_PROMPT } from "@/lib/prompts/mealSuggest.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { computeRemaining, getDayTotals } from "@/lib/ledger";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
+import { localDateIso, tzOffsetFromRequest } from "@/lib/tz";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -37,6 +38,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const tzOffsetMin = tzOffsetFromRequest(request);
+  const dateIso =
+    typeof tzOffsetMin === "number"
+      ? localDateIso(new Date(), tzOffsetMin)
+      : undefined;
   const [{ data: profile }, totals] = await Promise.all([
     supabase
       .from("profiles")
@@ -45,7 +51,7 @@ export async function POST(request: Request) {
       )
       .eq("user_id", user.id)
       .maybeSingle(),
-    getDayTotals(supabase, user.id),
+    getDayTotals(supabase, user.id, dateIso, tzOffsetMin),
   ]);
 
   const remaining = computeRemaining(totals, {
