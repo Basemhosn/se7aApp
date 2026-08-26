@@ -52,37 +52,57 @@ export interface RemainingBudget {
   fat_g: MacroRange;
 }
 
-function startOfDayUtc(d: Date = new Date()): Date {
-  const out = new Date(d);
-  out.setUTCHours(0, 0, 0, 0);
-  return out;
-}
-
-function nextDayUtc(d: Date): Date {
-  const out = new Date(d);
-  out.setUTCDate(out.getUTCDate() + 1);
-  return out;
-}
-
 /**
  * Pull a specific day's meal_items for a user and aggregate into ranges.
- * When `dateIso` is omitted, defaults to today.
  *
- * TODO(phase-2): respect the user's timezone instead of UTC. The Gulf
- * launch is GST (+04), so a UTC midnight cutoff is acceptable now but
- * will eventually surprise users at the day boundary.
+ * The day boundary is the user's LOCAL midnight, not UTC midnight —
+ * a UTC-only cutoff meant Gulf users (UTC+4) lost every meal logged
+ * between 00:00 and 04:00 local once the clock rolled past their
+ * local 4am. Callers pass tzOffsetMin (minutes east of UTC, matching
+ * `-new Date().getTimezoneOffset()` on the client). When both dateIso
+ * and tzOffsetMin are provided, the window is exactly the calendar
+ * day named by dateIso in that timezone. Both omitted → today in UTC
+ * (legacy behavior; only server-side callers without a request rely
+ * on this).
  */
 export async function getDayTotals(
   supabase: SupabaseClient,
   userId: string,
-  dateIso?: string
+  dateIso?: string,
+  tzOffsetMin?: number
 ): Promise<DailyTotals> {
-  const base = dateIso
-    ? dateIsoToDate(dateIso)
-    : new Date();
-  const start = startOfDayUtc(base);
-  const end = nextDayUtc(start);
+  const { start, end } = dayWindow(dateIso, tzOffsetMin);
   return getRangeTotals(supabase, userId, start, end);
+}
+
+/**
+ * Compute the [start, end) UTC Date window for a local calendar day.
+ * - dateIso + tzOffsetMin: exactly that YYYY-MM-DD in that timezone.
+ * - dateIso only: 00:00 UTC of dateIso to 00:00 UTC of the next day
+ *   (legacy — callers that don't know the user's tz).
+ * - Neither: today in UTC.
+ */
+function dayWindow(
+  dateIso?: string,
+  tzOffsetMin?: number
+): { start: Date; end: Date } {
+  if (dateIso && typeof tzOffsetMin === "number") {
+    const [y, m, d] = dateIso.split("-").map(Number);
+    // Local midnight at (y, m, d) expressed in UTC:
+    // UTC = local - offset. tzOffsetMin is minutes EAST of UTC
+    // (UAE +240), so subtract that to shift local → UTC.
+    const localMidnightUtcMs =
+      Date.UTC(y!, (m ?? 1) - 1, d ?? 1) - tzOffsetMin * 60_000;
+    const start = new Date(localMidnightUtcMs);
+    const end = new Date(localMidnightUtcMs + 24 * 60 * 60 * 1000);
+    return { start, end };
+  }
+  const base = dateIso ? dateIsoToDate(dateIso) : new Date();
+  const start = new Date(base);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
 }
 
 function dateIsoToDate(iso: string): Date {

@@ -52,8 +52,11 @@ export default function Log() {
 
   const load = useCallback(async () => {
     try {
+      const tzOffsetMin = -new Date().getTimezoneOffset();
       const [today, rec] = await Promise.all([
-        api<LedgerDayResponse>("/api/ledger/today"),
+        api<LedgerDayResponse>(
+          `/api/ledger/today?tz_offset_min=${tzOffsetMin}`
+        ),
         api<RecentResponse>("/api/ledger/recent?limit=12").catch(() => ({
           items: [] as RecentItem[],
         })),

@@ -159,8 +159,8 @@ export default function Home() {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
     const ledgerPath = isToday
-      ? "/api/ledger/today"
-      : `/api/ledger/today?date=${viewDateIso}`;
+      ? `/api/ledger/today?tz_offset_min=${tzOffsetMin}`
+      : `/api/ledger/today?date=${viewDateIso}&tz_offset_min=${tzOffsetMin}`;
     const [
       { data: profileData },
       ledgerRes,
