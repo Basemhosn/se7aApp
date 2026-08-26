@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
+  Easing,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -14,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { WaterRing } from "@/components/WaterRing";
 import { CalorieRing } from "@/components/CalorieRing";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
@@ -106,6 +110,7 @@ interface CardioTodayResponse {
 
 export default function Home() {
   const { user } = useAuth();
+  const { ent } = useEntitlement();
   const { t } = useTranslation();
   usePushRegistration();
   useNotificationDeepLinks();
@@ -137,22 +142,78 @@ export default function Home() {
   }, [viewOffset]);
   const isToday = viewOffset === 0;
 
-  // Horizontal swipe on the hero area (day picker + ring) changes day.
-  // PanResponder is deliberately picky about claiming the gesture so
-  // vertical scrolling in the ScrollView below stays smooth — it only
-  // grabs when horizontal movement is clearly dominant (|dx| > 1.5·|dy|)
-  // and past a 15px threshold. Release with |dx| ≥ 50 commits the shift.
+  // Horizontal swipe to change day, with follow-finger drag + spring
+  // snap so it feels responsive instead of "click on release." The
+  // translateX animated value tracks the finger during move and
+  // animates to commit (± screen width, then reset from opposite side)
+  // or snaps back on release below threshold. useNativeDriver = true
+  // so the animation runs on the UI thread even mid-fetch.
+  //
+  // PanResponder still only claims clearly-horizontal drags so the
+  // vertical ScrollView keeps working; isAnimating ref prevents a
+  // second swipe from starting while an animation is in flight.
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isSwipeAnimating = useRef(false);
+  const SCREEN_WIDTH = useMemo(() => Dimensions.get("window").width, []);
+  const SWIPE_COMMIT_PX = 60;
+
   const swipeResponder = useMemo(
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_e, g) =>
-          Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+          !isSwipeAnimating.current &&
+          Math.abs(g.dx) > 8 &&
+          Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+        onPanResponderMove: (_e, g) => {
+          translateX.setValue(
+            Math.max(-SCREEN_WIDTH, Math.min(SCREEN_WIDTH, g.dx))
+          );
+        },
         onPanResponderRelease: (_e, g) => {
-          if (g.dx <= -50) setViewOffset((v) => v + 1);
-          else if (g.dx >= 50) setViewOffset((v) => v - 1);
+          const direction: -1 | 0 | 1 =
+            g.dx <= -SWIPE_COMMIT_PX ? 1 : g.dx >= SWIPE_COMMIT_PX ? -1 : 0;
+          if (direction === 0) {
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              speed: 20,
+              bounciness: 6,
+            }).start();
+            return;
+          }
+          isSwipeAnimating.current = true;
+          Animated.timing(translateX, {
+            toValue: -direction * SCREEN_WIDTH,
+            duration: 160,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }).start(({ finished }) => {
+            if (!finished) {
+              isSwipeAnimating.current = false;
+              return;
+            }
+            setViewOffset((v) => v + direction);
+            translateX.setValue(direction * SCREEN_WIDTH);
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: 180,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }).start(() => {
+              isSwipeAnimating.current = false;
+            });
+          });
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 6,
+          }).start();
         },
       }),
-    []
+    [SCREEN_WIDTH, translateX]
   );
 
   const load = useCallback(async () => {
@@ -326,11 +387,14 @@ export default function Home() {
       {/* Swipe-to-shift-day zone wraps all day-scoped content — ring,
           macros, micros, slot grid, streak, cardio, sleep, wrapped,
           fasting, workout, quick log — so the gesture is discoverable
-          from anywhere on the page. PanResponder only claims clearly-
-          horizontal drags (|dx| > 1.5·|dy|) so vertical ScrollView
-          gestures still work; chip and card taps don't move enough
-          to trigger the responder. */}
-      <View {...swipeResponder.panHandlers}>
+          from anywhere on the page. Animated.View follows the finger
+          on drag (translateX) then springs into commit or snap-back
+          on release. Vertical scroll still works because PanResponder
+          only claims clearly-horizontal drags (|dx| > 1.2·|dy|). */}
+      <Animated.View
+        {...swipeResponder.panHandlers}
+        style={{ transform: [{ translateX }], gap: spacing.lg }}
+      >
         <View style={styles.dayPickerRow}>
           <Pressable
             onPress={() => setViewOffset((v) => v - 1)}
@@ -376,6 +440,37 @@ export default function Home() {
               ? t("home.day_label.planned_for_day")
               : t("home.day_label.nothing_planned")}
       </Text>
+
+      {isToday && (
+        <View style={styles.planBadgeRow}>
+          {ent.is_pro ? (
+            <View style={[styles.planBadge, styles.planBadgePro]}>
+              <Ionicons name="sparkles" size={11} color={colors.gold} />
+              <Text style={styles.planBadgeProText}>
+                {t("home.plan_badge.pro")}
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => router.push("/paywall")}
+              style={[styles.planBadge, styles.planBadgeFree]}
+              hitSlop={8}
+            >
+              <Text style={styles.planBadgeFreeText}>
+                {t("home.plan_badge.free")}
+              </Text>
+              <Text style={styles.planBadgeUpgradeText}>
+                {t("home.plan_badge.upgrade_cta")}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={12}
+                color={colors.gold}
+              />
+            </Pressable>
+          )}
+        </View>
+      )}
 
       <View style={styles.ringRow}>
         <CalorieRing
@@ -673,7 +768,7 @@ export default function Home() {
         ]}
       />
       )}
-      </View>
+      </Animated.View>
     </Screen>
   );
 }
@@ -1388,6 +1483,46 @@ const styles = StyleSheet.create({
     color: colors.dim,
     letterSpacing: 1.4,
     marginTop: 4,
+  },
+  planBadgeRow: {
+    alignItems: "center",
+    marginTop: spacing.sm,
+  },
+  planBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  planBadgeFree: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  planBadgePro: {
+    borderColor: colors.gold,
+    backgroundColor: colors.gold,
+  },
+  planBadgeFreeText: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
+  },
+  planBadgeUpgradeText: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.2,
+  },
+  planBadgeProText: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.bg,
+    letterSpacing: 1.4,
+    fontWeight: "700",
   },
   ringRow: {
     flexDirection: "row",

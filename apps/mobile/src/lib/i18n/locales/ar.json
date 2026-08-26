@@ -97,6 +97,11 @@
       "sub": "الأرقام، السلاسل، ورأي المدرب في الأسبوع."
     },
     "sleep_7day_avg": "متوسط ٧ أيام",
+    "plan_badge": {
+      "free": "مجاني",
+      "upgrade_cta": "الترقية إلى PRO",
+      "pro": "SE7A · PRO"
+    },
     "streak_card": {
       "kicker_today_logged": "السلسلة · سُجّل اليوم",
       "kicker_yesterday_missed": "السلسلة · فاتك أمس",

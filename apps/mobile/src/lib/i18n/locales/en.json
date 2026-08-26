@@ -97,6 +97,11 @@
       "sub": "Numbers, streaks, and the coach's take on the week."
     },
     "sleep_7day_avg": "7-day avg",
+    "plan_badge": {
+      "free": "FREE",
+      "upgrade_cta": "UPGRADE TO PRO",
+      "pro": "SE7A · PRO"
+    },
     "streak_card": {
       "kicker_today_logged": "STREAK · TODAY LOGGED",
       "kicker_yesterday_missed": "STREAK · YESTERDAY MISSED",

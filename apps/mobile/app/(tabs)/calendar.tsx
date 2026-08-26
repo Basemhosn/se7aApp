@@ -213,22 +213,24 @@ export default function Calendar() {
     };
 
     const snapBack = () => {
-      Animated.timing(translateX, {
+      Animated.spring(translateX, {
         toValue: 0,
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
+        speed: 20,
+        bounciness: 6,
       }).start(finishAnimation);
     };
 
     const commitSwipe = (direction: 1 | -1) => {
-      // direction: +1 = prev (swipe right), -1 = next (swipe left)
+      // direction: +1 = prev (swipe right), -1 = next (swipe left).
+      // Durations tuned for iOS "feel snappy" (~340ms total) — 200/220
+      // felt sluggish on smaller devices.
       if (isAnimating.current) return;
       isAnimating.current = true;
       translateX.stopAnimation(); // defensive
       Animated.timing(translateX, {
         toValue: direction * SCREEN_WIDTH,
-        duration: 200,
+        duration: 160,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start(({ finished }) => {
@@ -243,7 +245,7 @@ export default function Calendar() {
         translateX.setValue(-direction * SCREEN_WIDTH);
         Animated.timing(translateX, {
           toValue: 0,
-          duration: 220,
+          duration: 180,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }).start(finishAnimation);
