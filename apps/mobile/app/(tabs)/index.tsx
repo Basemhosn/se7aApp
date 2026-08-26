@@ -923,8 +923,13 @@ function MicroCell({
 /**
  * Meal-slot log grid — one row per slot (Breakfast/Lunch/Dinner/Snack).
  * MyFitnessPal-style: shows kcal range + item count when the slot has
- * items, or "Log" affordance when empty. Tap opens meals-suggest with
- * the slot pre-selected, matching how the coach entry-flow is scoped.
+ * items.
+ *
+ * Interaction split:
+ *   • Tap the card body → toggle expanded item list (shows what you ate).
+ *   • Tap the "+" button → open meals-suggest with slot pre-selected.
+ *   • Empty slot: tapping anywhere opens meals-suggest (no items to
+ *     show, so the card acts as one big log button).
  *
  * Bucketing is client-side from ledger.totals.items so no extra fetch.
  */
@@ -950,6 +955,27 @@ function MealSlotGrid({
     if (!slot) continue;
     if (bySlot.has(slot)) bySlot.get(slot)!.push(it);
   }
+
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (s: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  };
+
+  const goLog = (s: "breakfast" | "lunch" | "dinner" | "snack") =>
+    router.push(
+      planned
+        ? { pathname: "/meal-plan" as const }
+        : {
+            pathname: "/meals-suggest" as const,
+            params: { slot: s },
+          }
+    );
+
   return (
     <View style={styles.slotGrid}>
       {SLOTS.map((s) => {
@@ -960,59 +986,90 @@ function MealSlotGrid({
           (sum, r) => sum + Number(r.kcal_high ?? 0),
           0
         );
+        const hasRows = rows.length > 0;
+        const isExpanded = expanded.has(s);
+        // Empty slot → tapping the body is the log affordance (no items
+        // to reveal). Populated slot → body tap toggles the list, and
+        // the "+" button is the log affordance.
+        const onBodyPress = () => (hasRows ? toggle(s) : goLog(s));
         return (
-          <Pressable
+          <View
             key={s}
-            onPress={() =>
-              router.push(
-                planned
-                  ? { pathname: "/meal-plan" as const }
-                  : {
-                      pathname: "/meals-suggest" as const,
-                      params: { slot: s },
-                    }
-              )
-            }
             style={[styles.slotCard, { borderLeftColor: meta.tint }]}
           >
-            <View style={styles.slotIcon}>
-              <Ionicons name={meta.icon} size={16} color={meta.tint} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.slotLabel, { color: meta.tint }]}>
-                {meta.en}
-                {planned && rows.length > 0
-                  ? "  " + t("home.slot_card.planned_suffix")
-                  : ""}
-              </Text>
-              {rows.length > 0 ? (
-                <Text style={styles.slotStat}>
-                  {Math.round(kcalLow)}–{Math.round(kcalHigh)}
-                  <Text style={styles.slotUnit}> {t("common.kcal")} · </Text>
-                  {rows.length}
-                  <Text style={styles.slotUnit}>
-                    {" "}
-                    {rows.length === 1
-                      ? t("home.slot_card.item_one")
-                      : t("home.slot_card.item_other")}
-                  </Text>
+            <Pressable style={styles.slotHead} onPress={onBodyPress}>
+              <View style={styles.slotIcon}>
+                <Ionicons name={meta.icon} size={16} color={meta.tint} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.slotLabel, { color: meta.tint }]}>
+                  {meta.en}
+                  {planned && hasRows
+                    ? "  " + t("home.slot_card.planned_suffix")
+                    : ""}
                 </Text>
+                {hasRows ? (
+                  <Text style={styles.slotStat}>
+                    {Math.round(kcalLow)}–{Math.round(kcalHigh)}
+                    <Text style={styles.slotUnit}> {t("common.kcal")} · </Text>
+                    {rows.length}
+                    <Text style={styles.slotUnit}>
+                      {" "}
+                      {rows.length === 1
+                        ? t("home.slot_card.item_one")
+                        : t("home.slot_card.item_other")}
+                    </Text>
+                  </Text>
+                ) : (
+                  <Text style={styles.slotEmpty}>
+                    {planned
+                      ? t("home.slot_card.not_planned")
+                      : t("home.slot_card.nothing_logged")}
+                  </Text>
+                )}
+              </View>
+              {hasRows ? (
+                <Pressable
+                  onPress={() => goLog(s)}
+                  hitSlop={10}
+                  style={styles.slotPlus}
+                >
+                  <Ionicons name="add" size={20} color={colors.gold} />
+                </Pressable>
               ) : (
-                <Text style={styles.slotEmpty}>
+                <Text style={styles.slotCta}>
                   {planned
-                    ? t("home.slot_card.not_planned")
-                    : t("home.slot_card.nothing_logged")}
+                    ? t("home.slot_card.view_cta")
+                    : t("home.slot_card.log_cta")}
                 </Text>
               )}
-            </View>
-            <Text style={styles.slotCta}>
-              {planned
-                ? t("home.slot_card.view_cta")
-                : rows.length > 0
-                  ? "+"
-                  : t("home.slot_card.log_cta")}
-            </Text>
-          </Pressable>
+            </Pressable>
+            {hasRows && isExpanded && (
+              <View style={styles.slotItems}>
+                {rows.map((r) => (
+                  <View key={r.id} style={styles.slotItemRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.slotItemName} numberOfLines={1}>
+                        {r.name}
+                      </Text>
+                      {r.portion_estimate ? (
+                        <Text
+                          style={styles.slotItemPortion}
+                          numberOfLines={1}
+                        >
+                          {r.portion_estimate}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.slotItemKcal}>
+                      {Math.round(Number(r.kcal_low ?? 0))}–
+                      {Math.round(Number(r.kcal_high ?? 0))}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         );
       })}
     </View>
@@ -1435,15 +1492,56 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   slotCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderLeftWidth: 3,
     borderColor: colors.line,
     borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  slotHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
     padding: spacing.md,
+  },
+  slotPlus: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slotItems: {
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: 6,
+  },
+  slotItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  slotItemName: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  slotItemPortion: {
+    fontFamily: font.body,
+    fontSize: 11,
+    color: colors.dim,
+    marginTop: 1,
+  },
+  slotItemKcal: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.gold,
   },
   slotIcon: {
     width: 34,
