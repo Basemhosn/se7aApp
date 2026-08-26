@@ -428,7 +428,12 @@
       "sending": "Sending…",
       "sent": "✓ Sent",
       "sent_msg": "Check {{email}} — tap the link to sign in.",
-      "invalid_email": "That doesn't look like an email."
+      "invalid_email": "That doesn't look like an email.",
+      "google": "Continue with Google",
+      "google_busy": "Opening Google…",
+      "google_err": "Couldn't start Google sign-in.",
+      "google_cancelled": "Google sign-in cancelled.",
+      "or_divider": "OR"
     },
     "callback": {
       "signing_in": "Signing you in…",
