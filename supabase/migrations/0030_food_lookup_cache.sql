@@ -11,9 +11,10 @@
 -- hit the same row. Not user-scoped — this is a shared corpus of
 -- deterministic food data every user benefits from.
 --
--- The full LLM response (up to 3 item variants + notes) is stored
--- as jsonb because the response shape can evolve; one row per query,
--- not one row per item.
+-- RLS mirrors barcode_products (0013): any authenticated user can
+-- read + insert. Route-level rate limits (20/min, 200/day per user)
+-- bound abuse; the endpoint calls this via a user-scoped route
+-- client, so no service role key is needed in production.
 
 create table if not exists public.food_lookup_cache (
   id bigserial primary key,
@@ -30,6 +31,20 @@ create index if not exists food_lookup_cache_hit_count_idx
 
 alter table public.food_lookup_cache enable row level security;
 
--- Reads go through the service role (from the API route) so no
--- policy is required for select; keep the policy off. Writes never
--- happen from the client.
+drop policy if exists "food_lookup_cache: authed read"   on public.food_lookup_cache;
+drop policy if exists "food_lookup_cache: authed insert" on public.food_lookup_cache;
+drop policy if exists "food_lookup_cache: authed update" on public.food_lookup_cache;
+
+create policy "food_lookup_cache: authed read"
+  on public.food_lookup_cache for select
+  using (auth.uid() is not null);
+
+create policy "food_lookup_cache: authed insert"
+  on public.food_lookup_cache for insert
+  with check (auth.uid() is not null);
+
+-- Updates cover the hit_count / last_hit_at bump after a cache hit.
+create policy "food_lookup_cache: authed update"
+  on public.food_lookup_cache for update
+  using (auth.uid() is not null)
+  with check (auth.uid() is not null);

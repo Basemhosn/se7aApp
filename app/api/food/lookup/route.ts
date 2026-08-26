@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
-import { getRouteClient, getAdminClient } from "@/lib/supabase/server";
+import { getRouteClient } from "@/lib/supabase/server";
 import {
   foodLookupInputSchema,
   foodLookupResultSchema,
@@ -44,10 +44,9 @@ export async function POST(request: Request) {
 
   const queryOriginal = parsed.data.query.trim();
   const queryNormalized = normalize(queryOriginal);
-  const admin = getAdminClient();
 
   // 1. Cache
-  const { data: cached } = await admin
+  const { data: cached } = await supabase
     .from("food_lookup_cache")
     .select("id, response, hit_count")
     .eq("query_normalized", queryNormalized)
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
 
   if (cached) {
     // Fire-and-forget hit tracking; don't block the response.
-    admin
+    supabase
       .from("food_lookup_cache")
       .update({
         hit_count: (cached.hit_count ?? 0) + 1,
@@ -92,7 +91,7 @@ export async function POST(request: Request) {
 
   // 3. Cache the response (best-effort; ignore write errors so the
   // user still gets their result even if the cache write races).
-  admin
+  supabase
     .from("food_lookup_cache")
     .insert({
       query_normalized: queryNormalized,
