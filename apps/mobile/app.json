@@ -83,6 +83,14 @@
         }
       ],
       "expo-localization",
+      [
+        "react-native-health",
+        {
+          "isClinicalDataEnabled": false,
+          "healthSharePermission": "SE7A reads your weight, body-fat percentage, steps, active energy, and workouts from Apple Health so your dashboard stays in sync automatically.",
+          "healthUpdatePermission": "SE7A saves the weigh-ins you log back to Apple Health so both apps stay consistent."
+        }
+      ],
       "react-native-health-connect",
       [
         "@sentry/react-native/expo",
