@@ -316,6 +316,11 @@ export default function Calendar() {
 
   return (
     <Screen>
+      {/* Swipe zone wraps the whole calendar content so the gesture is
+          discoverable from the month header, stats, or grid — not just
+          the grid. Only the grid Animated.View below actually slides
+          during the transition; header + stats stay put. */}
+      <View {...panResponder.panHandlers} style={{ gap: spacing.lg }}>
       <View style={styles.monthRow}>
         <Pressable onPress={prev} style={styles.navBtn}>
           <Ionicons name="chevron-back" size={20} color={colors.ink} />
@@ -382,7 +387,6 @@ export default function Calendar() {
 
       <Animated.View
         style={[styles.swipeWrap, { transform: [{ translateX }] }]}
-        {...panResponder.panHandlers}
       >
         <View style={styles.weekdayRow}>
           {weekdayHead.map((d, i) => (
@@ -457,6 +461,7 @@ export default function Calendar() {
         <Legend color={colors.gold} label={t("calendar.legend_meals")} />
         <Legend color={colors.mint} label={t("calendar.legend_workout")} />
         <Legend color={colors.coral} label={t("calendar.legend_weighin")} />
+      </View>
       </View>
 
       <Modal

@@ -323,10 +323,13 @@ export default function Home() {
         </Pressable>
       </View>
 
-      {/* Swipe-to-shift-day zone: day picker chips + label + ring.
-          PanResponder in the parent claims only clearly-horizontal drags
-          so vertical scroll below stays smooth. Chip taps still work
-          because taps don't move enough to trigger the responder. */}
+      {/* Swipe-to-shift-day zone wraps all day-scoped content — ring,
+          macros, micros, slot grid, streak, cardio, sleep, wrapped,
+          fasting, workout, quick log — so the gesture is discoverable
+          from anywhere on the page. PanResponder only claims clearly-
+          horizontal drags (|dx| > 1.5·|dy|) so vertical ScrollView
+          gestures still work; chip and card taps don't move enough
+          to trigger the responder. */}
       <View {...swipeResponder.panHandlers}>
         <View style={styles.dayPickerRow}>
           <Pressable
@@ -412,7 +415,6 @@ export default function Home() {
             tint={colors.dim}
           />
         </View>
-      </View>
       </View>
 
       <View style={styles.macros}>
@@ -671,6 +673,7 @@ export default function Home() {
         ]}
       />
       )}
+      </View>
     </Screen>
   );
 }
