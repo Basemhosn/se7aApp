@@ -289,10 +289,10 @@ function BENEFITS(isArabic: boolean) {
         : "Chat with a coach that knows your logs and goals.",
     },
     {
-      title: isArabic ? "مسح غير محدود" : "200 scans a day",
+      title: isArabic ? "مسح غير محدود" : "Unlimited scans",
       body: isArabic
-        ? "بدلاً من ٣٠ يومياً في الخطة المجانية."
-        : "Up from 30 on Free — enough for the heaviest logger.",
+        ? "بدلاً من ٥ يومياً في الخطة المجانية."
+        : "Up from 5 a day on Free — snap as much as you want.",
     },
     {
       title: isArabic ? "كل برامج التمرين" : "All workout programs",

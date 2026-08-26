@@ -16,17 +16,20 @@ const scanBurst = new Ratelimit({
   analytics: true,
 });
 
+// Free tier: 5 scans per rolling 24h across ALL scan types (plate,
+// menu, body, meals-suggest, meal-plan). Pro is effectively unlimited
+// — capped at 10k/day only as an abuse ceiling; users never see it.
 const scanDaily = new Ratelimit({
   redis,
-  limiter: Ratelimit.fixedWindow(30, "24 h"),
-  prefix: "rl:scan:daily",
+  limiter: Ratelimit.fixedWindow(5, "24 h"),
+  prefix: "rl:scan:daily:v2",
   analytics: true,
 });
 
 const scanDailyPro = new Ratelimit({
   redis,
-  limiter: Ratelimit.fixedWindow(200, "24 h"),
-  prefix: "rl:scan:daily:pro",
+  limiter: Ratelimit.fixedWindow(10000, "24 h"),
+  prefix: "rl:scan:daily:pro:v2",
   analytics: true,
 });
 
