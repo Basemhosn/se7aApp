@@ -153,6 +153,60 @@ export async function purchasePackage(
   }
 }
 
+/**
+ * Consumable IAP for the 90-Day Plan report. Non-subscription — each
+ * purchase entitles one report generation. RC still tracks it in
+ * customerInfo.nonSubscriptionTransactions for restore/audit even
+ * though "consumable" means the SDK finishes the transaction and
+ * doesn't grant a lasting entitlement.
+ *
+ * Product ID must match the ASC + RC dashboard entry exactly.
+ */
+export const REPORT_PRODUCT_ID = "se7a_report_90day";
+
+export async function purchaseReport(): Promise<
+  | { cancelled: true }
+  | { cancelled: false; info: CustomerInfo }
+  | { cancelled: false; info: null; error: string }
+> {
+  if (!apiKey()) {
+    return { cancelled: false, info: null, error: "billing_unavailable" };
+  }
+  try {
+    const products = await Purchases.getProducts([REPORT_PRODUCT_ID]);
+    const product = products[0];
+    if (!product) {
+      return { cancelled: false, info: null, error: "product_unavailable" };
+    }
+    const { customerInfo } = await Purchases.purchaseStoreProduct(product);
+    return { cancelled: false, info: customerInfo };
+  } catch (e) {
+    const err = e as { userCancelled?: boolean; message?: string };
+    if (err.userCancelled) return { cancelled: true };
+    return {
+      cancelled: false,
+      info: null,
+      error: err.message ?? "purchase_failed",
+    };
+  }
+}
+
+/**
+ * Fetch just the report product's priceString so the CTA can show the
+ * localized amount ("19 AED" for UAE, "$5" for US, etc.) instead of
+ * the hardcoded 19 AED. Returns null when RC isn't configured or the
+ * product isn't set up yet.
+ */
+export async function fetchReportPriceString(): Promise<string | null> {
+  if (!apiKey()) return null;
+  try {
+    const products = await Purchases.getProducts([REPORT_PRODUCT_ID]);
+    return products[0]?.priceString ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function restorePurchases(): Promise<CustomerInfo | null> {
   if (!apiKey()) return null;
   try {

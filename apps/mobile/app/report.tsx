@@ -16,6 +16,7 @@ import { BackButton } from "@/components/BackButton";
 import { Btn } from "@/components/Btn";
 import { api } from "@/lib/api";
 import { useEntitlement } from "@/lib/EntitlementContext";
+import { fetchReportPriceString, purchaseReport } from "@/lib/rc";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -110,6 +111,7 @@ export default function ReportScreen() {
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [priceString, setPriceString] = useState<string | null>(null);
   const [err, setErr] = useState("");
 
   const load = useCallback(async () => {
@@ -126,6 +128,14 @@ export default function ReportScreen() {
     load();
   }, [load]);
 
+  // Fetch RC price so the CTA shows localized currency ("29 AED",
+  // "$8", etc.). Runs alongside load; failures are silent — CTA falls
+  // back to the hardcoded 19 AED string from i18n.
+  useEffect(() => {
+    if (ent.is_pro) return;
+    fetchReportPriceString().then(setPriceString).catch(() => {});
+  }, [ent.is_pro]);
+
   // Fire-and-forget weekly refresh on load if the plan is at least a
   // week old and no fresh summary. Rate-limited server-side to once/24h.
   useEffect(() => {
@@ -140,14 +150,26 @@ export default function ReportScreen() {
   }, [report, load]);
 
   const generate = useCallback(async () => {
+    setErr("");
+    // Non-Pro users must buy the consumable IAP first. Pro users skip
+    // straight to generation. Purchase → generate happens on the same
+    // tap so the user isn't stuck in a "you bought it, now tap again"
+    // dead-end.
     if (!ent.is_pro) {
-      // Non-Pro: send to paywall. Phase 3 will add a report-specific
-      // consumable IAP path; for now the paywall is the Pro upgrade.
-      router.push({ pathname: "/paywall", params: { feature: "report" } });
-      return;
+      const result = await purchaseReport();
+      if (result.cancelled) return;
+      if ("error" in result && result.error) {
+        setErr(
+          result.error === "product_unavailable"
+            ? t("report.purchase_unavailable")
+            : result.error === "billing_unavailable"
+              ? t("report.purchase_unavailable")
+              : t("report.purchase_err")
+        );
+        return;
+      }
     }
     setGenerating(true);
-    setErr("");
     try {
       await api("/api/reports/generate", {
         method: "POST",
@@ -212,7 +234,11 @@ export default function ReportScreen() {
               label={
                 ent.is_pro
                   ? t("report.generate_cta_pro")
-                  : t("report.generate_cta_free")
+                  : priceString
+                    ? t("report.generate_cta_free_priced", {
+                        price: priceString,
+                      })
+                    : t("report.generate_cta_free")
               }
               onPress={generate}
               disabled={generating}
