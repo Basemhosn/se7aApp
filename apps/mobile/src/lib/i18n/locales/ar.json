@@ -710,5 +710,82 @@
     "roast_kicker": "رأي المدرب",
     "share_cta": "شارك أسبوعك",
     "share_header": "SE7A · أسبوع {{range}}"
+  },
+  "report": {
+    "home_cta": {
+      "kicker": "خطة شخصية",
+      "title_new": "احصل على خطتك لـ ٩٠ يومًا",
+      "sub_new": "مصممة بالذكاء الاصطناعي من ملفك وسجلاتك: وجبات، تمارين، عادات، وخارطة أسبوعية.",
+      "cta_new": "احصل على الخطة · ١٩ درهم",
+      "cta_new_pro": "احصل على الخطة",
+      "title_active": "أسبوع {{week}} من {{total}}",
+      "sub_active": "عرض خطة الـ ٩٠ يومًا",
+      "cta_active": "فتح"
+    },
+    "empty_title": "خطتك لـ ٩٠ يومًا",
+    "empty_sub": "خطة واحدة مصممة بالذكاء الاصطناعي مخصصة لملفك. أهداف السعرات، خطة الوجبات، التمارين، قواعد العادات، وخارطة أسبوعية.",
+    "generate_cta_free": "أنشئ الخطة · ١٩ درهم",
+    "generate_cta_pro": "أنشئ خطتي",
+    "generating": "جارٍ إنشاء خطتك…",
+    "generating_sub": "يستغرق دقيقة إلى دقيقتين. نمرّر ملفك وسجلاتك على الكوتش.",
+    "generate_err": "تعذّر إنشاء الخطة.",
+    "onboarding_incomplete": "أكمل الإعداد أولاً — الخطة تحتاج ملفك.",
+    "kicker": "أسبوع {{week}} من {{total}}",
+    "regenerate": "إعادة الإنشاء",
+    "share": "شارك الخطة",
+    "weekly_summary": {
+      "title": "هذا الأسبوع",
+      "went_well": "ما نجحت فيه",
+      "to_change": "ما يجب تغييره",
+      "coach_take": "رأي المدرب",
+      "refreshing": "جارٍ التحديث…"
+    },
+    "section": {
+      "nutrition": "التغذية",
+      "meals": "الوجبات · نموذج ٧ أيام",
+      "training": "التمارين",
+      "habits": "العادات",
+      "tracking": "المتابعة",
+      "roadmap": "خارطة الطريق",
+      "safety": "ملاحظات السلامة"
+    },
+    "nutrition": {
+      "targets": "الأهداف اليومية",
+      "kcal_range": "{{low}}–{{high}} سعرة",
+      "macro_row": "{{low}}–{{high}} غ",
+      "why_this": "لماذا هذه الأرقام",
+      "adjust_rules": "التعديلات الأسبوعية"
+    },
+    "meals": {
+      "day": "اليوم {{n}}",
+      "swaps": "بدائل",
+      "grocery": "قائمة التسوّق",
+      "eating_out": "الأكل خارج المنزل"
+    },
+    "training": {
+      "session": "اليوم {{n}} · {{focus}}",
+      "duration": "~{{min}} دقيقة",
+      "sets_reps": "{{sets}} × {{reps}}",
+      "rest": "راحة {{sec}} ث",
+      "progression": "التقدّم",
+      "deload": "أسبوع الراحة",
+      "cardio": "الكارديو"
+    },
+    "habits": {
+      "daily": "يومي",
+      "hard_scenarios": "المواقف الصعبة",
+      "missed_workout": "إذا فوّت التمرين",
+      "cravings": "دليل الشراهة"
+    },
+    "tracking": {
+      "measurements": "ما نقيسه",
+      "weekly_questions": "مراجعة أسبوعية",
+      "trend_rules": "كيف تقرأ الاتجاهات"
+    },
+    "roadmap": {
+      "week": "الأسبوع {{n}}",
+      "monthly_reviews": "المراجعة الشهرية"
+    },
+    "days": ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
   }
 }

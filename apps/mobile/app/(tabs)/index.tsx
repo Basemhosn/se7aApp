@@ -133,6 +133,10 @@ export default function Home() {
   const [streak, setStreak] = useState<StreakResponse | null>(null);
   const [cardio, setCardio] = useState<CardioTodayResponse | null>(null);
   const [sleep, setSleep] = useState<SleepTodayResponse | null>(null);
+  const [reportMeta, setReportMeta] = useState<{
+    week_index: number;
+    total_weeks: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const viewDateIso = useMemo(() => {
@@ -232,6 +236,7 @@ export default function Home() {
       streakRes,
       cardioRes,
       sleepRes,
+      reportRes,
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -256,6 +261,12 @@ export default function Home() {
       ).catch(() => null),
       api<CardioTodayResponse>("/api/cardio/today").catch(() => null),
       api<SleepTodayResponse>("/api/sleep/today").catch(() => null),
+      api<{
+        report: {
+          week_index: number;
+          total_weeks: number;
+        } | null;
+      }>("/api/reports/current").catch(() => ({ report: null })),
     ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
@@ -270,6 +281,7 @@ export default function Home() {
     setStreak(streakRes);
     setCardio(cardioRes);
     setSleep(sleepRes);
+    setReportMeta(reportRes.report);
     setLoading(false);
   }, [user, isToday, viewDateIso]);
 
@@ -525,6 +537,8 @@ export default function Home() {
         planned={hasFuturePlan}
         t={t}
       />
+
+      {isToday && <ReportCard meta={reportMeta} isPro={ent.is_pro} t={t} />}
 
       {isToday &&
         streak &&
@@ -1174,6 +1188,75 @@ function MealSlotGrid({
   );
 }
 
+/**
+ * Home surface for the 90-Day Plan.
+ * - No report yet: gold-accented CTA "Get your 90-Day Plan · 19 AED"
+ *   (or "Get your plan" for Pro users). Tapping routes to /report.
+ * - Report present: compact pill "Week X of N · View your 90-Day Plan"
+ *   that opens the full viewer.
+ * All copy pulls from i18n so the AR variant reads naturally.
+ */
+function ReportCard({
+  meta,
+  isPro,
+  t,
+}: {
+  meta: { week_index: number; total_weeks: number } | null;
+  isPro: boolean;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  if (meta) {
+    return (
+      <Pressable
+        onPress={() => router.push("/report")}
+        style={styles.reportActiveCard}
+      >
+        <View style={styles.reportActiveIcon}>
+          <Ionicons name="sparkles" size={18} color={colors.gold} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.reportActiveKicker}>
+            {t("report.home_cta.title_active", {
+              week: meta.week_index,
+              total: meta.total_weeks,
+            })}
+          </Text>
+          <Text style={styles.reportActiveSub}>
+            {t("report.home_cta.sub_active")}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.dim} />
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => router.push("/report")}
+      style={styles.reportNewCard}
+    >
+      <View style={styles.reportNewIcon}>
+        <Ionicons name="sparkles" size={22} color={colors.gold} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.reportNewKicker}>
+          {t("report.home_cta.kicker")}
+        </Text>
+        <Text style={styles.reportNewTitle}>
+          {t("report.home_cta.title_new")}
+        </Text>
+        <Text style={styles.reportNewSub}>{t("report.home_cta.sub_new")}</Text>
+      </View>
+      <View style={styles.reportNewCta}>
+        <Text style={styles.reportNewCtaText}>
+          {isPro
+            ? t("report.home_cta.cta_new_pro")
+            : t("report.home_cta.cta_new")}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function StreakCard({
   streak,
   onFrozen,
@@ -1680,6 +1763,88 @@ const styles = StyleSheet.create({
     fontFamily: font.mono,
     fontSize: 12,
     color: colors.gold,
+  },
+  reportNewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  reportNewIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(246,183,60,0.10)",
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reportNewKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  reportNewTitle: {
+    fontFamily: font.bodyBold,
+    fontSize: 15,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  reportNewSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  reportNewCta: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold,
+  },
+  reportNewCtaText: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.bg,
+    letterSpacing: 1.2,
+    fontWeight: "700",
+  },
+  reportActiveCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  reportActiveIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(246,183,60,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reportActiveKicker: {
+    fontFamily: font.bodyBold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  reportActiveSub: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.2,
+    marginTop: 2,
   },
   slotIcon: {
     width: 34,

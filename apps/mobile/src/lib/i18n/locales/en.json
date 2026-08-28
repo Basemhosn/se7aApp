@@ -710,5 +710,82 @@
     "roast_kicker": "COACH'S TAKE",
     "share_cta": "Share your week",
     "share_header": "SE7A · Week of {{range}}"
+  },
+  "report": {
+    "home_cta": {
+      "kicker": "PERSONALIZED BLUEPRINT",
+      "title_new": "Get your 90-Day Plan",
+      "sub_new": "AI-built from your profile + logs. Meals, workouts, habits, weekly roadmap.",
+      "cta_new": "Get plan · 19 AED",
+      "cta_new_pro": "Get plan",
+      "title_active": "Week {{week}} of {{total}}",
+      "sub_active": "View your 90-Day Plan",
+      "cta_active": "Open"
+    },
+    "empty_title": "Your 90-Day Plan",
+    "empty_sub": "One AI-generated blueprint personalized to your profile. Calorie targets, meal plan, workouts, habit rules, and a week-by-week roadmap.",
+    "generate_cta_free": "Generate for 19 AED",
+    "generate_cta_pro": "Generate my plan",
+    "generating": "Generating your plan…",
+    "generating_sub": "This takes 1–2 minutes. We're running your profile + logs through the coach.",
+    "generate_err": "Couldn't generate your plan.",
+    "onboarding_incomplete": "Finish onboarding first — the plan needs your profile.",
+    "kicker": "WEEK {{week}} OF {{total}}",
+    "regenerate": "Regenerate",
+    "share": "Share plan",
+    "weekly_summary": {
+      "title": "This week",
+      "went_well": "What went well",
+      "to_change": "What to change",
+      "coach_take": "Coach's take",
+      "refreshing": "Refreshing…"
+    },
+    "section": {
+      "nutrition": "NUTRITION",
+      "meals": "MEALS · 7-DAY SAMPLE",
+      "training": "TRAINING",
+      "habits": "HABITS",
+      "tracking": "TRACKING",
+      "roadmap": "ROADMAP",
+      "safety": "SAFETY NOTES"
+    },
+    "nutrition": {
+      "targets": "Daily targets",
+      "kcal_range": "{{low}}–{{high}} kcal",
+      "macro_row": "{{low}}–{{high}} g",
+      "why_this": "Why this",
+      "adjust_rules": "Weekly adjustments"
+    },
+    "meals": {
+      "day": "Day {{n}}",
+      "swaps": "Swap ideas",
+      "grocery": "Grocery staples",
+      "eating_out": "Eating out"
+    },
+    "training": {
+      "session": "Day {{n}} · {{focus}}",
+      "duration": "~{{min}} min",
+      "sets_reps": "{{sets}} × {{reps}}",
+      "rest": "{{sec}}s rest",
+      "progression": "Progression",
+      "deload": "Deload",
+      "cardio": "Cardio"
+    },
+    "habits": {
+      "daily": "Daily",
+      "hard_scenarios": "When it's hard",
+      "missed_workout": "If you miss a workout",
+      "cravings": "Cravings playbook"
+    },
+    "tracking": {
+      "measurements": "What to measure",
+      "weekly_questions": "Weekly review",
+      "trend_rules": "Reading the trends"
+    },
+    "roadmap": {
+      "week": "Week {{n}}",
+      "monthly_reviews": "Monthly review"
+    },
+    "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
   }
 }
