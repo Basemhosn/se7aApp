@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -78,7 +79,6 @@ export default function Login() {
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type !== "success") {
         // User dismissed the sheet or the flow returned no result.
-        // Not an error worth surfacing loudly unless there's a URL.
         if (result.type === "cancel" || result.type === "dismiss") {
           setMsg(t("auth.login.google_cancelled"));
         } else {
@@ -87,30 +87,62 @@ export default function Login() {
         setGoogleBusy(false);
         return;
       }
-      // Success: the returned url is se7a://auth/callback?code=...
-      // Extract code, exchange it. The /auth/callback screen handles
-      // the same exchange when a magic link deep-links back — reuse
-      // that path instead of duplicating the exchange here so profile
-      // routing + onboarding redirect stay consistent.
-      const url = new URL(result.url);
-      const code = url.searchParams.get("code");
+      // Success — pull the code from the returned url. Supabase can
+      // put it in either the search string (?code=...) or the URL
+      // fragment (#code=... in the older implicit flow). Try both.
+      const code = extractCodeFromReturnUrl(result.url);
       if (!code) {
-        setMsg(t("auth.login.google_err"));
+        setMsg(
+          `${t("auth.login.google_err")} (no code in redirect)`
+        );
         setGoogleBusy(false);
         return;
       }
       const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
       if (exErr) {
-        setMsg(exErr.message);
+        setMsg(`${t("auth.login.google_err")}: ${exErr.message}`);
         setGoogleBusy(false);
         return;
       }
-      // Session is now live; AuthProvider picks it up and routes.
+      // Explicit navigation — the AuthProvider does route on session
+      // change but that's raced by this screen staying mounted, so
+      // we push to callback ourselves. The callback route handles the
+      // onboarded-vs-onboarding branch.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setMsg(`${t("auth.login.google_err")} (no user after exchange)`);
+        setGoogleBusy(false);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("onboarded_at")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      router.replace(profile?.onboarded_at ? "/" : "/onboarding");
     } catch (e) {
       setMsg((e as Error).message || t("auth.login.google_err"));
     }
     setGoogleBusy(false);
   };
+
+  function extractCodeFromReturnUrl(rawUrl: string): string | null {
+    try {
+      const u = new URL(rawUrl);
+      const q = u.searchParams.get("code");
+      if (q) return q;
+      // Fragment path: #code=... or #access_token=...&code=...
+      const frag = u.hash?.startsWith("#") ? u.hash.slice(1) : u.hash ?? "";
+      if (frag) {
+        const fragParams = new URLSearchParams(frag);
+        const c = fragParams.get("code");
+        if (c) return c;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
 
   const anyBusy = busy || googleBusy;
 
