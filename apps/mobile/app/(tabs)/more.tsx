@@ -52,11 +52,15 @@ export default function More() {
   const [streak, setStreak] = useState<StreakResponse | null>(null);
   const [weightDelta, setWeightDelta] = useState<number | null>(null);
   const [cycleEnabled, setCycleEnabled] = useState(false);
+  const [reportMeta, setReportMeta] = useState<{
+    week_index: number;
+    total_weeks: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
-    const [{ data: profileData }, streakRes, trendRes, cycleRes] =
+    const [{ data: profileData }, streakRes, trendRes, cycleRes, reportRes] =
       await Promise.all([
         supabase
           .from("profiles")
@@ -68,6 +72,9 @@ export default function More() {
         ).catch(() => null),
         api<WeightTrend>("/api/weight/trend?days=30").catch(() => null),
         api<CycleStatus>("/api/cycle/status").catch(() => null),
+        api<{
+          report: { week_index: number; total_weeks: number } | null;
+        }>("/api/reports/current").catch(() => ({ report: null })),
       ]);
     setProfile(profileData as Profile | null);
     setStreak(streakRes);
@@ -81,6 +88,7 @@ export default function More() {
       setWeightDelta(null);
     }
     setCycleEnabled(!!cycleRes?.prefs.enabled);
+    setReportMeta(reportRes.report);
   }, [user]);
 
   useFocusEffect(
@@ -145,6 +153,41 @@ export default function More() {
             <Text style={styles.proArrow}>→</Text>
           </Pressable>
         )}
+
+        {/* ── Featured: 90-Day Plan ────────────────────────────────── */}
+        <Pressable
+          onPress={() => router.push("/report")}
+          style={styles.reportFeatured}
+        >
+          <View style={styles.reportIcon}>
+            <Ionicons name="sparkles" size={20} color={colors.gold} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reportKicker}>
+              {reportMeta
+                ? isArabic
+                  ? `أسبوع ${reportMeta.week_index} من ${reportMeta.total_weeks}`
+                  : `WEEK ${reportMeta.week_index} OF ${reportMeta.total_weeks}`
+                : isArabic
+                  ? "خطتك · ٩٠ يومًا"
+                  : "YOUR 90-DAY PLAN"}
+            </Text>
+            <Text style={styles.reportTitle}>
+              {reportMeta
+                ? isArabic
+                  ? "افتح خطتك"
+                  : "View your plan"
+                : isPro
+                  ? isArabic
+                    ? "أنشئ خطتك"
+                    : "Generate your plan"
+                  : isArabic
+                    ? "احصل عليها · ١٩ درهم"
+                    : "Get it · 19 AED"}
+            </Text>
+          </View>
+          <Text style={styles.chevGold}>→</Text>
+        </Pressable>
 
         {/* ── Featured: Weekly Wrapped ─────────────────────────────── */}
         <Pressable
@@ -392,7 +435,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.gold,
   },
-  wrappedFeatured: {
+  reportFeatured: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
@@ -402,6 +445,39 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     marginTop: spacing.md,
+  },
+  reportIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(246,183,60,0.10)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reportKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  reportTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 17,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  wrappedFeatured: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
   },
   wrappedIcon: {
     width: 40,
