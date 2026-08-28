@@ -122,27 +122,6 @@ export default function Login() {
       <Text style={styles.h1}>{t("auth.login.h1")}</Text>
       <Text style={styles.sub}>{t("auth.login.sub")}</Text>
 
-      <Pressable
-        onPress={signInWithGoogle}
-        disabled={anyBusy || sent}
-        style={({ pressed }) => [
-          styles.googleBtn,
-          (anyBusy || sent) && styles.googleBtnDisabled,
-          pressed && { opacity: 0.9 },
-        ]}
-      >
-        <Ionicons name="logo-google" size={18} color={colors.ink} />
-        <Text style={styles.googleBtnText}>
-          {googleBusy ? t("auth.login.google_busy") : t("auth.login.google")}
-        </Text>
-      </Pressable>
-
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>{t("auth.login.or_divider")}</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
       <View style={styles.field}>
         <Text style={styles.label}>{t("auth.login.email_label")}</Text>
         <TextInput
@@ -165,6 +144,27 @@ export default function Login() {
         disabled={sent || googleBusy}
       />
 
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>{t("auth.login.or_divider")}</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <Pressable
+        onPress={signInWithGoogle}
+        disabled={anyBusy || sent}
+        style={({ pressed }) => [
+          styles.googleBtn,
+          (anyBusy || sent) && styles.googleBtnDisabled,
+          pressed && { opacity: 0.85 },
+        ]}
+      >
+        <Ionicons name="logo-google" size={18} color={colors.ink} />
+        <Text style={styles.googleBtnText}>
+          {googleBusy ? t("auth.login.google_busy") : t("auth.login.google")}
+        </Text>
+      </Pressable>
+
       {!!msg && (
         <Text style={[styles.note, sent ? styles.ok : styles.err]}>{msg}</Text>
       )}
@@ -185,13 +185,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
   },
   googleBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   googleBtnText: {
     fontFamily: font.bodyBold,
