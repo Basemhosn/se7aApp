@@ -13,7 +13,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
+import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
 import { SLOTS, slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -88,30 +88,32 @@ export default function MealsSuggest() {
 
   const logSuggestion = async (s: Suggestion, idx: number) => {
     setLogging(idx);
+    const item = {
+      name: s.name,
+      portion_estimate: s.portion,
+      kcal_low: s.kcal_low,
+      kcal_high: s.kcal_high,
+      protein_g_low: s.protein_g_low,
+      protein_g_high: s.protein_g_high,
+      carb_g_low: s.carb_g_low,
+      carb_g_high: s.carb_g_high,
+      fat_g_low: s.fat_g_low,
+      fat_g_high: s.fat_g_high,
+      confidence: "medium" as const,
+    };
     try {
       await api("/api/ledger/add", {
         method: "POST",
         body: JSON.stringify({
           source: "manual",
           meal_slot: slot,
-          items: [
-            {
-              name: s.name,
-              portion_estimate: s.portion,
-              kcal_low: s.kcal_low,
-              kcal_high: s.kcal_high,
-              protein_g_low: s.protein_g_low,
-              protein_g_high: s.protein_g_high,
-              carb_g_low: s.carb_g_low,
-              carb_g_high: s.carb_g_high,
-              fat_g_low: s.fat_g_low,
-              fat_g_high: s.fat_g_high,
-              confidence: "medium",
-            },
-          ],
+          items: [item],
         }),
       });
       markDayDirty();
+      pushOptimisticLogItems([
+        { ...item, source: "manual", meal_slot: slot },
+      ]);
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("meals_suggest.couldnt_log"));

@@ -21,7 +21,7 @@ import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
+import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
 import { SLOTS, slotForNow } from "@/lib/slot";
@@ -147,32 +147,35 @@ export default function BarcodeScan() {
     if (!product || !macros || portionNum <= 0) return;
     setPhase("saving");
     setErr("");
+    const name = product.brand
+      ? `${product.brand} · ${product.name}`
+      : product.name;
+    const item = {
+      name,
+      portion_estimate: `${portionNum} g`,
+      kcal_low: macros.kcal_low,
+      kcal_high: macros.kcal_high,
+      protein_g_low: macros.protein_g_low,
+      protein_g_high: macros.protein_g_high,
+      carb_g_low: macros.carb_g_low,
+      carb_g_high: macros.carb_g_high,
+      fat_g_low: macros.fat_g_low,
+      fat_g_high: macros.fat_g_high,
+      confidence: product.confidence,
+    };
     try {
       await api("/api/ledger/add", {
         method: "POST",
         body: JSON.stringify({
-          source: "manual",
+          source: "barcode",
           meal_slot: slot,
-          items: [
-            {
-              name: product.brand
-                ? `${product.brand} · ${product.name}`
-                : product.name,
-              portion_estimate: `${portionNum} g`,
-              kcal_low: macros.kcal_low,
-              kcal_high: macros.kcal_high,
-              protein_g_low: macros.protein_g_low,
-              protein_g_high: macros.protein_g_high,
-              carb_g_low: macros.carb_g_low,
-              carb_g_high: macros.carb_g_high,
-              fat_g_low: macros.fat_g_low,
-              fat_g_high: macros.fat_g_high,
-              confidence: product.confidence,
-            },
-          ],
+          items: [item],
         }),
       });
       markDayDirty();
+      pushOptimisticLogItems([
+        { ...item, source: "barcode", meal_slot: slot },
+      ]);
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || "Couldn't log — try again.");

@@ -20,7 +20,11 @@ import { CalorieRing } from "@/components/CalorieRing";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
+import {
+  clearOptimisticLogItems,
+  markDayDirty,
+  peekOptimisticLogItems,
+} from "@/lib/calendarCache";
 import { useRamadan, useRamadanScheduling } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
@@ -301,7 +305,21 @@ export default function Home() {
 
   useFocusEffect(
     useCallback(() => {
-      load().catch(() => setLoading(false));
+      // Optimistic pre-merge: if a log flow just finished and pushed
+      // items, splice them into ledger.totals RIGHT NOW so the ring
+      // reflects the new totals within a frame — before the network
+      // fetch has a chance to complete. Load() still runs in parallel
+      // and replaces this with authoritative server data.
+      const pending = peekOptimisticLogItems();
+      if (pending.length > 0) {
+        setLedger((prev) => (prev ? mergePendingIntoLedger(prev, pending) : prev));
+      }
+      load()
+        .then(() => clearOptimisticLogItems())
+        .catch(() => {
+          clearOptimisticLogItems();
+          setLoading(false);
+        });
     }, [load])
   );
 
@@ -785,6 +803,76 @@ export default function Home() {
       </Animated.View>
     </Screen>
   );
+}
+
+/**
+ * Splice optimistic just-logged items into an existing LedgerDayResponse
+ * so the ring can update within a frame of the log screen navigating
+ * back. Recomputes the totals block by summing every field the ring
+ * + macros + micros row reads. When the fresh server ledger arrives,
+ * it fully replaces this merged shape via setLedger(ledgerRes).
+ */
+function mergePendingIntoLedger(
+  prev: LedgerDayResponse,
+  pending: ReturnType<typeof peekOptimisticLogItems>
+): LedgerDayResponse {
+  if (pending.length === 0) return prev;
+  const nowMs = Date.now();
+  const pendingItems = pending.map((p, i) => ({
+    id: -(nowMs + i), // negative synthetic id — never collides with server bigserial
+    name: p.name,
+    portion_estimate: p.portion_estimate ?? null,
+    source: p.source,
+    confidence: p.confidence ?? null,
+    eaten_at: p.eaten_at,
+    meal_slot: p.meal_slot ?? null,
+    kcal_low: p.kcal_low,
+    kcal_high: p.kcal_high,
+    protein_g_low: p.protein_g_low,
+    protein_g_high: p.protein_g_high,
+    carb_g_low: p.carb_g_low,
+    carb_g_high: p.carb_g_high,
+    fat_g_low: p.fat_g_low,
+    fat_g_high: p.fat_g_high,
+    sodium_mg_low: p.sodium_mg_low ?? null,
+    sodium_mg_high: p.sodium_mg_high ?? null,
+    fiber_g_low: p.fiber_g_low ?? null,
+    fiber_g_high: p.fiber_g_high ?? null,
+    sugar_g_low: p.sugar_g_low ?? null,
+    sugar_g_high: p.sugar_g_high ?? null,
+    saturated_fat_g_low: p.saturated_fat_g_low ?? null,
+    saturated_fat_g_high: p.saturated_fat_g_high ?? null,
+  }));
+  const nextItems = [...prev.totals.items, ...pendingItems];
+  const bump = (
+    range: { low: number; high: number },
+    key: "kcal" | "protein_g" | "carb_g" | "fat_g" | "sodium_mg" | "fiber_g" | "sugar_g" | "saturated_fat_g"
+  ) => {
+    let low = range.low;
+    let high = range.high;
+    for (const it of pendingItems) {
+      const lowKey = `${key}_low` as keyof typeof it;
+      const highKey = `${key}_high` as keyof typeof it;
+      low += Number(it[lowKey] ?? 0);
+      high += Number(it[highKey] ?? 0);
+    }
+    return { low, high };
+  };
+  return {
+    ...prev,
+    totals: {
+      ...prev.totals,
+      items: nextItems,
+      kcal: bump(prev.totals.kcal, "kcal"),
+      protein_g: bump(prev.totals.protein_g, "protein_g"),
+      carb_g: bump(prev.totals.carb_g, "carb_g"),
+      fat_g: bump(prev.totals.fat_g, "fat_g"),
+      sodium_mg: bump(prev.totals.sodium_mg, "sodium_mg"),
+      fiber_g: bump(prev.totals.fiber_g, "fiber_g"),
+      sugar_g: bump(prev.totals.sugar_g, "sugar_g"),
+      saturated_fat_g: bump(prev.totals.saturated_fat_g, "saturated_fat_g"),
+    },
+  };
 }
 
 function SideStat({

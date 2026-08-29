@@ -9,7 +9,7 @@ import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
+import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -222,6 +222,27 @@ export default function PlateScan() {
         }),
       });
       markDayDirty();
+      // Plate scan currently doesn't carry micronutrients in the
+      // scaled review shape — the server extracts them from scan_id
+      // instead. Optimistic merge just uses macros; the fresh fetch
+      // will bring in sodium/fiber/sugar/sat_fat when it lands.
+      pushOptimisticLogItems(
+        scaledPicked.map((it) => ({
+          name: it.name,
+          portion_estimate: it.portion_estimate ?? null,
+          source: "plate_scan",
+          confidence: it.confidence ?? null,
+          meal_slot: slot,
+          kcal_low: it.kcal_low,
+          kcal_high: it.kcal_high,
+          protein_g_low: it.protein_g_low,
+          protein_g_high: it.protein_g_high,
+          carb_g_low: it.carb_g_low,
+          carb_g_high: it.carb_g_high,
+          fat_g_low: it.fat_g_low,
+          fat_g_high: it.fat_g_high,
+        }))
+      );
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("scan.plate.couldnt_save"));

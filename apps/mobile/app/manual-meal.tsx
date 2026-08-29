@@ -14,7 +14,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
+import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
 import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -105,30 +105,32 @@ export default function ManualMeal() {
     const p = Number(protein) || 0;
     const c = Number(carb) || 0;
     const f = Number(fat) || 0;
+    const item = {
+      name: name.trim(),
+      portion_estimate: portion.trim() || null,
+      kcal_low: k,
+      kcal_high: k,
+      protein_g_low: p,
+      protein_g_high: p,
+      carb_g_low: c,
+      carb_g_high: c,
+      fat_g_low: f,
+      fat_g_high: f,
+      confidence: "high" as const,
+    };
     try {
       await api("/api/ledger/add", {
         method: "POST",
         body: JSON.stringify({
           source: "manual",
           meal_slot: slot,
-          items: [
-            {
-              name: name.trim(),
-              portion_estimate: portion.trim() || undefined,
-              kcal_low: k,
-              kcal_high: k,
-              protein_g_low: p,
-              protein_g_high: p,
-              carb_g_low: c,
-              carb_g_high: c,
-              fat_g_low: f,
-              fat_g_high: f,
-              confidence: "high",
-            },
-          ],
+          items: [{ ...item, portion_estimate: item.portion_estimate ?? undefined }],
         }),
       });
       markDayDirty();
+      pushOptimisticLogItems([
+        { ...item, source: "manual", meal_slot: slot },
+      ]);
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("manual_meal.couldnt_save"));
