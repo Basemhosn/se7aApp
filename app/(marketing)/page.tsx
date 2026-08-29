@@ -8,19 +8,15 @@ export default function Home() {
   return (
     <>
       <StickyNav>
-        {(scrolled) => (
-          <div className={`nav-wrap ${scrolled ? "nav-wrap-scrolled" : ""}`}>
-            <div className="shell">
-              <nav className="nav">
-                <div className="wordmark">
-                  SE<span className="seven">7</span>A
-                  <span className="arabic">{"صحة"}</span>
-                </div>
-                <div className="nav-tag">EAT SMART {"·"} TRAIN SMART</div>
-              </nav>
+        <div className="shell">
+          <nav className="nav">
+            <div className="wordmark">
+              SE<span className="seven">7</span>A
+              <span className="arabic">{"صحة"}</span>
             </div>
-          </div>
-        )}
+            <div className="nav-tag">EAT SMART {"·"} TRAIN SMART</div>
+          </nav>
+        </div>
       </StickyNav>
 
       <div className="shell">

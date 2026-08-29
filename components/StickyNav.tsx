@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
- * Nav bar that gets a subtle glass/blur background once the user has
- * scrolled past the hero. Client-only because it hooks window scroll;
- * SSR fallback renders the transparent (default) state, so no
- * layout jump on hydration.
+ * Nav bar wrapper that gets a subtle glass/blur background once the
+ * user has scrolled past the hero. Children pass through unchanged
+ * (plain ReactNode — no render prop) so this stays SSR-safe: the
+ * page-level Server Component can pass regular JSX in without hitting
+ * the "functions can't cross Server→Client boundary" error.
+ *
+ * Scroll state lives here; the toggle just flips a class name on the
+ * wrapper. CSS in globals.css owns the actual visual (padding shrink,
+ * backdrop blur, border-bottom).
  */
-export function StickyNav({
-  children,
-}: {
-  children: (isScrolled: boolean) => React.ReactNode;
-}) {
+export function StickyNav({ children }: { children: ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -22,5 +23,9 @@ export function StickyNav({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  return <>{children(scrolled)}</>;
+  return (
+    <div className={`nav-wrap ${scrolled ? "nav-wrap-scrolled" : ""}`}>
+      {children}
+    </div>
+  );
 }
