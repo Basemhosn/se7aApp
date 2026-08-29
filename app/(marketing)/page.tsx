@@ -61,6 +61,7 @@ export default function Home() {
                 width={280}
                 height={520}
                 className="phone"
+                unoptimized
                 priority
               />
             </div>
@@ -87,6 +88,7 @@ export default function Home() {
                 width={280}
                 height={575}
                 className="phone"
+                unoptimized
               />
             </div>
           </section>
@@ -111,6 +113,7 @@ export default function Home() {
                 width={280}
                 height={575}
                 className="phone"
+                unoptimized
               />
             </div>
           </section>
@@ -175,6 +178,7 @@ export default function Home() {
                 width={280}
                 height={575}
                 className="phone"
+                unoptimized
               />
             </div>
           </section>
@@ -200,6 +204,7 @@ export default function Home() {
                 width={280}
                 height={575}
                 className="phone"
+                unoptimized
               />
             </div>
           </section>
@@ -287,6 +292,7 @@ export default function Home() {
                 width={280}
                 height={575}
                 className="phone"
+                unoptimized
               />
             </div>
           </section>
