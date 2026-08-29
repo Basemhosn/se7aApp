@@ -31,6 +31,14 @@ interface CycleStatus {
   prefs: { enabled: boolean };
 }
 
+interface BadgeShelfItem {
+  key: string;
+  icon: string;
+  tier: "bronze" | "silver" | "gold" | "platinum";
+  earned_at: string | null;
+  seen: boolean;
+}
+
 type IconName = keyof typeof Ionicons.glyphMap;
 
 /**
@@ -56,30 +64,40 @@ export default function More() {
     week_index: number;
     total_weeks: number;
   } | null>(null);
+  const [badges, setBadges] = useState<BadgeShelfItem[]>([]);
 
   const load = useCallback(async () => {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
-    const [{ data: profileData }, streakRes, trendRes, cycleRes, reportRes] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        api<StreakResponse>(
-          `/api/streaks?tz_offset_min=${tzOffsetMin}`
-        ).catch(() => null),
-        api<WeightTrend>("/api/weight/trend?days=30").catch(() => null),
-        api<CycleStatus>("/api/cycle/status").catch(() => null),
-        api<{
-          report: {
-            week_index: number;
-            total_weeks: number;
-            checkpoints_met?: number[];
-          } | null;
-        }>("/api/reports/current").catch(() => ({ report: null })),
-      ]);
+    const [
+      { data: profileData },
+      streakRes,
+      trendRes,
+      cycleRes,
+      reportRes,
+      badgesRes,
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      api<StreakResponse>(
+        `/api/streaks?tz_offset_min=${tzOffsetMin}`
+      ).catch(() => null),
+      api<WeightTrend>("/api/weight/trend?days=30").catch(() => null),
+      api<CycleStatus>("/api/cycle/status").catch(() => null),
+      api<{
+        report: {
+          week_index: number;
+          total_weeks: number;
+          checkpoints_met?: number[];
+        } | null;
+      }>("/api/reports/current").catch(() => ({ report: null })),
+      api<{ badges: BadgeShelfItem[] }>("/api/badges").catch(() => ({
+        badges: [] as BadgeShelfItem[],
+      })),
+    ]);
     setProfile(profileData as Profile | null);
     setStreak(streakRes);
     if (trendRes && trendRes.points.length >= 2) {
@@ -93,6 +111,7 @@ export default function More() {
     }
     setCycleEnabled(!!cycleRes?.prefs.enabled);
     setReportMeta(reportRes.report);
+    setBadges(badgesRes.badges ?? []);
   }, [user]);
 
   useFocusEffect(
@@ -211,6 +230,52 @@ export default function More() {
           </View>
           <Text style={styles.chevGold}>→</Text>
         </Pressable>
+
+        {/* ── Badges shelf ─────────────────────────────────────────── */}
+        {badges.length > 0 && (
+          <>
+            <SectionHeader
+              label={
+                isArabic
+                  ? `الإنجازات · ${badges.filter((b) => b.earned_at).length}`
+                  : `ACHIEVEMENTS · ${badges.filter((b) => b.earned_at).length}`
+              }
+              isArabic={isArabic}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.badgeShelf}
+            >
+              {badges.map((b) => {
+                const earned = !!b.earned_at;
+                const tint =
+                  b.tier === "gold"
+                    ? colors.gold
+                    : b.tier === "platinum"
+                      ? colors.mint
+                      : b.tier === "silver"
+                        ? colors.ink
+                        : colors.coral;
+                return (
+                  <View
+                    key={b.key}
+                    style={[
+                      styles.badgeItem,
+                      earned && { borderColor: tint },
+                    ]}
+                  >
+                    <Ionicons
+                      name={b.icon as keyof typeof Ionicons.glyphMap}
+                      size={22}
+                      color={earned ? tint : colors.line}
+                    />
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
 
         {/* ── Habits ───────────────────────────────────────────────── */}
         <SectionHeader
@@ -438,6 +503,21 @@ const styles = StyleSheet.create({
     fontFamily: font.displayBold,
     fontSize: 16,
     color: colors.gold,
+  },
+  badgeShelf: {
+    gap: spacing.sm,
+    paddingHorizontal: 2,
+    paddingVertical: spacing.xs,
+  },
+  badgeItem: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.panel,
+    alignItems: "center",
+    justifyContent: "center",
   },
   reportFeatured: {
     flexDirection: "row",
