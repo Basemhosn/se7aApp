@@ -143,7 +143,7 @@ export default function Coach() {
           </View>
         </View>
         <View style={styles.gate}>
-          <Text style={styles.gateKicker}>SE7A · PRO</Text>
+          <Text style={styles.gateKicker}>PRO</Text>
           <Text style={styles.gateH}>
             {isArabic ? "الكوتش على Pro" : "Coach is a Pro feature"}
           </Text>
@@ -173,7 +173,7 @@ export default function Coach() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.head}>
         <View style={styles.avatar}>
-          <Ionicons name="sparkles" size={20} color={colors.gold} />
+          <Text style={styles.avatarMark}>C</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>SE7A Coach</Text>
@@ -206,9 +206,8 @@ export default function Coach() {
             </View>
           ) : messages.length === 0 ? (
             <View style={styles.empty}>
-              <View style={styles.emptyAvatar}>
-                <Ionicons name="sparkles" size={40} color={colors.gold} />
-              </View>
+              <Text style={styles.emptyKicker}>COACH</Text>
+              <View style={styles.emptyRule} />
               <Text style={styles.emptyTitle}>
                 {isArabic ? "أهلاً — أنا كوتشك." : "Hey — I'm your coach."}
               </Text>
@@ -383,14 +382,19 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(246,183,60,0.15)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
+  },
+  avatarMark: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.gold,
   },
   title: {
     fontFamily: font.displayBold,
@@ -437,34 +441,34 @@ const styles = StyleSheet.create({
   },
   empty: {
     marginTop: spacing.xl,
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  emptyAvatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "rgba(246,183,60,0.08)",
-    borderWidth: 1,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.sm,
+  emptyKicker: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.8,
+  },
+  emptyRule: {
+    width: 40,
+    height: 1,
+    backgroundColor: colors.gold,
+    marginVertical: spacing.md,
   },
   emptyTitle: {
     fontFamily: font.displayBold,
-    fontSize: 24,
+    fontSize: 26,
     color: colors.ink,
-    textAlign: "center",
   },
   emptyBody: {
     fontFamily: font.body,
     fontSize: 14,
     color: colors.dim,
     lineHeight: 21,
-    textAlign: "center",
     marginTop: 4,
+    marginBottom: spacing.md,
   },
   suggestGrid: {
     marginTop: spacing.lg,

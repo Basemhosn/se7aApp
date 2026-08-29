@@ -216,9 +216,8 @@ export default function ReportScreen() {
       <Screen>
         <BackButton />
         <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="sparkles" size={44} color={colors.gold} />
-          </View>
+          <Text style={styles.emptyKicker}>90-DAY PLAN</Text>
+          <View style={styles.emptyRule} />
           <Text style={styles.emptyTitle}>{t("report.empty_title")}</Text>
           <Text style={styles.emptySub}>{t("report.empty_sub")}</Text>
           {!!err && <Text style={styles.err}>{err}</Text>}
@@ -662,34 +661,36 @@ const styles = StyleSheet.create({
   centerFill: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   empty: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
-    gap: spacing.md,
-    padding: spacing.xl,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xl,
   },
-  emptyIcon: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "rgba(246,183,60,0.10)",
-    borderWidth: 1,
-    borderColor: colors.goldDim,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.sm,
+  emptyKicker: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.8,
+  },
+  emptyRule: {
+    width: 40,
+    height: 1,
+    backgroundColor: colors.gold,
+    marginVertical: spacing.md,
   },
   emptyTitle: {
     fontFamily: font.displayBold,
-    fontSize: 26,
+    fontSize: 34,
     color: colors.ink,
-    textAlign: "center",
+    lineHeight: 38,
   },
   emptySub: {
     fontFamily: font.body,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.dim,
-    textAlign: "center",
-    lineHeight: 21,
+    lineHeight: 23,
+    marginBottom: spacing.lg,
   },
   generatingLabel: {
     fontFamily: font.mono,
@@ -702,9 +703,7 @@ const styles = StyleSheet.create({
     fontFamily: font.body,
     fontSize: 13,
     color: colors.dim,
-    textAlign: "center",
     lineHeight: 19,
-    maxWidth: 280,
   },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
   kicker: {

@@ -182,9 +182,7 @@ export default function More() {
           onPress={() => router.push("/report")}
           style={styles.reportFeatured}
         >
-          <View style={styles.reportIcon}>
-            <Ionicons name="sparkles" size={20} color={colors.gold} />
-          </View>
+          <View style={styles.reportRule} />
           <View style={{ flex: 1 }}>
             <Text style={styles.reportKicker}>
               {reportMeta
@@ -192,8 +190,8 @@ export default function More() {
                   ? `أسبوع ${reportMeta.week_index} من ${reportMeta.total_weeks}`
                   : `WEEK ${reportMeta.week_index} OF ${reportMeta.total_weeks}`
                 : isArabic
-                  ? "خطتك · ٩٠ يومًا"
-                  : "YOUR 90-DAY PLAN"}
+                  ? "خطة الـ ٩٠ يومًا"
+                  : "90-DAY PLAN"}
             </Text>
             <Text style={styles.reportTitle}>
               {reportMeta
@@ -217,15 +215,13 @@ export default function More() {
           onPress={() => router.push("/weekly-wrapped")}
           style={styles.wrappedFeatured}
         >
-          <View style={styles.wrappedIcon}>
-            <Ionicons name="sparkles" size={20} color={colors.gold} />
-          </View>
+          <View style={styles.wrappedRule} />
           <View style={{ flex: 1 }}>
             <Text style={styles.wrappedKicker}>
-              {isArabic ? "أسبوعك · ملخص" : "YOUR WEEK · WRAPPED"}
+              {isArabic ? "المراجعة الأسبوعية" : "WEEKLY REVIEW"}
             </Text>
             <Text style={styles.wrappedTitle}>
-              {isArabic ? "شاهد الملخص" : "See your recap"}
+              {isArabic ? "شاهد الملخص" : "See your week"}
             </Text>
           </View>
           <Text style={styles.chevGold}>→</Text>
@@ -257,6 +253,10 @@ export default function More() {
                       : b.tier === "silver"
                         ? colors.ink
                         : colors.coral;
+                // Two-letter mark derived from the badge key so every
+                // achievement reads as a small typographic token, not
+                // a game icon. Tier only tints the dot when earned.
+                const mark = badgeMark(b.key);
                 return (
                   <View
                     key={b.key}
@@ -265,11 +265,14 @@ export default function More() {
                       earned && { borderColor: tint },
                     ]}
                   >
-                    <Ionicons
-                      name={b.icon as keyof typeof Ionicons.glyphMap}
-                      size={22}
-                      color={earned ? tint : colors.line}
-                    />
+                    <Text
+                      style={[
+                        styles.badgeItemMark,
+                        { color: earned ? tint : colors.line },
+                      ]}
+                    >
+                      {mark}
+                    </Text>
                   </View>
                 );
               })}
@@ -391,6 +394,29 @@ export default function More() {
   );
 }
 
+/**
+ * Turns a badge_key into a short typographic mark for the shelf.
+ * Rules: pick a domain letter + a number/tier suffix so every mark
+ * reads deterministically ("S7" streak-7-day, "P1" plan-week-1, etc.)
+ * without needing per-badge design.
+ */
+function badgeMark(key: string): string {
+  if (key.startsWith("streak_")) return "S" + key.replace("streak_", "").replace("d", "");
+  if (key.startsWith("anniv_")) return "D" + key.replace("anniv_", "").replace("d", "");
+  if (key.startsWith("plan_week")) return "W1";
+  if (key === "plan_month1_complete") return "M1";
+  if (key === "plan_finished") return "P✓";
+  if (key === "logged_100") return "L2";
+  if (key === "logged_1000") return "L3";
+  if (key === "workouts_10") return "W2";
+  if (key.startsWith("first_")) {
+    const rest = key.replace("first_", "");
+    return "1·" + rest[0]!.toUpperCase();
+  }
+  // Fallback: first two letters of the key.
+  return key.slice(0, 2).toUpperCase();
+}
+
 function SectionHeader({
   label,
   isArabic: _isArabic,
@@ -505,40 +531,39 @@ const styles = StyleSheet.create({
     color: colors.gold,
   },
   badgeShelf: {
-    gap: spacing.sm,
+    gap: spacing.xs,
     paddingHorizontal: 2,
     paddingVertical: spacing.xs,
   },
   badgeItem: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.panel,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
+  },
+  badgeItemMark: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    letterSpacing: 0.4,
   },
   reportFeatured: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
     marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.line,
   },
-  reportIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(246,183,60,0.10)",
-    borderWidth: 1,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
+  reportRule: {
+    width: 2,
+    alignSelf: "stretch",
+    backgroundColor: colors.gold,
   },
   reportKicker: {
     fontFamily: font.mono,
@@ -556,22 +581,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
     borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginTop: spacing.sm,
   },
-  wrappedIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.panel2,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
+  wrappedRule: {
+    width: 2,
+    alignSelf: "stretch",
+    backgroundColor: colors.line,
   },
   wrappedKicker: {
     fontFamily: font.mono,

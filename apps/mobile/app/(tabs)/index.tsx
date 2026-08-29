@@ -543,29 +543,22 @@ export default function Home() {
       {isToday && (
         <View style={styles.planBadgeRow}>
           {ent.is_pro ? (
-            <View style={[styles.planBadge, styles.planBadgePro]}>
-              <Ionicons name="sparkles" size={11} color={colors.gold} />
-              <Text style={styles.planBadgeProText}>
-                {t("home.plan_badge.pro")}
-              </Text>
-            </View>
+            <Text style={styles.planBadgeProText}>
+              {t("home.plan_badge.pro")}
+            </Text>
           ) : (
             <Pressable
               onPress={() => router.push("/paywall")}
-              style={[styles.planBadge, styles.planBadgeFree]}
               hitSlop={8}
+              style={styles.planBadgeFreeRow}
             >
               <Text style={styles.planBadgeFreeText}>
                 {t("home.plan_badge.free")}
               </Text>
+              <Text style={styles.planBadgeSep}>·</Text>
               <Text style={styles.planBadgeUpgradeText}>
                 {t("home.plan_badge.upgrade_cta")}
               </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={12}
-                color={colors.gold}
-              />
             </Pressable>
           )}
         </View>
@@ -1395,10 +1388,10 @@ function AnniversaryModal({
     <Modal visible transparent animationType="fade" onRequestClose={onDismiss}>
       <View style={styles.annivBg}>
         <View style={styles.annivCard}>
-          <View style={styles.annivIcon}>
-            <Ionicons name="gift" size={38} color={colors.gold} />
-          </View>
           <Text style={styles.annivKicker}>{kicker}</Text>
+          <Text style={styles.annivBigNumber}>{days}</Text>
+          <Text style={styles.annivDaysLabel}>DAYS</Text>
+          <View style={styles.annivRule} />
           <Text style={styles.annivTitle}>{title}</Text>
           <Text style={styles.annivSub}>{sub}</Text>
           <View style={styles.annivStatsRow}>
@@ -1469,9 +1462,6 @@ function ReportCard({
         style={styles.reportActiveCard}
       >
         <View style={styles.reportActiveHead}>
-          <View style={styles.reportActiveIcon}>
-            <Ionicons name="sparkles" size={16} color={colors.gold} />
-          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.reportActiveKicker}>
               {t("report.home_cta.title_active", {
@@ -1483,7 +1473,7 @@ function ReportCard({
               {t("report.home_cta.sub_active")}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.dim} />
+          <Text style={styles.reportActiveArrow}>→</Text>
         </View>
         <ScrollView
           ref={scrollRef}
@@ -1532,9 +1522,7 @@ function ReportCard({
       onPress={() => router.push("/report")}
       style={styles.reportNewCard}
     >
-      <View style={styles.reportNewIcon}>
-        <Ionicons name="sparkles" size={22} color={colors.gold} />
-      </View>
+      <View style={styles.reportNewRule} />
       <View style={{ flex: 1 }}>
         <Text style={styles.reportNewKicker}>
           {t("report.home_cta.kicker")}
@@ -1544,13 +1532,11 @@ function ReportCard({
         </Text>
         <Text style={styles.reportNewSub}>{t("report.home_cta.sub_new")}</Text>
       </View>
-      <View style={styles.reportNewCta}>
-        <Text style={styles.reportNewCtaText}>
-          {isPro
-            ? t("report.home_cta.cta_new_pro")
-            : t("report.home_cta.cta_new")}
-        </Text>
-      </View>
+      <Text style={styles.reportNewCtaText}>
+        {isPro
+          ? t("report.home_cta.cta_new_pro")
+          : t("report.home_cta.cta_new")}
+      </Text>
     </Pressable>
   );
 }
@@ -1867,43 +1853,36 @@ const styles = StyleSheet.create({
   },
   planBadgeRow: {
     alignItems: "center",
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
+    marginBottom: 2,
   },
-  planBadge: {
+  planBadgeFreeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
-  planBadgeFree: {
-    borderColor: colors.gold,
-    backgroundColor: "rgba(246,183,60,0.10)",
-  },
-  planBadgePro: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold,
   },
   planBadgeFreeText: {
     fontFamily: font.mono,
     fontSize: 10,
     color: colors.dim,
-    letterSpacing: 1.4,
+    letterSpacing: 1.6,
+  },
+  planBadgeSep: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.line,
   },
   planBadgeUpgradeText: {
     fontFamily: font.mono,
     fontSize: 10,
     color: colors.gold,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
   },
   planBadgeProText: {
     fontFamily: font.mono,
     fontSize: 10,
-    color: colors.bg,
-    letterSpacing: 1.4,
-    fontWeight: "700",
+    color: colors.gold,
+    letterSpacing: 1.6,
   },
   ringRow: {
     flexDirection: "row",
@@ -2066,33 +2045,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.goldDim,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.line,
   },
-  reportNewIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(246,183,60,0.10)",
-    borderWidth: 1,
-    borderColor: colors.goldDim,
-    alignItems: "center",
-    justifyContent: "center",
+  reportNewRule: {
+    width: 2,
+    alignSelf: "stretch",
+    backgroundColor: colors.gold,
+    marginRight: 2,
   },
   reportNewKicker: {
     fontFamily: font.mono,
     fontSize: 10,
     color: colors.gold,
-    letterSpacing: 1.4,
+    letterSpacing: 1.6,
   },
   reportNewTitle: {
     fontFamily: font.bodyBold,
     fontSize: 15,
     color: colors.ink,
-    marginTop: 2,
+    marginTop: 3,
   },
   reportNewSub: {
     fontFamily: font.body,
@@ -2101,51 +2075,40 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 2,
   },
-  reportNewCta: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-    backgroundColor: colors.gold,
-  },
   reportNewCtaText: {
     fontFamily: font.mono,
     fontSize: 10,
-    color: colors.bg,
-    letterSpacing: 1.2,
-    fontWeight: "700",
+    color: colors.gold,
+    letterSpacing: 1.6,
   },
   reportActiveCard: {
     gap: spacing.sm,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.goldDim,
-    borderRadius: radius.md,
-    padding: spacing.sm,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.line,
   },
   reportActiveHead: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     gap: spacing.md,
   },
-  reportActiveIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(246,183,60,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
   reportActiveKicker: {
-    fontFamily: font.bodyBold,
-    fontSize: 13,
-    color: colors.ink,
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.6,
   },
   reportActiveSub: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.2,
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
     marginTop: 2,
+  },
+  reportActiveArrow: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.dim,
   },
   roadmapStrip: {
     marginTop: 2,
@@ -2178,65 +2141,66 @@ const styles = StyleSheet.create({
   },
   annivBg: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    alignItems: "center",
+    backgroundColor: colors.bg,
+    padding: spacing.xl,
     justifyContent: "center",
-    padding: spacing.lg,
   },
   annivCard: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.goldDim,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.sm,
-    width: "100%",
-    maxWidth: 420,
-  },
-  annivIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(246,183,60,0.10)",
-    borderWidth: 1,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.sm,
   },
   annivKicker: {
     fontFamily: font.mono,
     fontSize: 11,
     color: colors.gold,
-    letterSpacing: 1.4,
+    letterSpacing: 1.8,
+    marginBottom: spacing.md,
+  },
+  annivBigNumber: {
+    fontFamily: font.displayBold,
+    fontSize: 128,
+    color: colors.ink,
+    lineHeight: 128,
+    letterSpacing: -4,
+  },
+  annivDaysLabel: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    letterSpacing: 1.6,
+    marginTop: -4,
+  },
+  annivRule: {
+    height: 1,
+    width: 60,
+    backgroundColor: colors.gold,
+    marginVertical: spacing.lg,
   },
   annivTitle: {
     fontFamily: font.displayBold,
     fontSize: 26,
     color: colors.ink,
-    textAlign: "center",
-    lineHeight: 30,
+    lineHeight: 32,
   },
   annivSub: {
     fontFamily: font.body,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.dim,
-    textAlign: "center",
-    lineHeight: 21,
-    marginBottom: spacing.md,
+    lineHeight: 22,
+    marginBottom: spacing.lg,
   },
   annivStatsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    alignItems: "flex-end",
+    gap: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  annivStat: { alignItems: "center", gap: 2 },
+  annivStat: { alignItems: "flex-start", gap: 2 },
   annivStatValue: {
     fontFamily: font.displayBold,
-    fontSize: 30,
-    color: colors.gold,
+    fontSize: 32,
+    color: colors.ink,
+    lineHeight: 32,
   },
   annivStatLabel: {
     fontFamily: font.mono,
@@ -2246,30 +2210,30 @@ const styles = StyleSheet.create({
   },
   annivStatDivider: {
     width: 1,
-    height: 32,
+    height: 24,
     backgroundColor: colors.line,
+    alignSelf: "center",
   },
   annivCta: {
-    backgroundColor: colors.gold,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.md,
+    borderTopWidth: 1,
+    borderColor: colors.line,
     width: "100%",
-    alignItems: "center",
   },
   annivCtaText: {
-    fontFamily: font.bodyBold,
-    fontSize: 15,
-    color: colors.bg,
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.gold,
+    letterSpacing: 1.6,
   },
   annivShare: {
-    paddingVertical: spacing.sm,
+    paddingVertical: 4,
   },
   annivShareText: {
     fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.2,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
   },
   roadmapChipText: {
     fontFamily: font.mono,

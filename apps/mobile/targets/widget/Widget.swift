@@ -100,47 +100,55 @@ struct SE7AWidgetEntryView: View {
     let entry: SE7AEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("SE")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(Color("AccentColor"))
-                Text("7")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(Color("AccentColor"))
-                Text("A")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(Color("AccentColor"))
-                Spacer()
-            }
-            Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            // Wordmark: single kerned Text, no scattered letters.
+            Text("SE7A")
+                .font(.system(size: 11, weight: .heavy))
+                .kerning(2.4)
+                .foregroundColor(Color("AccentColor"))
+
+            // Thin editorial rule under the wordmark.
+            Rectangle()
+                .fill(Color("AccentColor"))
+                .frame(width: 24, height: 1)
+                .padding(.top, 8)
+
+            Spacer(minLength: 8)
+
             if let s = entry.status {
                 Text("REMAINING")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(.gray)
-                    .kerning(1.2)
-                HStack(alignment: .lastTextBaseline, spacing: 3) {
+                    .kerning(1.6)
+
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
                     Text("\(s.remaining.low)")
-                        .font(.system(size: 22, weight: .heavy))
-                        .foregroundColor(Color("AccentColor"))
+                        .font(.system(size: 30, weight: .heavy, design: .default))
+                        .foregroundColor(Color.primary)
                     Text("–")
-                        .font(.system(size: 15))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundColor(.gray)
                     Text("\(s.remaining.high)")
-                        .font(.system(size: 22, weight: .heavy))
-                        .foregroundColor(Color("AccentColor"))
+                        .font(.system(size: 30, weight: .heavy, design: .default))
+                        .foregroundColor(Color.primary)
                 }
-                Text("kcal of \(s.target ?? 0)")
-                    .font(.system(size: 10))
+                .padding(.top, 4)
+
+                Text("KCAL · TARGET \(s.target ?? 0)")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(.gray)
+                    .kerning(1.2)
+                    .padding(.top, 4)
             } else {
                 Text(entry.error ?? "Loading…")
-                    .font(.system(size: 12))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(.gray)
+                    .kerning(0.6)
             }
-            Spacer()
+
+            Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(14)
         .containerBackground(for: .widget) {
             Color("WidgetBackground")
         }

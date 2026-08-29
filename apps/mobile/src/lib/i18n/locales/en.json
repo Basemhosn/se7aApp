@@ -100,7 +100,7 @@
     "plan_badge": {
       "free": "FREE",
       "upgrade_cta": "UPGRADE TO PRO",
-      "pro": "SE7A · PRO"
+      "pro": "PRO"
     },
     "streak_card": {
       "kicker_today_logged": "STREAK · TODAY LOGGED",
@@ -713,12 +713,12 @@
     }
   },
   "wrapped": {
-    "empty_title": "Weekly Wrapped",
-    "empty_sub": "Nothing to recap yet — log meals, workouts, or sleep this week and check back next Monday.",
+    "empty_title": "Weekly Review",
+    "empty_sub": "Nothing to review yet — log meals, workouts, or sleep this week and check back next Monday.",
     "kicker": "WEEK OF {{range}}",
-    "title": "Your week, wrapped.",
+    "title": "Weekly Review",
     "roast_kicker": "COACH'S TAKE",
-    "share_cta": "Share your week",
+    "share_cta": "Share",
     "share_header": "SE7A · Week of {{range}}"
   },
   "anniversary": {

@@ -692,9 +692,6 @@ function TrialOfferStep({ offering }: { offering: PurchasesOffering | null }) {
 
   return (
     <View style={{ gap: spacing.md, paddingTop: spacing.xl }}>
-      <View style={styles.trialAvatar}>
-        <Ionicons name="sparkles" size={40} color={colors.gold} />
-      </View>
       <Text style={styles.kicker}>{t("onboarding.trial_kicker")}</Text>
       <Text style={styles.hero}>{t("onboarding.trial_hero")}</Text>
       <Text style={styles.heroSub}>{t("onboarding.trial_hero_sub")}</Text>
@@ -792,9 +789,6 @@ function WelcomeStep({
   const { t } = useTranslation();
   return (
     <View style={{ gap: spacing.md, paddingTop: spacing.xl }}>
-      <View style={styles.welcomeIconWrap}>
-        <Ionicons name="sparkles" size={44} color={colors.gold} />
-      </View>
       <Text style={styles.kicker}>
         {returning
           ? t("onboarding.welcome_kicker_returning")
