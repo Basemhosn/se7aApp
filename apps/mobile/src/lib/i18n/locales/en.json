@@ -721,6 +721,23 @@
     "share_cta": "Share your week",
     "share_header": "SE7A · Week of {{range}}"
   },
+  "anniversary": {
+    "kicker_30": "30-DAY MILESTONE",
+    "kicker_60": "60-DAY MILESTONE",
+    "kicker_90": "90-DAY MILESTONE",
+    "title_30": "First month with SE7A",
+    "title_60": "Two months in",
+    "title_90": "90 days. That's a habit.",
+    "sub_30": "Consistency is compounding. Here's what you've built.",
+    "sub_60": "You're past the messy middle. Keep the momentum.",
+    "sub_90": "Habits stick around day 66 on average. You're through.",
+    "stat_streak": "Streak",
+    "stat_meals": "Meals",
+    "stat_weighins": "Weigh-ins",
+    "stat_workouts": "Workouts",
+    "cta_continue": "Keep going",
+    "share": "Share"
+  },
   "report": {
     "home_cta": {
       "kicker": "PERSONALIZED BLUEPRINT",

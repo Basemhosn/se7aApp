@@ -45,6 +45,12 @@ export const BADGES: BadgeDef[] = [
   // Fitness
   { key: "first_workout", icon: "barbell", tier: "bronze" },
   { key: "workouts_10", icon: "barbell", tier: "silver" },
+
+  // Anniversaries — days since onboarding. Client watches for the
+  // seen_at=null case on these to trigger a full-bleed modal.
+  { key: "anniv_30d", icon: "gift", tier: "bronze" },
+  { key: "anniv_60d", icon: "gift", tier: "silver" },
+  { key: "anniv_90d", icon: "gift", tier: "gold" },
 ];
 
 /**
@@ -64,6 +70,7 @@ export interface BadgeSnapshot {
   workout_count: number;
   active_plan_total_weeks: number | null;
   active_plan_checkpoints_met: number[];
+  days_since_onboarded: number | null;
 }
 
 /**
@@ -103,6 +110,12 @@ export function evaluateBadges(snapshot: BadgeSnapshot): Set<string> {
     met.length >= snapshot.active_plan_total_weeks
   ) {
     earned.add("plan_finished");
+  }
+
+  if (snapshot.days_since_onboarded !== null) {
+    if (snapshot.days_since_onboarded >= 30) earned.add("anniv_30d");
+    if (snapshot.days_since_onboarded >= 60) earned.add("anniv_60d");
+    if (snapshot.days_since_onboarded >= 90) earned.add("anniv_90d");
   }
 
   return earned;

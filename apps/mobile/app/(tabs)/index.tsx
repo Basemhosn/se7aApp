@@ -5,9 +5,11 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Modal,
   PanResponder,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -125,6 +127,12 @@ export default function Home() {
   const { status: ramadan } = useRamadan();
   useRamadanScheduling(ramadan);
 
+  // Anniversary modal state — declared up here (before the useEffects
+  // that reference it) to satisfy no-use-before-define.
+  const [anniversary, setAnniversary] = useState<
+    "anniv_30d" | "anniv_60d" | "anniv_90d" | null
+  >(null);
+
   // Register the two weekly ritual notifications (Sun 6pm Wrapped,
   // Mon 9am Summary) once per session. Idempotent — the scheduler
   // clears any prior weekly_ritual entries before writing new ones,
@@ -134,6 +142,45 @@ export default function Home() {
   useEffect(() => {
     rescheduleWeeklyRituals().catch(() => {});
   }, []);
+
+  // Non-blocking check for unseen anniversary badges. Fires once per
+  // session after the main load completes; if the user just crossed
+  // day 30/60/90 we surface the full-bleed modal on next Home focus.
+  useEffect(() => {
+    if (!user) return;
+    api<{
+      badges: {
+        key: string;
+        earned_at: string | null;
+        seen: boolean;
+      }[];
+    }>("/api/badges")
+      .then((res) => {
+        const unseenAnniv = res.badges
+          .filter((b) => b.key.startsWith("anniv_") && b.earned_at && !b.seen)
+          .sort((a, b) => (b.earned_at ?? "").localeCompare(a.earned_at ?? ""))[0];
+        if (unseenAnniv) {
+          setAnniversary(
+            unseenAnniv.key as "anniv_30d" | "anniv_60d" | "anniv_90d"
+          );
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const dismissAnniversary = useCallback(async () => {
+    if (!anniversary) return;
+    const key = anniversary;
+    setAnniversary(null);
+    try {
+      await api("/api/badges", {
+        method: "POST",
+        body: JSON.stringify({ mark_seen: [key] }),
+      });
+    } catch {
+      /* silent — worst case user sees it again next open */
+    }
+  }, [anniversary]);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
@@ -823,6 +870,13 @@ export default function Home() {
       />
       )}
       </Animated.View>
+      <AnniversaryModal
+        badge={anniversary}
+        streakDays={streak?.current_days ?? 0}
+        mealCount={ledger?.totals.items.length ?? 0}
+        onDismiss={dismissAnniversary}
+        t={t}
+      />
     </Screen>
   );
 }
@@ -1306,6 +1360,81 @@ function MealSlotGrid({
  *   that opens the full viewer.
  * All copy pulls from i18n so the AR variant reads naturally.
  */
+/**
+ * Full-bleed celebration modal that appears once when the user hits
+ * a Day 30 / 60 / 90 anniversary. Content is intentionally simple —
+ * headline, a few numbers, one CTA, optional share. Tap "Keep going"
+ * dismisses + marks the badge seen server-side.
+ */
+function AnniversaryModal({
+  badge,
+  streakDays,
+  mealCount,
+  onDismiss,
+  t,
+}: {
+  badge: "anniv_30d" | "anniv_60d" | "anniv_90d" | null;
+  streakDays: number;
+  mealCount: number;
+  onDismiss: () => void;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  if (!badge) return null;
+  const days = badge === "anniv_30d" ? 30 : badge === "anniv_60d" ? 60 : 90;
+  const kicker = t(`anniversary.kicker_${days}`);
+  const title = t(`anniversary.title_${days}`);
+  const sub = t(`anniversary.sub_${days}`);
+
+  const share = async () => {
+    await Share.share({
+      message: `${title} — ${sub}\n\nSE7A`,
+    }).catch(() => {});
+  };
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onDismiss}>
+      <View style={styles.annivBg}>
+        <View style={styles.annivCard}>
+          <View style={styles.annivIcon}>
+            <Ionicons name="gift" size={38} color={colors.gold} />
+          </View>
+          <Text style={styles.annivKicker}>{kicker}</Text>
+          <Text style={styles.annivTitle}>{title}</Text>
+          <Text style={styles.annivSub}>{sub}</Text>
+          <View style={styles.annivStatsRow}>
+            <AnnivStat
+              label={t("anniversary.stat_streak")}
+              value={String(streakDays)}
+            />
+            <View style={styles.annivStatDivider} />
+            <AnnivStat
+              label={t("anniversary.stat_meals")}
+              value={String(mealCount)}
+            />
+          </View>
+          <Pressable onPress={onDismiss} style={styles.annivCta}>
+            <Text style={styles.annivCtaText}>
+              {t("anniversary.cta_continue")}
+            </Text>
+          </Pressable>
+          <Pressable onPress={share} hitSlop={8} style={styles.annivShare}>
+            <Text style={styles.annivShareText}>{t("anniversary.share")}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function AnnivStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.annivStat}>
+      <Text style={styles.annivStatValue}>{value}</Text>
+      <Text style={styles.annivStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function ReportCard({
   meta,
   isPro,
@@ -2046,6 +2175,101 @@ const styles = StyleSheet.create({
   roadmapChipMet: {
     borderColor: colors.gold,
     backgroundColor: colors.gold,
+  },
+  annivBg: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  annivCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: spacing.sm,
+    width: "100%",
+    maxWidth: 420,
+  },
+  annivIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(246,183,60,0.10)",
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
+  annivKicker: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  annivTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    color: colors.ink,
+    textAlign: "center",
+    lineHeight: 30,
+  },
+  annivSub: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.dim,
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: spacing.md,
+  },
+  annivStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  annivStat: { alignItems: "center", gap: 2 },
+  annivStatValue: {
+    fontFamily: font.displayBold,
+    fontSize: 30,
+    color: colors.gold,
+  },
+  annivStatLabel: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.4,
+  },
+  annivStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.line,
+  },
+  annivCta: {
+    backgroundColor: colors.gold,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    width: "100%",
+    alignItems: "center",
+  },
+  annivCtaText: {
+    fontFamily: font.bodyBold,
+    fontSize: 15,
+    color: colors.bg,
+  },
+  annivShare: {
+    paddingVertical: spacing.sm,
+  },
+  annivShareText: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.2,
   },
   roadmapChipText: {
     fontFamily: font.mono,

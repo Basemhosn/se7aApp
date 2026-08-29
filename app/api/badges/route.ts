@@ -134,6 +134,7 @@ async function buildSnapshot(
     { count: workoutCount },
     { data: streakSample },
     { data: report },
+    { data: profile },
   ] = await Promise.all([
     supabase
       .from("meal_items")
@@ -173,6 +174,11 @@ async function buildSnapshot(
       .order("generated_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("onboarded_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
   ]);
 
   const sources = new Set(
@@ -199,6 +205,13 @@ async function buildSnapshot(
     );
   }
 
+  const onboardedAt = profile?.onboarded_at ?? null;
+  const daysSinceOnboarded = onboardedAt
+    ? Math.floor(
+        (Date.now() - new Date(onboardedAt).getTime()) / 86_400_000
+      )
+    : null;
+
   return {
     meal_count: mealCount ?? 0,
     first_meal_at: firstMealRow?.eaten_at ?? null,
@@ -211,6 +224,7 @@ async function buildSnapshot(
     workout_count: workoutCount ?? 0,
     active_plan_total_weeks: planWeeks,
     active_plan_checkpoints_met: planCheckpoints,
+    days_since_onboarded: daysSinceOnboarded,
   };
 }
 
