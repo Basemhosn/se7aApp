@@ -152,6 +152,7 @@ export default function Home() {
   const [reportMeta, setReportMeta] = useState<{
     week_index: number;
     total_weeks: number;
+    checkpoints_met: number[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -281,6 +282,7 @@ export default function Home() {
         report: {
           week_index: number;
           total_weeks: number;
+          checkpoints_met?: number[];
         } | null;
       }>("/api/reports/current").catch(() => ({ report: null })),
     ]);
@@ -297,7 +299,15 @@ export default function Home() {
     setStreak(streakRes);
     setCardio(cardioRes);
     setSleep(sleepRes);
-    setReportMeta(reportRes.report);
+    setReportMeta(
+      reportRes.report
+        ? {
+            week_index: reportRes.report.week_index,
+            total_weeks: reportRes.report.total_weeks,
+            checkpoints_met: reportRes.report.checkpoints_met ?? [],
+          }
+        : null
+    );
     setLoading(false);
   }, [user, isToday, viewDateIso]);
 
@@ -1301,7 +1311,11 @@ function ReportCard({
   isPro,
   t,
 }: {
-  meta: { week_index: number; total_weeks: number } | null;
+  meta: {
+    week_index: number;
+    total_weeks: number;
+    checkpoints_met: number[];
+  } | null;
   isPro: boolean;
   t: (key: string, opts?: Record<string, string | number>) => string;
 }) {
@@ -1353,24 +1367,30 @@ function ReportCard({
             const weekNum = i + 1;
             const isCurrent = weekNum === meta.week_index;
             const isPast = weekNum < meta.week_index;
+            const isMet = meta.checkpoints_met.includes(weekNum);
             return (
               <View
                 key={weekNum}
                 style={[
                   styles.roadmapChip,
                   isCurrent && styles.roadmapChipCurrent,
-                  isPast && styles.roadmapChipPast,
+                  isPast && !isMet && styles.roadmapChipPast,
+                  isMet && styles.roadmapChipMet,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.roadmapChipText,
-                    isCurrent && styles.roadmapChipTextCurrent,
-                    isPast && styles.roadmapChipTextPast,
-                  ]}
-                >
-                  {weekNum}
-                </Text>
+                {isMet && !isCurrent ? (
+                  <Ionicons name="checkmark" size={14} color={colors.bg} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.roadmapChipText,
+                      isCurrent && styles.roadmapChipTextCurrent,
+                      isPast && !isMet && styles.roadmapChipTextPast,
+                    ]}
+                  >
+                    {weekNum}
+                  </Text>
+                )}
               </View>
             );
           })}
@@ -2022,6 +2042,10 @@ const styles = StyleSheet.create({
   roadmapChipPast: {
     borderColor: colors.goldDim,
     backgroundColor: "rgba(246,183,60,0.15)",
+  },
+  roadmapChipMet: {
+    borderColor: colors.gold,
+    backgroundColor: colors.gold,
   },
   roadmapChipText: {
     fontFamily: font.mono,

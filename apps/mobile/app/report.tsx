@@ -103,6 +103,7 @@ interface Report {
     coach_take: string;
   } | null;
   weekly_summary_at: string | null;
+  checkpoints_met: number[];
 }
 
 export default function ReportScreen() {
@@ -271,7 +272,42 @@ export default function ReportScreen() {
       <TrainingSection plan={report.plan.training} t={t} />
       <HabitsSection plan={report.plan.habits} t={t} />
       <TrackingSection plan={report.plan.tracking} t={t} />
-      <RoadmapSection plan={report.plan.roadmap} t={t} />
+      <RoadmapSection
+        plan={report.plan.roadmap}
+        checkpointsMet={report.checkpoints_met ?? []}
+        onToggleCheckpoint={async (weekIndex, met) => {
+          // Optimistic flip so the tap feels instant.
+          setReport((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  checkpoints_met: met
+                    ? Array.from(new Set([...prev.checkpoints_met, weekIndex]))
+                    : prev.checkpoints_met.filter((w) => w !== weekIndex),
+                }
+              : prev
+          );
+          try {
+            await api("/api/reports/checkpoint", {
+              method: "POST",
+              body: JSON.stringify({ week_index: weekIndex, met }),
+            });
+          } catch {
+            // Roll back on failure.
+            setReport((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    checkpoints_met: met
+                      ? prev.checkpoints_met.filter((w) => w !== weekIndex)
+                      : Array.from(new Set([...prev.checkpoints_met, weekIndex])),
+                  }
+                : prev
+            );
+          }
+        }}
+        t={t}
+      />
       <SafetySection notes={report.plan.hero.safety_notes} t={t} />
 
       <View style={styles.actionsRow}>
@@ -542,24 +578,46 @@ function TrackingSection({
 
 function RoadmapSection({
   plan,
+  checkpointsMet,
+  onToggleCheckpoint,
   t,
 }: {
   plan: Report["plan"]["roadmap"];
+  checkpointsMet: number[];
+  onToggleCheckpoint: (weekIndex: number, met: boolean) => void;
   t: T;
 }) {
+  const met = new Set(checkpointsMet);
   return (
     <View style={styles.section}>
       <SectionHeader label={t("report.section.roadmap")} />
-      {plan.weeks.map((w) => (
-        <View key={w.week_index} style={styles.roadmapWeek}>
-          <Text style={styles.roadmapWeekLabel}>
-            {t("report.roadmap.week", { n: w.week_index })}
-          </Text>
-          <Text style={styles.roadmapTheme}>{w.theme}</Text>
-          <Text style={styles.roadmapFocus}>{w.focus}</Text>
-          <Text style={styles.roadmapCheckpoint}>{w.checkpoint}</Text>
-        </View>
-      ))}
+      {plan.weeks.map((w) => {
+        const isMet = met.has(w.week_index);
+        return (
+          <View key={w.week_index} style={styles.roadmapWeek}>
+            <View style={styles.roadmapWeekHead}>
+              <Text style={styles.roadmapWeekLabel}>
+                {t("report.roadmap.week", { n: w.week_index })}
+              </Text>
+              <Pressable
+                onPress={() => onToggleCheckpoint(w.week_index, !isMet)}
+                hitSlop={10}
+                style={[
+                  styles.checkpointCircle,
+                  isMet && styles.checkpointCircleMet,
+                ]}
+              >
+                {isMet ? (
+                  <Ionicons name="checkmark" size={14} color={colors.bg} />
+                ) : null}
+              </Pressable>
+            </View>
+            <Text style={styles.roadmapTheme}>{w.theme}</Text>
+            <Text style={styles.roadmapFocus}>{w.focus}</Text>
+            <Text style={styles.roadmapCheckpoint}>{w.checkpoint}</Text>
+          </View>
+        );
+      })}
       <Text style={styles.blockH}>{t("report.roadmap.monthly_reviews")}</Text>
       {plan.monthly_reviews.map((m) => (
         <View key={m.month_index} style={styles.monthReview}>
@@ -916,11 +974,30 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.sm,
     gap: 2,
   },
+  roadmapWeekHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   roadmapWeekLabel: {
     fontFamily: font.mono,
     fontSize: 11,
     color: colors.gold,
     letterSpacing: 1.2,
+  },
+  checkpointCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  checkpointCircleMet: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
   },
   roadmapTheme: {
     fontFamily: font.bodyBold,

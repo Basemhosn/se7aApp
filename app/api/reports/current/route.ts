@@ -41,6 +41,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ report: null });
   }
 
+  // Pull checkpoint state alongside so the client renders check
+  // circles + Home strip's completed-week fills without a second
+  // round-trip. Best-effort — if RLS blocks or table isn't provisioned
+  // yet, fall back to empty.
+  const { data: cpRows } = await supabase
+    .from("report_week_checkpoints")
+    .select("week_index")
+    .eq("report_id", data.id);
+  const checkpoints = (cpRows ?? []).map(
+    (r: { week_index: number }) => r.week_index
+  );
+
   // Compute derived week_index client can trust — days since
   // generated_at, floor-divided by 7, +1. Capped at total weeks.
   const generated = new Date(data.generated_at).getTime();
@@ -58,6 +70,7 @@ export async function GET(request: Request) {
       plan: data.plan as ReportPlan,
       weekly_summary: data.weekly_summary as WeeklySummary | null,
       weekly_summary_at: data.weekly_summary_at,
+      checkpoints_met: checkpoints,
     },
   });
 }

@@ -73,7 +73,11 @@ export default function More() {
         api<WeightTrend>("/api/weight/trend?days=30").catch(() => null),
         api<CycleStatus>("/api/cycle/status").catch(() => null),
         api<{
-          report: { week_index: number; total_weeks: number } | null;
+          report: {
+            week_index: number;
+            total_weeks: number;
+            checkpoints_met?: number[];
+          } | null;
         }>("/api/reports/current").catch(() => ({ report: null })),
       ]);
     setProfile(profileData as Profile | null);
