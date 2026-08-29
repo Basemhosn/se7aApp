@@ -7,6 +7,7 @@ import {
   Easing,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -1304,27 +1305,76 @@ function ReportCard({
   isPro: boolean;
   t: (key: string, opts?: Record<string, string | number>) => string;
 }) {
+  // Auto-scroll the chip strip so the current week is roughly centered
+  // when the card renders. Keeps context visible without hunting.
+  const scrollRef = useRef<ScrollView | null>(null);
+  useEffect(() => {
+    if (!meta || !scrollRef.current) return;
+    // ~52px per chip + spacing.xs (4) gap. Scroll to (current-1) * 56
+    // minus a bit to bias-center. Empirical, feels right on iPhone 15.
+    const target = Math.max(0, (meta.week_index - 2) * 56);
+    const id = setTimeout(() => {
+      scrollRef.current?.scrollTo({ x: target, animated: false });
+    }, 50);
+    return () => clearTimeout(id);
+  }, [meta]);
+
   if (meta) {
     return (
       <Pressable
         onPress={() => router.push("/report")}
         style={styles.reportActiveCard}
       >
-        <View style={styles.reportActiveIcon}>
-          <Ionicons name="sparkles" size={18} color={colors.gold} />
+        <View style={styles.reportActiveHead}>
+          <View style={styles.reportActiveIcon}>
+            <Ionicons name="sparkles" size={16} color={colors.gold} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reportActiveKicker}>
+              {t("report.home_cta.title_active", {
+                week: meta.week_index,
+                total: meta.total_weeks,
+              })}
+            </Text>
+            <Text style={styles.reportActiveSub}>
+              {t("report.home_cta.sub_active")}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.dim} />
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.reportActiveKicker}>
-            {t("report.home_cta.title_active", {
-              week: meta.week_index,
-              total: meta.total_weeks,
-            })}
-          </Text>
-          <Text style={styles.reportActiveSub}>
-            {t("report.home_cta.sub_active")}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.dim} />
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.roadmapStrip}
+          contentContainerStyle={styles.roadmapStripInner}
+        >
+          {Array.from({ length: meta.total_weeks }).map((_, i) => {
+            const weekNum = i + 1;
+            const isCurrent = weekNum === meta.week_index;
+            const isPast = weekNum < meta.week_index;
+            return (
+              <View
+                key={weekNum}
+                style={[
+                  styles.roadmapChip,
+                  isCurrent && styles.roadmapChipCurrent,
+                  isPast && styles.roadmapChipPast,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roadmapChipText,
+                    isCurrent && styles.roadmapChipTextCurrent,
+                    isPast && styles.roadmapChipTextPast,
+                  ]}
+                >
+                  {weekNum}
+                </Text>
+              </View>
+            );
+          })}
+        </ScrollView>
       </Pressable>
     );
   }
@@ -1916,14 +1966,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   reportActiveCard: {
+    gap: spacing.sm,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  reportActiveHead: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    padding: spacing.sm,
   },
   reportActiveIcon: {
     width: 32,
@@ -1944,6 +1997,43 @@ const styles = StyleSheet.create({
     color: colors.gold,
     letterSpacing: 1.2,
     marginTop: 2,
+  },
+  roadmapStrip: {
+    marginTop: 2,
+  },
+  roadmapStripInner: {
+    gap: 6,
+    paddingRight: spacing.sm,
+  },
+  roadmapChip: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  roadmapChipCurrent: {
+    borderColor: colors.gold,
+    backgroundColor: colors.gold,
+  },
+  roadmapChipPast: {
+    borderColor: colors.goldDim,
+    backgroundColor: "rgba(246,183,60,0.15)",
+  },
+  roadmapChipText: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+  },
+  roadmapChipTextCurrent: {
+    color: colors.bg,
+    fontWeight: "700",
+  },
+  roadmapChipTextPast: {
+    color: colors.gold,
   },
   slotIcon: {
     width: 34,
