@@ -29,6 +29,7 @@ import { useRamadan, useRamadanScheduling } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
+import { rescheduleWeeklyRituals } from "@/lib/weeklyRitualScheduler";
 import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
 import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
@@ -122,6 +123,16 @@ export default function Home() {
   useWidgetToken(user?.id);
   const { status: ramadan } = useRamadan();
   useRamadanScheduling(ramadan);
+
+  // Register the two weekly ritual notifications (Sun 6pm Wrapped,
+  // Mon 9am Summary) once per session. Idempotent — the scheduler
+  // clears any prior weekly_ritual entries before writing new ones,
+  // so a re-mount won't accumulate duplicates. No dependency on
+  // plan/entitlement state — both notifications deep-link to
+  // in-app screens that handle their own empty states.
+  useEffect(() => {
+    rescheduleWeeklyRituals().catch(() => {});
+  }, []);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
