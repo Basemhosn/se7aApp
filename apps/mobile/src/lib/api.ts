@@ -138,7 +138,16 @@ export async function api<T>(
     ...(await bearerHeader()),
     ...(init.headers ?? {}),
   };
-  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  // Belt-and-suspenders with the server-side no-store: some iOS
+  // URLSession configs still stash responses briefly even when the
+  // server says no-store. Setting cache: 'no-store' on the request
+  // side guarantees a fresh fetch. Server headers remain authoritative
+  // for external tools.
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
+  });
   return parseOrThrow<T>(res);
 }
 
@@ -171,6 +180,7 @@ export async function apiUpload<T>(
       ...tzHeader(),
       ...(await bearerHeader()),
     },
+    cache: "no-store",
   });
   return parseOrThrow<T>(res);
 }
