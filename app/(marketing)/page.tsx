@@ -9,8 +9,17 @@ import { ScrollProgress } from "@/components/ScrollProgress";
 import { Marquee } from "@/components/Marquee";
 import { Particles } from "@/components/Particles";
 import { FloatingCard } from "@/components/FloatingCard";
+import { HowItWorks } from "@/components/HowItWorks";
+import { Comparison } from "@/components/Comparison";
+import { Pricing } from "@/components/Pricing";
+import { FAQ } from "@/components/FAQ";
+import { getWaitlistCount } from "@/lib/waitlistCount";
 
-export default function Home() {
+export const revalidate = 300; // 5 min — waitlist count freshness
+
+export default async function Home() {
+  const waitlistCount = await getWaitlistCount();
+
   return (
     <>
       <ScrollProgress />
@@ -28,7 +37,7 @@ export default function Home() {
       </StickyNav>
 
       <div className="shell">
-        {/* ─── HERO — split layout, floating particles + cards ───── */}
+        {/* ─── HERO — split layout, particles + floating cards ────── */}
         <section className="hero hero-split">
           <Particles count={22} />
           <div className="hero-copy">
@@ -44,6 +53,14 @@ export default function Home() {
               the oil {"—"} we don&apos;t pretend it can.
             </p>
             <Waitlist />
+            {waitlistCount !== null && waitlistCount > 0 && (
+              <div className="waitlist-social">
+                <span className="waitlist-dot" />
+                <span>
+                  Join {waitlistCount.toLocaleString()}+ others waiting
+                </span>
+              </div>
+            )}
           </div>
           <div className="hero-shot">
             <div className="hero-shot-wrap">
@@ -81,7 +98,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ─── TRUST TICKER ───────────────────────────────────────── */}
+        {/* ─── TICKER ─────────────────────────────────────────────── */}
         <section className="ticker-band">
           <Marquee duration={36}>
             <span>HONEST RANGES</span>
@@ -103,7 +120,12 @@ export default function Home() {
           </Marquee>
         </section>
 
-        {/* ─── FEATURE: LOG (with floating card) ─────────────────── */}
+        {/* ─── HOW IT WORKS ───────────────────────────────────────── */}
+        <Reveal>
+          <HowItWorks />
+        </Reveal>
+
+        {/* ─── FEATURE: LOG ───────────────────────────────────────── */}
         <Reveal>
           <section className="feature-row reverse">
             <div className="feature-copy">
@@ -143,7 +165,7 @@ export default function Home() {
           </section>
         </Reveal>
 
-        {/* ─── COACH — inline chat mock ──────────────────────────── */}
+        {/* ─── COACH ──────────────────────────────────────────────── */}
         <Reveal>
           <section className="coach-band">
             <div className="coach-copy">
@@ -182,7 +204,7 @@ export default function Home() {
           </section>
         </Reveal>
 
-        {/* ─── FEATURE: PROGRESS (with floating card) ────────────── */}
+        {/* ─── FEATURE: PROGRESS ──────────────────────────────────── */}
         <Reveal>
           <section className="feature-row">
             <div className="feature-copy">
@@ -269,7 +291,7 @@ export default function Home() {
               <div className="plan-price">
                 <span className="mono dim">19 AED once</span>
                 <span className="dim">{"·"}</span>
-                <span className="mono">or included with Pro</span>
+                <span className="mono">or included with Pro Annual</span>
               </div>
             </div>
             <div className="plan-band-shot">
@@ -285,7 +307,7 @@ export default function Home() {
           </section>
         </Reveal>
 
-        {/* ─── NOT ANOTHER TRACKER — hard differentiators ────────── */}
+        {/* ─── WHY SE7A / DIFFERENTIATORS ─────────────────────────── */}
         <Reveal>
           <section className="diff-band">
             <div className="diff-header">
@@ -324,8 +346,8 @@ export default function Home() {
                 <p>
                   Machboos, kabsa, shawarma, and every Gulf chain recognized
                   by default. Halal-only suggestions. Ramadan reshapes the
-                  whole app into suhoor/iftar windows. Full Arabic RTL —
-                  not a Google-translated afterthought.
+                  whole app into suhoor/iftar windows. Full Arabic RTL — not
+                  a Google-translated afterthought.
                 </p>
               </div>
               <div className="diff-card">
@@ -335,14 +357,19 @@ export default function Home() {
                   A one-shot AI blueprint {"—"} nutrition, training, habits,
                   week-by-week roadmap {"—"} grounded in your actual profile
                   and last 30 days of logs. Not a monthly upsell treadmill.
-                  19 AED once. Or included with Pro.
+                  19 AED once. Or included with Pro Annual.
                 </p>
               </div>
             </div>
           </section>
         </Reveal>
 
-        {/* ─── EDITORIAL STATS with count-up ──────────────────────── */}
+        {/* ─── COMPARISON ─────────────────────────────────────────── */}
+        <Reveal>
+          <Comparison />
+        </Reveal>
+
+        {/* ─── EDITORIAL STATS ────────────────────────────────────── */}
         <Reveal>
           <section className="stats-band">
             <div className="stat">
@@ -375,7 +402,7 @@ export default function Home() {
           </section>
         </Reveal>
 
-        {/* ─── PHONE SHOWCASE — angled row ────────────────────────── */}
+        {/* ─── PHONE SHOWCASE ─────────────────────────────────────── */}
         <Reveal>
           <section className="showcase-band">
             <div className="showcase-header">
@@ -460,7 +487,17 @@ export default function Home() {
           </section>
         </Reveal>
 
-        {/* ─── FINAL CTA — with particles + app store badges ─────── */}
+        {/* ─── PRICING ────────────────────────────────────────────── */}
+        <Reveal>
+          <Pricing />
+        </Reveal>
+
+        {/* ─── FAQ ────────────────────────────────────────────────── */}
+        <Reveal>
+          <FAQ />
+        </Reveal>
+
+        {/* ─── FINAL CTA ──────────────────────────────────────────── */}
         <Reveal>
           <section className="final-cta final-cta-bg">
             <Particles count={18} variant="cta" />
@@ -487,10 +524,18 @@ export default function Home() {
           </section>
         </Reveal>
 
-        <footer>
-          <div className="mono">SE7A {"©"} 2026 {"·"} DUBAI, UAE</div>
-          <a href="/privacy">Privacy</a>
-          <a href="/terms">Terms</a>
+        <footer className="footer">
+          <div className="footer-left">
+            <div className="mono">SE7A {"©"} 2026 {"·"} DUBAI, UAE</div>
+            <div className="footer-sub">
+              Eat smart · Train smart · Built in the Gulf, for the Gulf.
+            </div>
+          </div>
+          <div className="footer-right">
+            <a href="mailto:hello@se7a.app">Support</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+          </div>
         </footer>
       </div>
     </>
