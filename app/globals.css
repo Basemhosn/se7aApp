@@ -380,6 +380,186 @@ footer a:hover { color: var(--gold); }
   .reveal { opacity: 1; transform: none; transition: none; }
 }
 
+/* ---------- stagger text (per-word hero reveal) ---------- */
+.stagger .stagger-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1),
+              transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.stagger.stagger-in .stagger-word {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stagger .stagger-word { opacity: 1; transform: none; transition: none; }
+}
+
+/* ---------- scroll progress bar ---------- */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  z-index: 30; pointer-events: none;
+  background: transparent;
+}
+.scroll-progress-fill {
+  height: 100%; width: 100%; transform-origin: left center;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+  will-change: transform;
+  transition: transform 80ms linear;
+}
+
+/* ---------- marquee ticker ---------- */
+.ticker-band {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-top: 24px; padding: 22px 0;
+  overflow: hidden;
+}
+.marquee { --marquee-duration: 40s; overflow: hidden; }
+.marquee-track {
+  display: flex; width: max-content;
+  animation: marquee-scroll var(--marquee-duration) linear infinite;
+}
+.marquee:hover .marquee-track { animation-play-state: paused; }
+.marquee-group {
+  display: flex; align-items: center; gap: 28px;
+  padding-right: 28px; flex-shrink: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; letter-spacing: 0.18em;
+  color: var(--dim); text-transform: uppercase;
+}
+.marquee-group .dot { color: var(--gold); }
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+}
+
+/* ---------- countup ---------- */
+.countup-suffix {
+  font-size: 0.55em; letter-spacing: 0.12em;
+  color: var(--dim); margin-left: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ---------- coach section ---------- */
+.coach-band {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: clamp(28px, 6vw, 72px); align-items: center;
+  padding: clamp(48px, 8vw, 96px) 0;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 780px) { .coach-band { grid-template-columns: 1fr; padding: 56px 0; gap: 32px; } }
+.coach-copy h2 {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
+.coach-copy p {
+  color: var(--dim); font-size: 16px; line-height: 1.65; max-width: 44ch;
+}
+.coach-chat {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 28px clamp(20px, 4vw, 36px);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 24px; position: relative;
+}
+.coach-chat::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px;
+  background: var(--gold);
+  border-radius: 24px 0 0 24px;
+}
+.coach-bubble {
+  border-radius: 16px; padding: 14px 18px;
+  font-size: 14px; line-height: 1.55; max-width: 92%;
+}
+.coach-bubble.user {
+  align-self: flex-end; background: var(--panel2);
+  border: 1px solid var(--line); color: var(--dim);
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+}
+.coach-bubble.bot {
+  align-self: flex-start; background: rgba(246, 183, 60, 0.06);
+  border: 1px solid rgba(246, 183, 60, 0.28); color: var(--ink);
+}
+
+/* ---------- gulf pillars ---------- */
+.gulf-band {
+  padding: clamp(56px, 9vw, 104px) 0;
+  border-top: 1px solid var(--line);
+}
+.gulf-header { max-width: 60ch; margin-bottom: 48px; }
+.gulf-header h2 {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: clamp(28px, 4vw, 42px); line-height: 1.08; letter-spacing: -0.02em;
+}
+.gulf-pillars {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+}
+@media (max-width: 900px) { .gulf-pillars { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .gulf-pillars { grid-template-columns: 1fr; } }
+.gulf-pillar {
+  padding: 22px 22px 24px;
+  border: 1px solid var(--line); border-radius: 18px; background: var(--panel);
+  display: flex; flex-direction: column; gap: 8px;
+  transition: border-color 0.28s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gulf-pillar:hover {
+  border-color: var(--gold-dim);
+  transform: translateY(-4px);
+}
+.pillar-kicker {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  color: var(--gold); letter-spacing: 0.2em;
+}
+.pillar-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 20px; letter-spacing: -0.01em; margin-top: 4px;
+}
+.pillar-sub { color: var(--dim); font-size: 13px; line-height: 1.55; margin-top: 6px; }
+
+/* ---------- everything else — mini grid ---------- */
+.grid-band {
+  padding: clamp(56px, 9vw, 104px) 0;
+  border-top: 1px solid var(--line);
+}
+.grid-header { max-width: 60ch; margin-bottom: 40px; }
+.grid-header h2 {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: clamp(26px, 3.6vw, 36px); line-height: 1.1; letter-spacing: -0.02em;
+}
+.mini-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+@media (max-width: 900px) { .mini-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .mini-grid { grid-template-columns: 1fr; } }
+.mini-card {
+  padding: 18px 20px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: border-color 0.24s ease, background 0.24s ease;
+}
+.mini-card:hover {
+  border-color: var(--gold-dim);
+  background: linear-gradient(180deg, rgba(246,183,60,0.03), var(--panel));
+}
+.mini-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.mini-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px;
+  color: var(--ink);
+}
+.mini-tag {
+  font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+  letter-spacing: 0.18em; color: var(--gold);
+  padding: 2px 7px; border: 1px solid var(--gold-dim); border-radius: 4px;
+}
+.mini-body { color: var(--dim); font-size: 13px; line-height: 1.55; }
+
 /* Waitlist button + hero animations kept as-is; reveal owns the
    scroll-triggered fades so nothing above the fold competes. */
 
