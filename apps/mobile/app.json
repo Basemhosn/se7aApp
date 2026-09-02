@@ -99,7 +99,8 @@
           "project": "se7a-mobile",
           "organization": "se7a-app"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

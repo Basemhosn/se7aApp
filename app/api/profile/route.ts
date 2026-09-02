@@ -31,29 +31,43 @@ export async function POST(request: Request) {
     goal_rate_kg_per_week: input.goal_rate_kg_per_week,
   });
 
+  const updatePayload: Record<string, unknown> = {
+    display_name: input.display_name ?? null,
+    sex: input.sex,
+    birthdate: input.birthdate,
+    height_cm: input.height_cm,
+    weight_kg: input.weight_kg,
+    activity_level: input.activity_level,
+    goal: input.goal,
+    goal_rate_kg_per_week: input.goal_rate_kg_per_week,
+    units: input.units,
+    training_experience: input.training_experience ?? null,
+    equipment_access: input.equipment_access ?? null,
+    days_per_week: input.days_per_week ?? null,
+    injuries: input.injuries ?? [],
+    rest_day_kcal_delta: input.rest_day_kcal_delta ?? 0,
+    daily_kcal_target: targets.daily_kcal_target,
+    daily_protein_g: targets.daily_protein_g,
+    daily_carb_g: targets.daily_carb_g,
+    daily_fat_g: targets.daily_fat_g,
+    onboarded_at: new Date().toISOString(),
+  };
+  // Merge onboarding_meta on top of whatever's already stored so
+  // callers can send only the keys they want to update.
+  if (input.onboarding_meta) {
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("onboarding_meta")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    updatePayload.onboarding_meta = {
+      ...((existing?.onboarding_meta as Record<string, unknown>) ?? {}),
+      ...input.onboarding_meta,
+    };
+  }
   const { error: updateErr } = await supabase
     .from("profiles")
-    .update({
-      display_name: input.display_name ?? null,
-      sex: input.sex,
-      birthdate: input.birthdate,
-      height_cm: input.height_cm,
-      weight_kg: input.weight_kg,
-      activity_level: input.activity_level,
-      goal: input.goal,
-      goal_rate_kg_per_week: input.goal_rate_kg_per_week,
-      units: input.units,
-      training_experience: input.training_experience ?? null,
-      equipment_access: input.equipment_access ?? null,
-      days_per_week: input.days_per_week ?? null,
-      injuries: input.injuries ?? [],
-      rest_day_kcal_delta: input.rest_day_kcal_delta ?? 0,
-      daily_kcal_target: targets.daily_kcal_target,
-      daily_protein_g: targets.daily_protein_g,
-      daily_carb_g: targets.daily_carb_g,
-      daily_fat_g: targets.daily_fat_g,
-      onboarded_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("user_id", user.id);
   if (updateErr) {
     return NextResponse.json(

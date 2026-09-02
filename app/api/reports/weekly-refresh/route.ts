@@ -122,6 +122,19 @@ export async function POST(request: Request) {
 
   const plan = report.plan as ReportPlan;
 
+  // Pick the nutrition phase covering this week so we compare adherence
+  // against the phase-specific targets, not a static top-level number.
+  const currentPhase =
+    plan.nutrition.phases.find((p) => {
+      const parts = p.weeks
+        .split(/[–\-]/)
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n));
+      const lo = parts[0] ?? 1;
+      const hi = parts[1] ?? lo;
+      return weekIndex >= lo && weekIndex <= hi;
+    }) ?? plan.nutrition.phases[0];
+
   const daySummaries = Array.from(byDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(
@@ -138,9 +151,9 @@ export async function POST(request: Request) {
         : "No weight logged this week.";
 
   const context = `
-Plan targets (from the active ${report.duration_days}-day plan):
-- Daily kcal: ${plan.nutrition.daily_kcal.low}–${plan.nutrition.daily_kcal.high}
-- Daily protein: ${plan.nutrition.protein_g.low}–${plan.nutrition.protein_g.high} g
+Plan targets (${currentPhase ? `Phase ${currentPhase.phase_index} · ${currentPhase.name}, weeks ${currentPhase.weeks}` : "current phase"}):
+- Daily kcal: ${currentPhase?.daily_kcal.low ?? "?"}–${currentPhase?.daily_kcal.high ?? "?"}
+- Daily protein: ${currentPhase?.protein_g.low ?? "?"}–${currentPhase?.protein_g.high ?? "?"} g
 
 Current week: ${weekIndex} of ${totalWeeks}.
 Days logged this week: ${daysLogged} / 7.

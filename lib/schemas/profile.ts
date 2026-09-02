@@ -40,6 +40,25 @@ export const onboardingSchema = z
     injuries: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
     // Kcal delta applied on rest days (negative subtracts, positive adds).
     rest_day_kcal_delta: z.number().int().min(-1000).max(1000).optional(),
+    // Onboarding v2 metadata. Stored in profiles.onboarding_meta jsonb.
+    // All optional so returning users who redo onboarding don't have to
+    // resupply preferences they set once.
+    onboarding_meta: z
+      .object({
+        halal_pref: z.enum(["halal", "no_preference"]).optional(),
+        ramadan_opt_in: z.boolean().optional(),
+        attribution_source: z
+          .enum([
+            "app_store",
+            "instagram",
+            "tiktok",
+            "friend",
+            "google",
+            "other",
+          ])
+          .optional(),
+      })
+      .optional(),
   })
   .superRefine((val, ctx) => {
     // Safety floor: a user whose starting BMI is already <17 (medically

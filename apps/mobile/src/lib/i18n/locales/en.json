@@ -16,6 +16,8 @@
     "discard": "Discard",
     "loading": "Loading…",
     "saving": "Saving…",
+    "saved": "Saved",
+    "error": "Error",
     "sign_out": "SIGN OUT",
     "of": "of",
     "kcal": "kcal",
@@ -442,6 +444,28 @@
     }
   },
   "onboarding": {
+    "language": {
+      "title": "Pick your language",
+      "sub": "You can change this any time in Settings.",
+      "en": "English",
+      "en_sub": "Full app in English",
+      "ar": "العربية",
+      "ar_sub": "التطبيق بالكامل بالعربية",
+      "continue": "Continue"
+    },
+    "birthdate": {
+      "title": "When were you born?",
+      "sub": "Age changes how your daily calorie need is calculated."
+    },
+    "size": {
+      "title": "Height and weight",
+      "sub": "Two numbers that anchor every macro calculation in SE7A.",
+      "cm": "cm",
+      "ftin": "ft, in",
+      "kg": "kg",
+      "lbs": "lbs",
+      "current_weight": "Current weight"
+    },
     "welcome_kicker_new": "YOUR PLAN",
     "welcome_kicker_returning": "REDO YOUR PLAN",
     "welcome_hero_new": "Hey {{name}}.",
@@ -464,19 +488,6 @@
       "hint": "Used only for BMR math — SE7A doesn't care about identity here, it cares about metabolic rate.",
       "male": "Male",
       "female": "Female"
-    },
-    "birthdate": {
-      "kicker": "ABOUT YOU · 2 OF 11",
-      "title": "Your birthdate?",
-      "hint": "Metabolism shifts with age. Format: YYYY-MM-DD. You must be 16+.",
-      "name_placeholder": "Display name (optional) — {{email}}"
-    },
-    "size": {
-      "kicker": "ABOUT YOU · 3 OF 11",
-      "title": "Height and weight.",
-      "hint": "In centimeters and kilograms. Whatever the scale says today — we'll recalibrate as it changes.",
-      "height_label": "HEIGHT (CM)",
-      "weight_label": "WEIGHT (KG)"
     },
     "activity": {
       "kicker": "ABOUT YOU · 4 OF 11",
@@ -578,13 +589,39 @@
       "placeholder": "lower back, right knee"
     },
     "reveal": {
-      "kicker": "YOUR PLAN",
+      "kicker": "YOUR DAILY TARGET",
       "title": "Here's where we start.",
       "sub": "Based on your goal ({{goal}}), experience, equipment, and days per week. You can switch plans any time from your dashboard.",
       "recommended": "RECOMMENDED",
       "or_pick_another": "OR PICK ANOTHER",
       "picked": "✓ picked",
-      "meta": "{{days}} days / week · {{exp}} · {{eq}}"
+      "meta": "{{days}} days / week · {{exp}} · {{eq}}",
+      "congrats": "Your plan is ready",
+      "kcal_per_day": "KCAL / DAY",
+      "tagline": "SE7A shows every kcal as a low–high range. This is the middle of yours.",
+      "protein": "Protein",
+      "carbs": "Carbs",
+      "fat": "Fat"
+    },
+    "halal": {
+      "title": "Any dietary preferences?",
+      "sub": "We'll bias meal suggestions to match. You can change this later.",
+      "halal": "Halal only",
+      "halal_sub": "Skip pork, non-halal meat, and alcohol.",
+      "no_pref": "No preference",
+      "no_pref_sub": "Show me everything.",
+      "ramadan_title": "Enable Ramadan mode",
+      "ramadan_sub": "Iftar / suhoor timers + adjusted daily target windows."
+    },
+    "attribution": {
+      "title": "How did you hear about SE7A?",
+      "sub": "Helps us focus where it's working. One-tap, no follow-ups.",
+      "app_store": "App Store",
+      "instagram": "Instagram",
+      "tiktok": "TikTok",
+      "google": "Google search",
+      "friend": "Friend or family",
+      "other": "Somewhere else"
     },
     "welcome_val_ranges_title": "Honest ranges, not fake precision",
     "welcome_val_ranges_body": "Every kcal and macro shown as a low–high band.",
@@ -763,12 +800,31 @@
     "kicker": "WEEK {{week}} OF {{total}}",
     "regenerate": "Regenerate",
     "share": "Share plan",
+    "download_pdf": "Download as PDF",
+    "download_pdf_working": "Generating PDF…",
+    "download_failed": "Couldn't build PDF — try again.",
     "weekly_summary": {
       "title": "This week",
       "went_well": "What went well",
       "to_change": "What to change",
       "coach_take": "Coach's take",
       "refreshing": "Refreshing…"
+    },
+    "tabs": {
+      "general": "General",
+      "nutrition": "Nutrition",
+      "training": "Training",
+      "habits": "Habits",
+      "roadmap": "Roadmap"
+    },
+    "phase": {
+      "short": "P{{n}}",
+      "label": "Phase {{n}}"
+    },
+    "macro": {
+      "protein": "Protein",
+      "carbs": "Carbs",
+      "fat": "Fat"
     },
     "section": {
       "nutrition": "NUTRITION",
@@ -779,42 +835,72 @@
       "roadmap": "ROADMAP",
       "safety": "SAFETY NOTES"
     },
+    "general": {
+      "now_in_phase": "PHASE {{n}} · {{name}}",
+      "this_week": "THIS WEEK"
+    },
     "nutrition": {
       "targets": "Daily targets",
       "kcal_range": "{{low}}–{{high}} kcal",
       "macro_row": "{{low}}–{{high}} g",
-      "why_this": "Why this",
-      "adjust_rules": "Weekly adjustments"
+      "why_this": "WHY THIS",
+      "adjust_rules": "WEEKLY ADJUSTMENTS"
     },
     "meals": {
       "day": "Day {{n}}",
       "swaps": "Swap ideas",
-      "grocery": "Grocery staples",
-      "eating_out": "Eating out"
+      "grocery": "GROCERY STAPLES",
+      "eating_out": "EATING OUT"
     },
     "training": {
       "session": "Day {{n}} · {{focus}}",
+      "session_short": "Day {{n}}",
       "duration": "~{{min}} min",
       "sets_reps": "{{sets}} × {{reps}}",
       "rest": "{{sec}}s rest",
-      "progression": "Progression",
-      "deload": "Deload",
-      "cardio": "Cardio"
+      "warmup": "WARMUP",
+      "cooldown": "COOLDOWN",
+      "substitutions": "Alt",
+      "phase_progression": "PHASE PROGRESSION",
+      "general_notes": "GENERAL NOTES · AUTOREGULATION",
+      "deload": "DELOAD",
+      "cardio": "CARDIO",
+      "mark_done": "Mark done today",
+      "done_today": "Done today"
+    },
+    "today": {
+      "kicker": "TODAY",
+      "week_kicker": "WEEK {{week}} OF {{total}}"
     },
     "habits": {
-      "daily": "Daily",
-      "hard_scenarios": "When it's hard",
-      "missed_workout": "If you miss a workout",
-      "cravings": "Cravings playbook"
+      "daily": "DAILY HABITS",
+      "sleep": "SLEEP & RECOVERY",
+      "contingencies": "CONTINGENCIES · WHEN LIFE HAPPENS",
+      "cravings": "CRAVINGS PLAYBOOK"
     },
     "tracking": {
-      "measurements": "What to measure",
-      "weekly_questions": "Weekly review",
-      "trend_rules": "Reading the trends"
+      "measurements": "WHAT TO MEASURE",
+      "weekly_questions": "WEEKLY REVIEW",
+      "trend_rules": "READING THE TRENDS"
     },
     "roadmap": {
       "week": "Week {{n}}",
-      "monthly_reviews": "Monthly review"
+      "full": "Full",
+      "monthly_reviews": "MONTHLY REVIEWS",
+      "month": "Month {{n}}",
+      "benchmarks": "BENCHMARKS · RETESTS",
+      "log_weight": "Log weight",
+      "log_weight_title": "Log this week's weight",
+      "log_weight_body": "Enter your weight in kg. Your daily kcal targets will retune automatically.",
+      "log_weight_invalid": "That doesn't look like a valid weight (0–500 kg).",
+      "log_weight_saved": "Saved {{kg}} kg.",
+      "log_weight_failed": "Couldn't save — try again.",
+      "benchmark_result": "Result",
+      "benchmark_result_ph": "e.g. 18 reps, 72 cm, 1:45",
+      "benchmark_notes": "Notes",
+      "benchmark_notes_ph": "How did it feel? Baseline vs improvement?",
+      "benchmark_save": "Save",
+      "benchmark_update": "Update"
     },
     "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
   }
