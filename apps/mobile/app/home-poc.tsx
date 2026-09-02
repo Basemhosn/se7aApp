@@ -11,9 +11,9 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Screen } from "@/components/Screen";
 import { CalorieRing } from "@/components/CalorieRing";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
@@ -128,11 +128,11 @@ export default function HomePoc() {
 
   if (loading) {
     return (
-      <Screen>
+      <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
         <View style={styles.loading}>
           <ActivityIndicator color={colors.gold} />
         </View>
-      </Screen>
+      </SafeAreaView>
     );
   }
 
@@ -146,10 +146,10 @@ export default function HomePoc() {
   const fatTarget = profile?.daily_fat_g ?? 0;
 
   return (
-    <Screen scroll={false}>
+    <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: spacing.xxl * 2 }}
+        contentContainerStyle={{ paddingBottom: spacing.xxl * 4 }}
       >
         <Header
           streakDays={streak?.current_days ?? 0}
@@ -265,7 +265,7 @@ export default function HomePoc() {
           },
         ]}
       />
-    </Screen>
+    </SafeAreaView>
   );
 }
 
@@ -816,6 +816,10 @@ function capitalize(s: string): string {
 // Styles
 
 const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
   loading: {
     flex: 1,
     alignItems: "center",

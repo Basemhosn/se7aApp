@@ -676,6 +676,7 @@ export default function Onboarding() {
         onPrimary={advance}
         primaryDisabled={!canAdvance}
         primaryLoading={busy}
+        errorText={err}
       >
         <QuestionHead
           title={t("onboarding.rate.title")}
@@ -810,6 +811,7 @@ export default function Onboarding() {
         primaryDisabled={!offering}
         secondaryLabel={t("onboarding.skip_free")}
         onSecondary={skipTrial}
+        errorText={err}
       >
         <View style={{ gap: spacing.md, flex: 1 }}>
           <Text style={styles.trialKickerV2}>{t("onboarding.trial_kicker")}</Text>
@@ -858,7 +860,7 @@ export default function Onboarding() {
       setHeight(String(cm));
     };
     // Weight: kg is canonical; lbs derived for display.
-    const weightKg = Number(weight) || 75;
+    const weightKg = Number(weight) || 60;
     const weightLbs = Math.round(weightKg * 2.20462 * 10) / 10;
     return (
       <OnboardingShell

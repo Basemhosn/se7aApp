@@ -43,6 +43,7 @@ export function OnboardingShell({
   primaryLoading,
   secondaryLabel,
   onSecondary,
+  errorText,
 }: {
   /** 0..1 — fraction of the flow complete */
   progress: number;
@@ -54,6 +55,9 @@ export function OnboardingShell({
   primaryLoading?: boolean;
   secondaryLabel?: string;
   onSecondary?: () => void;
+  /** Error line shown above the primary CTA so silent API failures
+   *  surface to the user instead of the button becoming a no-op. */
+  errorText?: string;
 }) {
   return (
     <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
@@ -78,6 +82,7 @@ export function OnboardingShell({
       <View style={styles.body}>{children}</View>
 
       <View style={styles.footer}>
+        {errorText ? <Text style={styles.errText}>{errorText}</Text> : null}
         <Pressable
           onPress={onPrimary}
           disabled={primaryDisabled || primaryLoading}
@@ -527,6 +532,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.line,
     backgroundColor: colors.bg,
+  },
+  errText: {
+    color: colors.err,
+    fontFamily: font.body,
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: spacing.sm,
   },
   primaryBtn: {
     height: 56,
