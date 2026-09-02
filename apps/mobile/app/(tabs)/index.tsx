@@ -4,7 +4,7 @@ import {
   Alert,
   Animated,
   Dimensions,
-  Easing,
+  FlatList,
   Modal,
   PanResponder,
   Pressable,
@@ -14,13 +14,11 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Screen } from "@/components/Screen";
-import { WaterRing } from "@/components/WaterRing";
 import { CalorieRing } from "@/components/CalorieRing";
-import { useEntitlement } from "@/lib/EntitlementContext";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
 import {
@@ -31,23 +29,39 @@ import {
 import { useRamadan, useRamadanScheduling } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthContext";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { rescheduleWeeklyRituals } from "@/lib/weeklyRitualScheduler";
 import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
 import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
-import type { LedgerDayResponse, Profile } from "@/types";
-import type { Program, Session } from "@/lib/programs";
+import type { LedgerDayResponse, MealSlot, Profile } from "@/types";
 import { SLOTS, SLOT_META } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
-interface CurrentWorkoutResponse {
-  active: boolean;
-  program?: Program;
-  next_session?: Session;
-  next_session_index?: number;
-  completed_this_week?: number;
-}
+/**
+ * Home tab — Cal.ai-inspired swipeable pager (2026-09-03 revamp).
+ *
+ * Replaced the previous ~18-widget vertical stack with three
+ * horizontally-paged metric views (Nutrition / Wellness / Activity).
+ * All prior widgets survived — they moved to whichever page they
+ * belong to, or to header pills, or to the footer below the meals
+ * list. Nothing was removed.
+ *
+ * Layout:
+ *   [ SE7A · pills · streak · avatar ]           header row
+ *   [ Ramadan banner (active only) ]
+ *   [ 7-day date strip ]
+ *   [ day-status chip (lift/rest/planned) ]
+ *   [ swipeable pager: Nutrition / Wellness / Activity ]
+ *   [ dot indicator ]
+ *   [ Today's meals — 4 slots, collapsible ]
+ *   [ Report card + Wrapped card ]
+ *   [ Streak card ]
+ *   FAB (unchanged 7 quick-log actions)
+ */
+
+// ── Types (unchanged from prior Home) ──────────────────────────────
 
 interface WaterTodayResponse {
   total_ml: number;
@@ -73,7 +87,7 @@ interface StreakResponse {
   todays_status: "logged" | "not_yet";
   freezes_available_this_month: number;
   freezes_monthly_budget: number;
-  freezable_days: string[]; // YYYY-MM-DD, most recent first
+  freezable_days: string[];
 }
 
 interface SleepTodayResponse {
@@ -116,10 +130,18 @@ interface CardioTodayResponse {
   };
 }
 
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const SWIPE_THRESHOLD = 60;
+
+// ────────────────────────────────────────────────────────────────────
+// Component
+
 export default function Home() {
   const { user } = useAuth();
   const { ent } = useEntitlement();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === "ar";
+  const isPro = ent.is_pro;
   usePushRegistration();
   useNotificationDeepLinks();
   useHealthSync(user?.id);
@@ -127,41 +149,51 @@ export default function Home() {
   const { status: ramadan } = useRamadan();
   useRamadanScheduling(ramadan);
 
-  // Anniversary modal state — declared up here (before the useEffects
-  // that reference it) to satisfy no-use-before-define.
   const [anniversary, setAnniversary] = useState<
     "anniv_30d" | "anniv_60d" | "anniv_90d" | null
   >(null);
 
-  // Register the two weekly ritual notifications (Sun 6pm Wrapped,
-  // Mon 9am Summary) once per session. Idempotent — the scheduler
-  // clears any prior weekly_ritual entries before writing new ones,
-  // so a re-mount won't accumulate duplicates. No dependency on
-  // plan/entitlement state — both notifications deep-link to
-  // in-app screens that handle their own empty states.
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
+  const [viewOffset, setViewOffset] = useState(0);
+  const [water, setWater] = useState<WaterTodayResponse | null>(null);
+  const [dayStatus, setDayStatus] = useState<DayStatusResponse | null>(null);
+  const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
+  const [streak, setStreak] = useState<StreakResponse | null>(null);
+  const [cardio, setCardio] = useState<CardioTodayResponse | null>(null);
+  const [sleep, setSleep] = useState<SleepTodayResponse | null>(null);
+  const [reportMeta, setReportMeta] = useState<{
+    week_index: number;
+    total_weeks: number;
+    checkpoints_met: number[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [expandedSlots, setExpandedSlots] = useState<Set<string>>(new Set());
+  const [streakSheetOpen, setStreakSheetOpen] = useState(false);
+
+  const viewDateIso = useMemo(() => isoOffset(viewOffset), [viewOffset]);
+  const isToday = viewOffset === 0;
+  const dateStrip = useMemo(() => buildDateStrip(viewOffset), [viewOffset]);
+
+  // ── Weekly ritual scheduler (idempotent) ─────────────────────────
   useEffect(() => {
     rescheduleWeeklyRituals().catch(() => {});
   }, []);
 
-  // Non-blocking check for unseen anniversary badges. Fires once per
-  // session after the main load completes; if the user just crossed
-  // day 30/60/90 we surface the full-bleed modal on next Home focus.
+  // ── Anniversary badge check ──────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     api<{
-      badges: {
-        key: string;
-        earned_at: string | null;
-        seen: boolean;
-      }[];
+      badges: { key: string; earned_at: string | null; seen: boolean }[];
     }>("/api/badges")
       .then((res) => {
-        const unseenAnniv = res.badges
+        const unseen = res.badges
           .filter((b) => b.key.startsWith("anniv_") && b.earned_at && !b.seen)
           .sort((a, b) => (b.earned_at ?? "").localeCompare(a.earned_at ?? ""))[0];
-        if (unseenAnniv) {
+        if (unseen) {
           setAnniversary(
-            unseenAnniv.key as "anniv_30d" | "anniv_60d" | "anniv_90d"
+            unseen.key as "anniv_30d" | "anniv_60d" | "anniv_90d"
           );
         }
       })
@@ -178,112 +210,11 @@ export default function Home() {
         body: JSON.stringify({ mark_seen: [key] }),
       });
     } catch {
-      /* silent — worst case user sees it again next open */
+      /* silent */
     }
   }, [anniversary]);
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
-  // Offset in days from today. 0 = today, -1 = yesterday, +1 = tomorrow.
-  // Chip taps shift this; ledger refetches for the new day. All the
-  // "always today" widgets (streak, cardio, sleep, FAB) stay put and
-  // only render when viewOffset === 0.
-  const [viewOffset, setViewOffset] = useState(0);
-  const [workout, setWorkout] = useState<CurrentWorkoutResponse | null>(null);
-  const [water, setWater] = useState<WaterTodayResponse | null>(null);
-  const [dayStatus, setDayStatus] = useState<DayStatusResponse | null>(null);
-  const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
-  const [streak, setStreak] = useState<StreakResponse | null>(null);
-  const [cardio, setCardio] = useState<CardioTodayResponse | null>(null);
-  const [sleep, setSleep] = useState<SleepTodayResponse | null>(null);
-  const [reportMeta, setReportMeta] = useState<{
-    week_index: number;
-    total_weeks: number;
-    checkpoints_met: number[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const viewDateIso = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + viewOffset);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, [viewOffset]);
-  const isToday = viewOffset === 0;
-
-  // Horizontal swipe to change day, with follow-finger drag + spring
-  // snap so it feels responsive instead of "click on release." The
-  // translateX animated value tracks the finger during move and
-  // animates to commit (± screen width, then reset from opposite side)
-  // or snaps back on release below threshold. useNativeDriver = true
-  // so the animation runs on the UI thread even mid-fetch.
-  //
-  // PanResponder still only claims clearly-horizontal drags so the
-  // vertical ScrollView keeps working; isAnimating ref prevents a
-  // second swipe from starting while an animation is in flight.
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isSwipeAnimating = useRef(false);
-  const SCREEN_WIDTH = useMemo(() => Dimensions.get("window").width, []);
-  const SWIPE_COMMIT_PX = 60;
-
-  const swipeResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_e, g) =>
-          !isSwipeAnimating.current &&
-          Math.abs(g.dx) > 8 &&
-          Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
-        onPanResponderMove: (_e, g) => {
-          translateX.setValue(
-            Math.max(-SCREEN_WIDTH, Math.min(SCREEN_WIDTH, g.dx))
-          );
-        },
-        onPanResponderRelease: (_e, g) => {
-          const direction: -1 | 0 | 1 =
-            g.dx <= -SWIPE_COMMIT_PX ? 1 : g.dx >= SWIPE_COMMIT_PX ? -1 : 0;
-          if (direction === 0) {
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: true,
-              speed: 20,
-              bounciness: 6,
-            }).start();
-            return;
-          }
-          isSwipeAnimating.current = true;
-          Animated.timing(translateX, {
-            toValue: -direction * SCREEN_WIDTH,
-            duration: 160,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }).start(({ finished }) => {
-            if (!finished) {
-              isSwipeAnimating.current = false;
-              return;
-            }
-            setViewOffset((v) => v + direction);
-            translateX.setValue(direction * SCREEN_WIDTH);
-            Animated.timing(translateX, {
-              toValue: 0,
-              duration: 180,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }).start(() => {
-              isSwipeAnimating.current = false;
-            });
-          });
-        },
-        onPanResponderTerminate: () => {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            speed: 20,
-            bounciness: 6,
-          }).start();
-        },
-      }),
-    [SCREEN_WIDTH, translateX]
-  );
-
+  // ── Data load ────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
@@ -293,7 +224,6 @@ export default function Home() {
     const [
       { data: profileData },
       ledgerRes,
-      workoutRes,
       waterRes,
       dayRes,
       fastingRes,
@@ -308,9 +238,6 @@ export default function Home() {
         .eq("user_id", user.id)
         .maybeSingle(),
       api<LedgerDayResponse>(ledgerPath),
-      api<CurrentWorkoutResponse>("/api/workouts/current").catch(() => ({
-        active: false,
-      })),
       api<WaterTodayResponse>("/api/water/today").catch(() => ({
         total_ml: 0,
         target_ml: 2500,
@@ -339,7 +266,6 @@ export default function Home() {
     }
     setProfile(profileData as Profile);
     setLedger(ledgerRes);
-    setWorkout(workoutRes);
     setWater(waterRes);
     setDayStatus(dayRes);
     setFasting(fastingRes);
@@ -358,8 +284,22 @@ export default function Home() {
     setLoading(false);
   }, [user, isToday, viewDateIso]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const pending = peekOptimisticLogItems();
+      if (pending.length > 0) {
+        setLedger((prev) =>
+          prev ? mergePendingIntoLedger(prev, pending) : prev
+        );
+        clearOptimisticLogItems();
+      }
+      load();
+    }, [load])
+  );
+
   const addWater = async (ml: number) => {
     if (!water) return;
+    const prev = water;
     setWater({ ...water, total_ml: water.total_ml + ml, entries: water.entries + 1 });
     try {
       await api("/api/water/log", {
@@ -368,533 +308,1317 @@ export default function Home() {
       });
       markDayDirty();
     } catch {
-      setWater(water);
+      setWater(prev);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      // Optimistic pre-merge: if a log flow just finished and pushed
-      // items, splice them into ledger.totals RIGHT NOW so the ring
-      // reflects the new totals within a frame — before the network
-      // fetch has a chance to complete. Load() still runs in parallel
-      // and replaces this with authoritative server data.
-      const pending = peekOptimisticLogItems();
-      if (pending.length > 0) {
-        setLedger((prev) => (prev ? mergePendingIntoLedger(prev, pending) : prev));
-      }
-      load()
-        .then(() => clearOptimisticLogItems())
-        .catch(() => {
-          clearOptimisticLogItems();
-          setLoading(false);
-        });
-    }, [load])
-  );
+  const applyFreeze = useCallback(async () => {
+    if (!streak || streak.freezes_available_this_month <= 0) return;
+    const target = streak.freezable_days[0];
+    if (!target) return;
+    Alert.alert(
+      isArabic ? "تجميد اليوم؟" : "Freeze this day?",
+      isArabic
+        ? `سنستخدم واحدًا من ${streak.freezes_available_this_month} تجميدات لهذا الشهر.`
+        : `We'll use one of your ${streak.freezes_available_this_month} freezes this month.`,
+      [
+        { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+        {
+          text: isArabic ? "تجميد" : "Freeze",
+          onPress: async () => {
+            try {
+              await api("/api/streaks/freeze", {
+                method: "POST",
+                body: JSON.stringify({ day: target }),
+              });
+              load();
+            } catch {
+              /* silent */
+            }
+          },
+        },
+      ]
+    );
+  }, [streak, isArabic, load]);
 
-  if (loading || !profile || !ledger) {
+  // ── Loading ──────────────────────────────────────────────────────
+  if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.gold} />
-      </View>
+      <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      </SafeAreaView>
     );
   }
 
-  const displayName = profile.display_name || user?.email?.split("@")[0] || "";
-  const nowDate = new Date();
-  const viewedDate = new Date();
-  viewedDate.setDate(viewedDate.getDate() + viewOffset);
-  const viewedLabel =
-    viewOffset === 0
-      ? t("home.day_picker.today")
-      : viewOffset === -1
-        ? t("home.day_picker.yesterday")
-        : viewOffset === 1
-          ? t("home.day_picker.tomorrow")
-          : viewedDate.toLocaleDateString(undefined, {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-            });
-
-  // Future-day view: use planned_items from the meal plan (if any)
-  // as the display source for the ring + slot grid. Today + past use
-  // real meal_items via ledger.totals as before.
-  const plannedItems = ledger.planned_items ?? [];
-  const hasFuturePlan = viewOffset > 0 && plannedItems.length > 0;
-  const displayKcal = hasFuturePlan
-    ? plannedItems.reduce(
-        (acc, p) => ({
-          low: acc.low + Number(p.kcal_low ?? 0),
-          high: acc.high + Number(p.kcal_high ?? 0),
-        }),
-        { low: 0, high: 0 }
-      )
-    : ledger.totals.kcal;
-  const displayItemCount = hasFuturePlan
-    ? plannedItems.length
-    : ledger.totals.items.length;
-  // Shim planned_items into meal-item-like shape so MealSlotGrid can
-  // render them unchanged. Only the fields it reads matter.
-  const plannedAsItems = plannedItems.map((p, i) => ({
-    id: -1 - i, // negative ids so React keys don't collide with real items
-    name: p.name,
-    portion_estimate: p.portion,
-    source: "planned",
-    confidence: null,
-    eaten_at: new Date().toISOString(),
-    meal_slot: p.slot,
-    kcal_low: p.kcal_low,
-    kcal_high: p.kcal_high,
-    protein_g_low: p.protein_g_low,
-    protein_g_high: p.protein_g_high,
-    carb_g_low: p.carb_g_low,
-    carb_g_high: p.carb_g_high,
-    fat_g_low: p.fat_g_low,
-    fat_g_high: p.fat_g_high,
-  }));
+  // ── Derived values ───────────────────────────────────────────────
+  const kcalTarget =
+    dayStatus?.adjusted_target ??
+    dayStatus?.base_target ??
+    profile?.daily_kcal_target ??
+    2200;
+  const totals = ledger?.totals;
+  const kcalLow = totals?.kcal.low ?? 0;
+  const kcalHigh = totals?.kcal.high ?? 0;
 
   return (
-    <Screen>
-      <View style={styles.head}>
-        <Pressable
-          onPress={() => router.push("/settings")}
-          hitSlop={8}
-          style={styles.avatar}
-        >
-          <Text style={styles.avatarInitial}>
-            {(displayName[0] ?? "S").toUpperCase()}
-          </Text>
-        </Pressable>
-        <View style={styles.headTitleCol}>
-          <Text style={styles.headGreet} numberOfLines={1}>
-            {greeting(nowDate) + (displayName ? `, ${displayName}` : "")}
-          </Text>
-          <Text style={styles.headDate}>
-            {nowDate.toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "short",
-              day: "numeric",
-            })}
-          </Text>
-        </View>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={12}>
-          <Ionicons name="settings-outline" size={22} color={colors.dim} />
-        </Pressable>
-      </View>
-
-      {/* Swipe-to-shift-day zone wraps all day-scoped content — ring,
-          macros, micros, slot grid, streak, cardio, sleep, wrapped,
-          fasting, workout, quick log — so the gesture is discoverable
-          from anywhere on the page. Animated.View follows the finger
-          on drag (translateX) then springs into commit or snap-back
-          on release. Vertical scroll still works because PanResponder
-          only claims clearly-horizontal drags (|dx| > 1.2·|dy|). */}
-      <Animated.View
-        {...swipeResponder.panHandlers}
-        style={{ transform: [{ translateX }], gap: spacing.lg }}
+    <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: spacing.xxl * 3 }}
       >
-        <View style={styles.dayPickerRow}>
-          <Pressable
-            onPress={() => setViewOffset((v) => v - 1)}
-            style={styles.dayChip}
-            hitSlop={6}
-          >
-            <Ionicons name="chevron-back" size={14} color={colors.dim} />
-            <Text style={styles.dayChipText}>{t("home.day_picker.prev")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => viewOffset !== 0 && setViewOffset(0)}
-            style={[styles.dayChip, styles.dayChipOn]}
-            hitSlop={6}
-          >
-            <Text style={[styles.dayChipText, styles.dayChipTextOn]}>
-              {viewedLabel}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setViewOffset((v) => v + 1)}
-            style={styles.dayChip}
-            hitSlop={6}
-          >
-            <Text style={styles.dayChipText}>{t("home.day_picker.next")}</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.dim} />
-          </Pressable>
-        </View>
-
-      {isToday && ramadan?.active && ramadan.today && (
-        <RamadanBanner status={ramadan} />
-      )}
-
-      <Text style={styles.dayLabel}>
-        {isToday
-          ? dayStatus?.kind === "lift"
-            ? t("home.lift_day_remaining")
-            : dayStatus?.kind === "rest" && dayStatus.delta_applied !== 0
-              ? t("home.rest_day_remaining")
-              : t("home.remaining_today")
-          : viewOffset < 0
-            ? t("home.day_label.what_you_logged")
-            : hasFuturePlan
-              ? t("home.day_label.planned_for_day")
-              : t("home.day_label.nothing_planned")}
-      </Text>
-
-      {isToday && (
-        <View style={styles.planBadgeRow}>
-          {ent.is_pro ? (
-            <Text style={styles.planBadgeProText}>
-              {t("home.plan_badge.pro")}
-            </Text>
-          ) : (
-            <Pressable
-              onPress={() => router.push("/paywall")}
-              hitSlop={8}
-              style={styles.planBadgeFreeRow}
-            >
-              <Text style={styles.planBadgeFreeText}>
-                {t("home.plan_badge.free")}
-              </Text>
-              <Text style={styles.planBadgeSep}>·</Text>
-              <Text style={styles.planBadgeUpgradeText}>
-                {t("home.plan_badge.upgrade_cta")}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      <View style={styles.ringRow}>
-        <CalorieRing
-          target={dayStatus?.adjusted_target ?? profile.daily_kcal_target ?? 2000}
-          eatenLow={Math.round(displayKcal.low)}
-          eatenHigh={Math.round(displayKcal.high)}
-          size={220}
-          planned={hasFuturePlan}
+        <Header
+          streakDays={streak?.current_days ?? 0}
+          onStreakTap={() => setStreakSheetOpen(true)}
+          fastingActive={fasting?.active ?? null}
+          isPro={isPro}
+          isArabic={isArabic}
         />
-        <View style={styles.ringSide}>
-          <SideStat
-            label={t("home.ring.target")}
-            value={String(
-              dayStatus?.adjusted_target ?? profile.daily_kcal_target
-            )}
-            unit={t("common.kcal")}
-            tint={colors.dim}
-          />
-          <SideStat
-            label={hasFuturePlan ? t("home.ring.planned") : t("home.ring.eaten")}
-            value={
-              displayItemCount === 0
-                ? "—"
-                : `${Math.round(displayKcal.low)}–${Math.round(displayKcal.high)}`
-            }
-            unit={t("common.kcal")}
-            tint={colors.gold}
-          />
-          <SideStat
-            label={t("home.ring.items")}
-            value={String(displayItemCount)}
-            unit={
-              hasFuturePlan
-                ? t("home.ring.planned_unit")
-                : t("home.ring.logged")
-            }
-            tint={colors.dim}
-          />
-        </View>
-      </View>
+        {ramadan?.active ? (
+          <RamadanBanner status={ramadan} isArabic={isArabic} />
+        ) : null}
+        <DateStrip
+          days={dateStrip}
+          selectedOffset={viewOffset}
+          onSelect={setViewOffset}
+          isArabic={isArabic}
+        />
+        {isToday && dayStatus?.kind && dayStatus.kind !== "none" ? (
+          <DayStatusChip status={dayStatus} isArabic={isArabic} />
+        ) : null}
+        {!isToday && ledger?.planned_items && ledger.planned_items.length > 0 ? (
+          <PlannedChip isArabic={isArabic} />
+        ) : null}
 
-      <View style={styles.macros}>
-        <Macro label={t("home.protein")} value={profile.daily_protein_g} unit={t("common.g")} />
-        <Macro label={t("home.carbs")} value={profile.daily_carb_g} unit={t("common.g")} />
-        <Macro label={t("home.fat")} value={profile.daily_fat_g} unit={t("common.g")} />
-      </View>
+        <MetricPager
+          pageIndex={pageIndex}
+          onPageChange={setPageIndex}
+          nutrition={{
+            target: kcalTarget,
+            eatenLow: kcalLow,
+            eatenHigh: kcalHigh,
+            protein: {
+              value: Math.round(midOf(totals?.protein_g)),
+              target: profile?.daily_protein_g ?? 0,
+            },
+            carbs: {
+              value: Math.round(midOf(totals?.carb_g)),
+              target: profile?.daily_carb_g ?? 0,
+            },
+            fat: {
+              value: Math.round(midOf(totals?.fat_g)),
+              target: profile?.daily_fat_g ?? 0,
+            },
+          }}
+          wellness={{
+            fiber: {
+              value: Math.round(midOf(totals?.fiber_g)),
+              target: profile?.daily_fiber_g ?? 25,
+            },
+            sugar: {
+              value: Math.round(midOf(totals?.sugar_g)),
+              target: profile?.daily_sugar_g ?? 50,
+            },
+            sodium: {
+              value: Math.round(midOf(totals?.sodium_mg)),
+              target: profile?.daily_sodium_mg ?? 2300,
+            },
+            sleep: isToday ? sleep : null,
+          }}
+          activity={{
+            steps: isToday ? cardio?.activity.steps ?? null : null,
+            burnedKcal: isToday
+              ? (cardio?.activity.active_kcal ?? 0) +
+                (cardio?.sessions.reduce(
+                  (s, x) => s + (x.kcal_burned ?? 0),
+                  0
+                ) ?? 0)
+              : null,
+            waterMl: isToday ? water?.total_ml ?? 0 : 0,
+            waterTarget: water?.target_ml ?? 2500,
+            onAddWater: () => addWater(250),
+          }}
+          isArabic={isArabic}
+        />
 
-      <MicrosRow profile={profile} totals={ledger.totals} t={t} />
-
-      <MealSlotGrid
-        items={hasFuturePlan ? plannedAsItems : ledger.totals.items}
-        planned={hasFuturePlan}
-        t={t}
-      />
-
-      {isToday && <ReportCard meta={reportMeta} isPro={ent.is_pro} t={t} />}
-
-      {isToday &&
-        streak &&
-        (streak.current_days > 0 ||
-          streak.days_this_week > 0 ||
-          (streak.freezable_days.length > 0 &&
-            streak.freezes_available_this_month > 0)) && (
-          <StreakCard
-            streak={streak}
-            t={t}
-            onFrozen={() => {
-              load().catch(() => {});
-            }}
-          />
-        )}
-
-      {isToday &&
-        cardio &&
-        (cardio.activity.steps > 0 ||
-          cardio.activity.active_kcal > 0 ||
-          cardio.sessions.length > 0) && (
-          <Pressable
-            onPress={() => router.push("/log-cardio")}
-            style={styles.cardioRow}
-          >
-            <View style={styles.cardioStat}>
-              <Ionicons name="footsteps" size={16} color={colors.mint} />
-              <Text style={styles.cardioValue}>
-                {cardio.activity.steps.toLocaleString()}
-              </Text>
-              <Text style={styles.cardioLabel}>steps</Text>
-            </View>
-            <View style={styles.cardioDivider} />
-            <View style={styles.cardioStat}>
-              <Ionicons name="flame" size={16} color={colors.coral} />
-              <Text style={styles.cardioValue}>
-                {cardio.activity.active_kcal + cardio.totals.kcal_burned}
-              </Text>
-              <Text style={styles.cardioLabel}>burned</Text>
-            </View>
-            <View style={styles.cardioDivider} />
-            <View style={styles.cardioStat}>
-              <Ionicons name="walk" size={16} color={colors.gold} />
-              <Text style={styles.cardioValue}>
-                {cardio.sessions.length}
-              </Text>
-              <Text style={styles.cardioLabel}>
-                {cardio.sessions.length === 1 ? "session" : "sessions"}
-              </Text>
-            </View>
-          </Pressable>
-        )}
-
-      {isToday && sleep?.last_night && (
-        <View style={styles.cardioRow}>
-          <View style={styles.cardioStat}>
-            <Ionicons name="moon" size={16} color="#8b7dd6" />
-            <Text style={styles.cardioValue}>
-              {formatHm(sleep.last_night.duration_minutes)}
-            </Text>
-            <Text style={styles.cardioLabel}>last night</Text>
-          </View>
-          <View style={styles.cardioDivider} />
-          <View style={styles.cardioStat}>
-            <Ionicons
-              name={
-                sleep.recovery
-                  ? "heart"
-                  : sleep.last_night.sleep_score !== null
-                    ? "ribbon"
-                    : "pulse"
-              }
-              size={16}
-              color={
-                sleep.recovery
-                  ? recoveryBandColor(sleep.recovery.band)
-                  : colors.mint
-              }
-            />
-            <Text style={styles.cardioValue}>
-              {sleep.recovery
-                ? sleep.recovery.score
-                : sleep.last_night.sleep_score !== null
-                  ? sleep.last_night.sleep_score
-                  : sleep.last_night.hrv_ms !== null
-                    ? Math.round(sleep.last_night.hrv_ms)
-                    : sleep.last_night.resting_hr_bpm !== null
-                      ? sleep.last_night.resting_hr_bpm
-                      : "—"}
-            </Text>
-            <Text style={styles.cardioLabel}>
-              {sleep.recovery
-                ? "recovery"
-                : sleep.last_night.sleep_score !== null
-                  ? "score"
-                  : sleep.last_night.hrv_ms !== null
-                    ? "HRV ms"
-                    : sleep.last_night.resting_hr_bpm !== null
-                      ? "RHR bpm"
-                      : "—"}
-            </Text>
-          </View>
-          <View style={styles.cardioDivider} />
-          <View style={styles.cardioStat}>
-            <Ionicons name="trending-up" size={16} color={colors.gold} />
-            <Text style={styles.cardioValue}>
-              {sleep.seven_day.avg_duration_minutes !== null
-                ? formatHm(sleep.seven_day.avg_duration_minutes)
-                : "—"}
-            </Text>
-            <Text style={styles.cardioLabel}>{t("home.sleep_7day_avg")}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Weekly Wrapped — surface on Mon-Wed while last week's recap is fresh. */}
-      {isToday && isWrappedWindow(nowDate) && (
-        <Pressable
-          onPress={() => router.push("/weekly-wrapped")}
-          style={styles.wrappedCard}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.kicker, { color: colors.gold }]}>
-              {t("home.wrapped_card.kicker")}
-            </Text>
-            <Text style={styles.suggestTitle}>
-              {t("home.wrapped_card.title")}
-            </Text>
-            <Text style={styles.suggestSub}>
-              {t("home.wrapped_card.sub")}
-            </Text>
-          </View>
-          <Text style={[styles.suggestArrow, { color: colors.gold }]}>→</Text>
-        </Pressable>
-      )}
-
-      {isToday && fasting?.active ? (
-        <Pressable
-          onPress={() => router.push("/fasting")}
-          style={styles.fastingCard}
-        >
-          <Text style={[styles.kicker, { color: colors.gold }]}>
-            {t("home.fasting_target", { hours: fasting.active.target_hours })}
-          </Text>
-          <Text style={styles.fastingBig}>
-            {formatFastElapsed(fasting.active.started_at)}
-          </Text>
-          <Text style={styles.fastingSub}>{t("home.tap_to_end_fast")}</Text>
-        </Pressable>
-      ) : null}
-
-      {isToday && workout?.active && workout.next_session && workout.program && (
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/workout",
-              params: {
-                program_id: workout.program!.id,
-                session_index: String(workout.next_session_index ?? 0),
-              },
+        <MealsList
+          totals={totals}
+          plannedItems={ledger?.planned_items ?? []}
+          expanded={expandedSlots}
+          onToggle={(slot) =>
+            setExpandedSlots((prev) => {
+              const next = new Set(prev);
+              if (next.has(slot)) next.delete(slot);
+              else next.add(slot);
+              return next;
             })
           }
-          style={styles.workoutCard}
-        >
-          <Text style={[styles.kicker, { color: colors.mint }]}>
-            {t("home.todays_session", {
-              count: workout.completed_this_week ?? 0,
-            })}
-          </Text>
-          <Text style={styles.workoutName}>{workout.next_session.name}</Text>
-          <Text style={styles.workoutFocus}>{workout.next_session.focus}</Text>
-          <Text style={styles.workoutMeta}>
-            {t("home.n_exercises_program", {
-              count: workout.next_session.exercises.length,
-              program: workout.program.name,
-            })}
-          </Text>
-        </Pressable>
-      )}
-
-      {isToday && water && (
-        <WaterRing
-          totalMl={water.total_ml}
-          targetMl={water.target_ml}
-          onAdd={addWater}
+          isToday={isToday}
+          isArabic={isArabic}
         />
-      )}
 
-      {isToday && (
+        {isToday ? (
+          <View style={styles.footerCards}>
+            <ReportCard
+              meta={reportMeta}
+              isPro={isPro}
+              isArabic={isArabic}
+              t={t}
+            />
+            {isWrappedWindow(new Date()) ? (
+              <WrappedCard isArabic={isArabic} />
+            ) : null}
+            {streak ? (
+              <StreakCardCompact
+                streak={streak}
+                onTap={() => setStreakSheetOpen(true)}
+                isArabic={isArabic}
+              />
+            ) : null}
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {isToday ? (
         <QuickLogFab
-        actions={[
-          {
-            key: "voice",
-            label: "Say what you ate",
-            icon: "mic-outline",
-            tint: colors.gold,
-            onPress: () => router.push("/voice-log"),
-          },
-          {
-            key: "plate",
-            label: "Scan a plate",
-            icon: "camera-outline",
-            tint: colors.gold,
-            onPress: () => router.push("/scan/plate"),
-          },
-          {
-            key: "barcode",
-            label: "Barcode",
-            icon: "barcode-outline",
-            tint: colors.gold,
-            onPress: () => router.push("/scan/barcode"),
-          },
-          {
-            key: "manual",
-            label: "Add manually",
-            icon: "create-outline",
-            tint: colors.ink,
-            onPress: () => router.push("/manual-meal"),
-          },
-          {
-            key: "water",
-            label: "Add water",
-            icon: "water-outline",
-            tint: colors.mint,
-            onPress: () => addWater(250),
-          },
-          {
-            key: "weight",
-            label: "Log weight",
-            icon: "speedometer-outline",
-            tint: colors.coral,
-            onPress: () => router.push("/progress"),
-          },
-          {
-            key: "cardio",
-            label: "Log cardio",
-            icon: "walk-outline",
-            tint: colors.mint,
-            onPress: () => router.push("/log-cardio"),
-          },
-        ]}
-      />
-      )}
-      </Animated.View>
+          actions={[
+            {
+              key: "voice",
+              label: isArabic ? "قل ما أكلت" : "Say what you ate",
+              icon: "mic-outline",
+              tint: colors.gold,
+              onPress: () => router.push("/voice-log"),
+            },
+            {
+              key: "plate",
+              label: isArabic ? "امسح الطبق" : "Scan a plate",
+              icon: "camera-outline",
+              tint: colors.gold,
+              onPress: () => router.push("/scan/plate"),
+            },
+            {
+              key: "barcode",
+              label: isArabic ? "الباركود" : "Barcode",
+              icon: "barcode-outline",
+              tint: colors.gold,
+              onPress: () => router.push("/scan/barcode"),
+            },
+            {
+              key: "manual",
+              label: isArabic ? "إضافة يدوية" : "Add manually",
+              icon: "create-outline",
+              tint: colors.ink,
+              onPress: () => router.push("/manual-meal"),
+            },
+            {
+              key: "water",
+              label: isArabic ? "أضف ماء" : "Add water",
+              icon: "water-outline",
+              tint: colors.mint,
+              onPress: () => addWater(250),
+            },
+            {
+              key: "weight",
+              label: isArabic ? "سجل الوزن" : "Log weight",
+              icon: "speedometer-outline",
+              tint: colors.coral,
+              onPress: () => router.push("/progress"),
+            },
+            {
+              key: "cardio",
+              label: isArabic ? "سجل الكارديو" : "Log cardio",
+              icon: "walk-outline",
+              tint: colors.mint,
+              onPress: () => router.push("/log-cardio"),
+            },
+          ]}
+        />
+      ) : null}
+
       <AnniversaryModal
         badge={anniversary}
         streakDays={streak?.current_days ?? 0}
         mealCount={ledger?.totals.items.length ?? 0}
         onDismiss={dismissAnniversary}
         t={t}
+        isArabic={isArabic}
       />
-    </Screen>
+
+      <StreakSheet
+        open={streakSheetOpen}
+        onClose={() => setStreakSheetOpen(false)}
+        streak={streak}
+        onFreeze={applyFreeze}
+        isArabic={isArabic}
+      />
+    </SafeAreaView>
   );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Header
+
+function Header({
+  streakDays,
+  onStreakTap,
+  fastingActive,
+  isPro,
+  isArabic,
+}: {
+  streakDays: number;
+  onStreakTap: () => void;
+  fastingActive: { started_at: string; target_hours: number } | null;
+  isPro: boolean;
+  isArabic: boolean;
+}) {
+  return (
+    <View style={styles.headerRow}>
+      <Text style={styles.headerLogo}>SE7A</Text>
+      <View style={styles.headerRight}>
+        {fastingActive ? (
+          <Pressable
+            style={styles.fastingPill}
+            onPress={() => router.push("/fasting")}
+          >
+            <Ionicons name="hourglass" size={12} color={colors.gold} />
+            <Text style={styles.fastingPillText}>
+              {formatFastElapsed(fastingActive.started_at)}
+            </Text>
+          </Pressable>
+        ) : null}
+        {!isPro ? (
+          <Pressable
+            style={styles.planPill}
+            onPress={() => router.push("/paywall")}
+          >
+            <Text style={styles.planPillText}>
+              {isArabic ? "مجاني" : "Free"}
+            </Text>
+            <Text style={styles.planPillArrow}>→</Text>
+          </Pressable>
+        ) : null}
+        <Pressable style={styles.streakChip} onPress={onStreakTap}>
+          <Ionicons name="flame" size={14} color={colors.gold} />
+          <Text style={styles.streakChipText}>{streakDays}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.avatarBtn}
+          onPress={() => router.push("/settings")}
+        >
+          <Ionicons name="person-outline" size={18} color={colors.ink} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Ramadan banner (live iftar/suhoor countdown)
+
+function RamadanBanner({
+  status,
+  isArabic,
+}: {
+  status: NonNullable<ReturnType<typeof useRamadan>["status"]>;
+  isArabic: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+  const t = status.today;
+  if (!t) return null;
+  // Use whichever countdown is smaller (nearer event).
+  const inFast = t.in_fast_window;
+  const baseSecs = inFast
+    ? (t.seconds_until_maghrib ?? 0)
+    : (t.seconds_until_fajr ?? 0);
+  const seconds = Math.max(
+    0,
+    baseSecs - Math.floor((now - Date.now()) / 1000)
+  );
+  return (
+    <View style={styles.ramadanBanner}>
+      <Ionicons name="moon" size={14} color={colors.gold} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.ramadanKicker}>
+          {isArabic
+            ? `رمضان · يوم ${status.day_num ?? "—"}/${status.total_days ?? "—"}`
+            : `RAMADAN · DAY ${status.day_num ?? "—"}/${status.total_days ?? "—"}`}
+        </Text>
+        <Text style={styles.ramadanBody}>
+          {inFast
+            ? isArabic
+              ? `الإفطار خلال ${formatHms(seconds)}`
+              : `Iftar in ${formatHms(seconds)}`
+            : isArabic
+              ? `الفجر خلال ${formatHms(seconds)}`
+              : `Suhoor closes in ${formatHms(seconds)}`}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Date strip (7 days)
+
+interface DateStripDay {
+  offset: number;
+  labelEn: string;
+  day: number;
+  isToday: boolean;
+}
+
+function buildDateStrip(viewOffset: number): DateStripDay[] {
+  const today = new Date();
+  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const days: DateStripDay[] = [];
+  for (let i = viewOffset - 3; i <= viewOffset + 3; i += 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push({
+      offset: i,
+      labelEn: labels[d.getDay()],
+      day: d.getDate(),
+      isToday: i === 0,
+    });
+  }
+  return days;
+}
+
+function DateStrip({
+  days,
+  selectedOffset,
+  onSelect,
+  isArabic,
+}: {
+  days: DateStripDay[];
+  selectedOffset: number;
+  onSelect: (offset: number) => void;
+  isArabic: boolean;
+}) {
+  const arLabels: Record<string, string> = {
+    Sun: "أحد",
+    Mon: "إثن",
+    Tue: "ثلاث",
+    Wed: "أرب",
+    Thu: "خم",
+    Fri: "جم",
+    Sat: "سبت",
+  };
+  return (
+    <View style={styles.dateStrip}>
+      {days.map((d) => {
+        const selected = d.offset === selectedOffset;
+        return (
+          <Pressable
+            key={d.offset}
+            style={styles.dateCell}
+            onPress={() => onSelect(d.offset)}
+          >
+            <Text
+              style={[
+                styles.dateLabel,
+                selected && styles.dateLabelSelected,
+                d.isToday && !selected && styles.dateLabelToday,
+              ]}
+            >
+              {isArabic ? arLabels[d.labelEn] : d.labelEn}
+            </Text>
+            <View
+              style={[
+                styles.dateCircle,
+                selected && styles.dateCircleSelected,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.dateDay,
+                  selected && styles.dateDaySelected,
+                ]}
+              >
+                {d.day}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Day-status chip (Lift day / Rest day)
+
+function DayStatusChip({
+  status,
+  isArabic,
+}: {
+  status: DayStatusResponse;
+  isArabic: boolean;
+}) {
+  const label =
+    status.kind === "lift"
+      ? isArabic
+        ? "يوم تمرين"
+        : "Lift day"
+      : status.kind === "rest"
+        ? isArabic
+          ? "يوم راحة"
+          : "Rest day"
+        : "";
+  if (!label) return null;
+  const deltaLabel =
+    status.delta_applied !== 0
+      ? ` · ${status.delta_applied > 0 ? "+" : ""}${status.delta_applied} kcal`
+      : "";
+  return (
+    <View style={styles.dayChipRow}>
+      <View style={styles.dayChip}>
+        <Ionicons
+          name={status.kind === "lift" ? "barbell" : "moon"}
+          size={12}
+          color={colors.dim}
+        />
+        <Text style={styles.dayChipText}>
+          {label}
+          {deltaLabel}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function PlannedChip({ isArabic }: { isArabic: boolean }) {
+  return (
+    <View style={styles.dayChipRow}>
+      <Pressable
+        style={styles.dayChip}
+        onPress={() => router.push("/meal-plan")}
+      >
+        <Ionicons name="calendar" size={12} color={colors.gold} />
+        <Text style={[styles.dayChipText, { color: colors.gold }]}>
+          {isArabic ? "معاينة الخطة" : "Plan preview"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Metric pager
+
+interface NutritionData {
+  target: number;
+  eatenLow: number;
+  eatenHigh: number;
+  protein: { value: number; target: number };
+  carbs: { value: number; target: number };
+  fat: { value: number; target: number };
+}
+
+interface WellnessData {
+  fiber: { value: number; target: number };
+  sugar: { value: number; target: number };
+  sodium: { value: number; target: number };
+  sleep: SleepTodayResponse | null;
+}
+
+interface ActivityData {
+  steps: number | null;
+  burnedKcal: number | null;
+  waterMl: number;
+  waterTarget: number;
+  onAddWater: () => void;
+}
+
+function MetricPager({
+  pageIndex,
+  onPageChange,
+  nutrition,
+  wellness,
+  activity,
+  isArabic,
+}: {
+  pageIndex: number;
+  onPageChange: (idx: number) => void;
+  nutrition: NutritionData;
+  wellness: WellnessData;
+  activity: ActivityData;
+  isArabic: boolean;
+}) {
+  const listRef = useRef<FlatList>(null);
+  const pages = ["nutrition", "wellness", "activity"] as const;
+  return (
+    <View>
+      <FlatList
+        ref={listRef}
+        data={pages}
+        keyExtractor={(p) => p}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={SCREEN_WIDTH}
+        decelerationRate="fast"
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(
+            e.nativeEvent.contentOffset.x / SCREEN_WIDTH
+          );
+          onPageChange(idx);
+        }}
+        renderItem={({ item }) => {
+          if (item === "nutrition")
+            return <NutritionPage data={nutrition} isArabic={isArabic} />;
+          if (item === "wellness")
+            return <WellnessPage data={wellness} isArabic={isArabic} />;
+          return <ActivityPage data={activity} isArabic={isArabic} />;
+        }}
+      />
+      <Dots count={3} active={pageIndex} />
+    </View>
+  );
+}
+
+function Dots({ count, active }: { count: number; active: number }) {
+  return (
+    <View style={styles.dotsRow}>
+      {Array.from({ length: count }).map((_, i) => (
+        <View
+          key={i}
+          style={[styles.dot, i === active && styles.dotActive]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Page 0 — Nutrition
+
+function NutritionPage({
+  data,
+  isArabic,
+}: {
+  data: NutritionData;
+  isArabic: boolean;
+}) {
+  return (
+    <View style={[styles.page, { width: SCREEN_WIDTH }]}>
+      <View style={styles.ringWrap}>
+        <CalorieRing
+          target={data.target}
+          eatenLow={data.eatenLow}
+          eatenHigh={data.eatenHigh}
+          size={220}
+        />
+      </View>
+      <View style={styles.tileRow}>
+        <MacroTile
+          label={isArabic ? "بروتين" : "Protein"}
+          value={data.protein.value}
+          target={data.protein.target}
+          unit="g"
+          tint={colors.gold}
+        />
+        <MacroTile
+          label={isArabic ? "كارب" : "Carbs"}
+          value={data.carbs.value}
+          target={data.carbs.target}
+          unit="g"
+          tint={colors.mint}
+        />
+        <MacroTile
+          label={isArabic ? "دهون" : "Fat"}
+          value={data.fat.value}
+          target={data.fat.target}
+          unit="g"
+          tint={colors.coral}
+        />
+      </View>
+    </View>
+  );
+}
+
+function MacroTile({
+  label,
+  value,
+  target,
+  unit,
+  tint,
+}: {
+  label: string;
+  value: number;
+  target: number;
+  unit: string;
+  tint: string;
+}) {
+  const pct = target > 0 ? Math.round((value / target) * 100) : 0;
+  return (
+    <View style={styles.macroTile}>
+      <Text style={[styles.macroValue, { color: tint }]}>
+        {value}
+        <Text style={styles.macroUnit}>{unit}</Text>
+      </Text>
+      <Text style={styles.macroLabel}>{label}</Text>
+      <View style={styles.macroBarBg}>
+        <View
+          style={[
+            styles.macroBarFill,
+            { width: `${Math.min(100, pct)}%`, backgroundColor: tint },
+          ]}
+        />
+      </View>
+      <Text style={styles.macroPct}>{pct}%</Text>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Page 1 — Wellness (micros + sleep summary)
+
+function WellnessPage({
+  data,
+  isArabic,
+}: {
+  data: WellnessData;
+  isArabic: boolean;
+}) {
+  const sleep = data.sleep?.last_night;
+  const recovery = data.sleep?.recovery;
+  return (
+    <View style={[styles.page, { width: SCREEN_WIDTH }]}>
+      <View style={styles.tileRow}>
+        <MacroTile
+          label={isArabic ? "ألياف" : "Fiber"}
+          value={data.fiber.value}
+          target={data.fiber.target}
+          unit="g"
+          tint={colors.mint}
+        />
+        <MacroTile
+          label={isArabic ? "سكر" : "Sugar"}
+          value={data.sugar.value}
+          target={data.sugar.target}
+          unit="g"
+          tint={colors.coral}
+        />
+        <MacroTile
+          label={isArabic ? "صوديوم" : "Sodium"}
+          value={data.sodium.value}
+          target={data.sodium.target}
+          unit="mg"
+          tint={colors.gold}
+        />
+      </View>
+      {sleep || recovery ? (
+        <View style={styles.wellnessCard}>
+          <Text style={styles.wellnessKicker}>
+            {isArabic ? "النوم والتعافي" : "SLEEP · RECOVERY"}
+          </Text>
+          <View style={styles.wellnessRow}>
+            {sleep ? (
+              <View style={styles.wellnessStat}>
+                <Ionicons name="moon" size={16} color={colors.mint} />
+                <Text style={styles.wellnessValue}>
+                  {formatHm(sleep.duration_minutes)}
+                </Text>
+                <Text style={styles.wellnessLabel}>
+                  {isArabic ? "الليلة الماضية" : "Last night"}
+                </Text>
+              </View>
+            ) : null}
+            {recovery ? (
+              <View style={styles.wellnessStat}>
+                <Ionicons name="heart" size={16} color={colors.coral} />
+                <Text style={styles.wellnessValue}>{recovery.score}</Text>
+                <Text style={styles.wellnessLabel}>
+                  {isArabic ? "التعافي" : "Recovery"}
+                </Text>
+              </View>
+            ) : null}
+            {data.sleep?.seven_day.avg_duration_minutes != null ? (
+              <View style={styles.wellnessStat}>
+                <Ionicons name="trending-up" size={16} color={colors.gold} />
+                <Text style={styles.wellnessValue}>
+                  {formatHm(data.sleep.seven_day.avg_duration_minutes)}
+                </Text>
+                <Text style={styles.wellnessLabel}>
+                  {isArabic ? "متوسط ٧ أيام" : "7-day avg"}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.wellnessCard}>
+          <Text style={styles.wellnessKicker}>
+            {isArabic ? "النوم" : "SLEEP"}
+          </Text>
+          <Text style={styles.placeholderNote}>
+            {isArabic
+              ? "قم بتوصيل الصحة لرؤية النوم والتعافي هنا."
+              : "Connect Health to see sleep + recovery here."}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Page 2 — Activity (steps / burned / water)
+
+function ActivityPage({
+  data,
+  isArabic,
+}: {
+  data: ActivityData;
+  isArabic: boolean;
+}) {
+  const waterPct =
+    data.waterTarget > 0
+      ? Math.min(100, Math.round((data.waterMl / data.waterTarget) * 100))
+      : 0;
+  return (
+    <View style={[styles.page, { width: SCREEN_WIDTH }]}>
+      <View style={styles.tileRow}>
+        <View style={styles.activityTile}>
+          <Ionicons name="walk" size={20} color={colors.mint} />
+          <Text style={styles.activityValue}>
+            {data.steps != null ? data.steps.toLocaleString() : "—"}
+          </Text>
+          <Text style={styles.activityLabel}>
+            {isArabic ? "خطوات" : "Steps"}
+          </Text>
+        </View>
+        <View style={styles.activityTile}>
+          <Ionicons name="flame" size={20} color={colors.coral} />
+          <Text style={styles.activityValue}>
+            {data.burnedKcal != null ? Math.round(data.burnedKcal) : "—"}
+          </Text>
+          <Text style={styles.activityLabel}>
+            {isArabic ? "محروقة" : "Burned"}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.waterCard}>
+        <View style={styles.waterHead}>
+          <Ionicons name="water" size={22} color={colors.mint} />
+          <Text style={styles.waterValue}>
+            {(data.waterMl / 1000).toFixed(1)}L
+            <Text style={styles.waterTarget}>
+              {" "}
+              / {(data.waterTarget / 1000).toFixed(1)}L
+            </Text>
+          </Text>
+          <Pressable style={styles.waterAddBtn} onPress={data.onAddWater}>
+            <Text style={styles.waterAddText}>+250ml</Text>
+          </Pressable>
+        </View>
+        <View style={styles.waterBarBg}>
+          <View style={[styles.waterBarFill, { width: `${waterPct}%` }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Meals list
+
+function MealsList({
+  totals,
+  plannedItems,
+  expanded,
+  onToggle,
+  isToday,
+  isArabic,
+}: {
+  totals: LedgerDayResponse["totals"] | undefined;
+  plannedItems: NonNullable<LedgerDayResponse["planned_items"]>;
+  expanded: Set<string>;
+  onToggle: (slot: string) => void;
+  isToday: boolean;
+  isArabic: boolean;
+}) {
+  const items = totals?.items ?? [];
+  const usePlanned = !isToday && plannedItems.length > 0;
+  return (
+    <View style={styles.mealsWrap}>
+      <View style={styles.mealsHeadRow}>
+        <Text style={styles.mealsHead}>
+          {usePlanned
+            ? isArabic
+              ? "الوجبات المخططة"
+              : "Planned meals"
+            : isArabic
+              ? "وجبات اليوم"
+              : "Today's meals"}
+        </Text>
+      </View>
+      <View style={styles.mealsCard}>
+        {SLOTS.map((slot, i) => {
+          const meta = SLOT_META[slot];
+          const slotItems = items.filter((it) => it.meal_slot === slot);
+          const slotPlanned = usePlanned
+            ? plannedItems.filter((p) => p.slot === slot)
+            : [];
+          const displayCount = usePlanned ? slotPlanned.length : slotItems.length;
+          const displayKcal = usePlanned
+            ? Math.round(
+                slotPlanned.reduce(
+                  (s, p) => s + (p.kcal_low + p.kcal_high) / 2,
+                  0
+                )
+              )
+            : Math.round(
+                slotItems.reduce(
+                  (s, it) => s + (it.kcal_low + it.kcal_high) / 2,
+                  0
+                )
+              );
+          const displayProtein = usePlanned
+            ? Math.round(
+                slotPlanned.reduce(
+                  (s, p) => s + (p.protein_g_low + p.protein_g_high) / 2,
+                  0
+                )
+              )
+            : Math.round(
+                slotItems.reduce(
+                  (s, it) => s + (it.protein_g_low + it.protein_g_high) / 2,
+                  0
+                )
+              );
+          const isExpanded = expanded.has(slot);
+          const emptyPress = () => {
+            if (usePlanned) {
+              router.push("/meal-plan");
+            } else if (isToday) {
+              router.push({ pathname: "/meals-suggest", params: { slot } });
+            }
+          };
+          return (
+            <View key={slot}>
+              <Pressable
+                style={[
+                  styles.mealRow,
+                  i < SLOTS.length - 1 && !isExpanded && styles.mealRowDivider,
+                ]}
+                onPress={() =>
+                  displayCount > 0 ? onToggle(slot) : emptyPress()
+                }
+              >
+                <View
+                  style={[
+                    styles.mealIcon,
+                    { backgroundColor: meta.tint + "22" },
+                  ]}
+                >
+                  <Ionicons name={meta.icon} size={16} color={meta.tint} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mealName}>
+                    {isArabic
+                      ? meta.ar
+                      : capitalize(meta.en.toLowerCase())}
+                  </Text>
+                  <Text style={styles.mealMeta}>
+                    {displayCount === 0
+                      ? isToday
+                        ? isArabic
+                          ? "لم يُسجّل بعد"
+                          : "Not logged"
+                        : isArabic
+                          ? "لا شيء"
+                          : "Nothing"
+                      : `${displayKcal} kcal · P${displayProtein}g · ${displayCount}`}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={
+                    displayCount === 0
+                      ? "add"
+                      : isExpanded
+                        ? "chevron-up"
+                        : "chevron-forward"
+                  }
+                  size={18}
+                  color={colors.dim}
+                />
+              </Pressable>
+              {isExpanded && !usePlanned
+                ? slotItems.map((it, idx) => (
+                    <View
+                      key={it.id}
+                      style={[
+                        styles.mealItemRow,
+                        idx < slotItems.length - 1 && styles.mealRowDivider,
+                      ]}
+                    >
+                      <Text style={styles.mealItemName} numberOfLines={1}>
+                        {it.name}
+                      </Text>
+                      <Text style={styles.mealItemMeta}>
+                        {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+                      </Text>
+                    </View>
+                  ))
+                : null}
+              {isExpanded && usePlanned
+                ? slotPlanned.map((p, idx) => (
+                    <View
+                      key={`p-${slot}-${idx}`}
+                      style={[
+                        styles.mealItemRow,
+                        idx < slotPlanned.length - 1 && styles.mealRowDivider,
+                      ]}
+                    >
+                      <Text style={styles.mealItemName} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      <Text style={styles.mealItemMeta}>
+                        {Math.round((p.kcal_low + p.kcal_high) / 2)} kcal
+                      </Text>
+                    </View>
+                  ))
+                : null}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Report card + Wrapped card + Streak card (compact footer versions)
+
+function ReportCard({
+  meta,
+  isPro,
+  isArabic,
+  t,
+}: {
+  meta: { week_index: number; total_weeks: number } | null;
+  isPro: boolean;
+  isArabic: boolean;
+  t: (key: string) => string;
+}) {
+  return (
+    <Pressable
+      style={styles.footerCard}
+      onPress={() => router.push("/report")}
+    >
+      <View style={[styles.footerRule, { backgroundColor: colors.gold }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.footerKicker}>
+          {meta
+            ? isArabic
+              ? `أسبوع ${meta.week_index} من ${meta.total_weeks}`
+              : `WEEK ${meta.week_index} OF ${meta.total_weeks}`
+            : isArabic
+              ? "خطة الـ٩٠ يومًا"
+              : "90-DAY PLAN"}
+        </Text>
+        <Text style={styles.footerTitle}>
+          {meta
+            ? isArabic
+              ? "افتح خطتك"
+              : "Open your plan"
+            : isPro
+              ? isArabic
+                ? "افتح خطتك"
+                : "Unlock your plan"
+              : isArabic
+                ? "احصل على خطتك"
+                : "Get your plan"}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.dim} />
+    </Pressable>
+  );
+}
+
+function WrappedCard({ isArabic }: { isArabic: boolean }) {
+  return (
+    <Pressable
+      style={styles.footerCard}
+      onPress={() => router.push("/weekly-wrapped")}
+    >
+      <View style={[styles.footerRule, { backgroundColor: colors.mint }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.footerKicker, { color: colors.mint }]}>
+          {isArabic ? "الملخص الأسبوعي" : "WEEKLY WRAPPED"}
+        </Text>
+        <Text style={styles.footerTitle}>
+          {isArabic ? "ماذا حدث الأسبوع الماضي" : "Last week at a glance"}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.dim} />
+    </Pressable>
+  );
+}
+
+function StreakCardCompact({
+  streak,
+  onTap,
+  isArabic,
+}: {
+  streak: StreakResponse;
+  onTap: () => void;
+  isArabic: boolean;
+}) {
+  return (
+    <Pressable style={styles.footerCard} onPress={onTap}>
+      <View style={[styles.footerRule, { backgroundColor: colors.coral }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.footerKicker, { color: colors.coral }]}>
+          {isArabic ? "السلسلة" : "STREAK"}
+        </Text>
+        <Text style={styles.footerTitle}>
+          {isArabic
+            ? `${streak.current_days} ${streak.current_days === 1 ? "يوم" : "أيام"}`
+            : `${streak.current_days} ${streak.current_days === 1 ? "day" : "days"}`}
+          {streak.days_this_week > 0
+            ? ` · ${streak.days_this_week}/7 ${isArabic ? "هذا الأسبوع" : "this week"}`
+            : ""}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.dim} />
+    </Pressable>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Streak sheet (bottom modal)
+
+function StreakSheet({
+  open,
+  onClose,
+  streak,
+  onFreeze,
+  isArabic,
+}: {
+  open: boolean;
+  onClose: () => void;
+  streak: StreakResponse | null;
+  onFreeze: () => void;
+  isArabic: boolean;
+}) {
+  if (!streak) return null;
+  return (
+    <Modal
+      visible={open}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.sheetBg} onPress={onClose}>
+        <Pressable style={styles.sheetCard} onPress={() => {}}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetKicker}>
+            {isArabic ? "سلسلتك" : "YOUR STREAK"}
+          </Text>
+          <Text style={styles.sheetBig}>{streak.current_days}</Text>
+          <Text style={styles.sheetUnit}>
+            {isArabic ? "أيام متتالية" : "consecutive days"}
+          </Text>
+          <View style={styles.sheetStatsRow}>
+            <View style={styles.sheetStat}>
+              <Text style={styles.sheetStatValue}>
+                {streak.days_this_week}/7
+              </Text>
+              <Text style={styles.sheetStatLabel}>
+                {isArabic ? "هذا الأسبوع" : "This week"}
+              </Text>
+            </View>
+            <View style={styles.sheetStat}>
+              <Text style={styles.sheetStatValue}>{streak.longest_days}</Text>
+              <Text style={styles.sheetStatLabel}>
+                {isArabic ? "الأفضل" : "Best"}
+              </Text>
+            </View>
+            <View style={styles.sheetStat}>
+              <Text style={styles.sheetStatValue}>
+                {streak.freezes_available_this_month}/{streak.freezes_monthly_budget}
+              </Text>
+              <Text style={styles.sheetStatLabel}>
+                {isArabic ? "تجميدات" : "Freezes"}
+              </Text>
+            </View>
+          </View>
+          {streak.freezes_available_this_month > 0 &&
+          streak.freezable_days.length > 0 ? (
+            <Pressable style={styles.sheetFreezeBtn} onPress={onFreeze}>
+              <Ionicons name="snow" size={16} color={colors.bg} />
+              <Text style={styles.sheetFreezeText}>
+                {isArabic
+                  ? `تجميد ${streak.freezable_days[0]}`
+                  : `Freeze ${streak.freezable_days[0]}`}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.sheetCloseBtn} onPress={onClose}>
+            <Text style={styles.sheetCloseText}>
+              {isArabic ? "إغلاق" : "Close"}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Anniversary modal
+
+function AnniversaryModal({
+  badge,
+  streakDays,
+  mealCount,
+  onDismiss,
+  t,
+  isArabic,
+}: {
+  badge: "anniv_30d" | "anniv_60d" | "anniv_90d" | null;
+  streakDays: number;
+  mealCount: number;
+  onDismiss: () => void;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+  isArabic: boolean;
+}) {
+  if (!badge) return null;
+  const days = badge === "anniv_30d" ? 30 : badge === "anniv_60d" ? 60 : 90;
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={onDismiss}
+    >
+      <View style={styles.annivBg}>
+        <View style={styles.annivCard}>
+          <Text style={styles.annivKicker}>
+            {isArabic ? "إنجاز" : "MILESTONE"}
+          </Text>
+          <Text style={styles.annivBig}>{days}</Text>
+          <Text style={styles.annivUnit}>
+            {isArabic ? "أيام مع SE7A" : "DAYS WITH SE7A"}
+          </Text>
+          <View style={styles.annivRule} />
+          <View style={styles.annivStatsRow}>
+            <View style={styles.annivStat}>
+              <Text style={styles.annivStatValue}>{streakDays}</Text>
+              <Text style={styles.annivStatLabel}>
+                {isArabic ? "سلسلة" : "STREAK"}
+              </Text>
+            </View>
+            <View style={styles.annivStat}>
+              <Text style={styles.annivStatValue}>{mealCount}</Text>
+              <Text style={styles.annivStatLabel}>
+                {isArabic ? "وجبات اليوم" : "TODAY MEALS"}
+              </Text>
+            </View>
+          </View>
+          <Pressable style={styles.annivCta} onPress={onDismiss}>
+            <Text style={styles.annivCtaText}>
+              {isArabic ? "متابعة" : "Continue"}
+            </Text>
+          </Pressable>
+          <Pressable
+            hitSlop={8}
+            onPress={() =>
+              Share.share({
+                message: isArabic
+                  ? `${days} يومًا مع SE7A 🔥`
+                  : `${days} days with SE7A 🔥`,
+              })
+            }
+          >
+            <Text style={styles.annivShareText}>
+              {isArabic ? "شارك" : "Share"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Helpers
+
+function midOf(range?: { low: number; high: number } | null): number {
+  if (!range) return 0;
+  return (range.low + range.high) / 2;
+}
+
+function isoOffset(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatHm(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return `${h}h ${m}m`;
+}
+
+function formatHms(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.max(0, seconds % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatFastElapsed(startedAt: string): string {
+  const now = Date.now();
+  const start = new Date(startedAt).getTime();
+  const min = Math.max(0, Math.floor((now - start) / 60000));
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}h ${m}m`;
+}
+
+function isWrappedWindow(d: Date): boolean {
+  const dow = d.getDay(); // 0=Sun ... 6=Sat
+  return dow >= 1 && dow <= 3; // Mon-Wed
 }
 
 /**
  * Splice optimistic just-logged items into an existing LedgerDayResponse
  * so the ring can update within a frame of the log screen navigating
- * back. Recomputes the totals block by summing every field the ring
- * + macros + micros row reads. When the fresh server ledger arrives,
- * it fully replaces this merged shape via setLedger(ledgerRes).
+ * back. Recomputes totals by summing every field the pager reads. The
+ * fresh server ledger arrives via setLedger(ledgerRes) shortly after.
  */
 function mergePendingIntoLedger(
   prev: LedgerDayResponse,
   pending: ReturnType<typeof peekOptimisticLogItems>
 ): LedgerDayResponse {
   if (pending.length === 0) return prev;
-  const nowMs = Date.now();
-  const pendingItems = pending.map((p, i) => ({
-    id: -(nowMs + i), // negative synthetic id — never collides with server bigserial
-    name: p.name,
-    portion_estimate: p.portion_estimate ?? null,
-    source: p.source,
-    confidence: p.confidence ?? null,
-    eaten_at: p.eaten_at,
-    meal_slot: p.meal_slot ?? null,
+  const nowIso = new Date().toISOString();
+  let nextId = -1;
+  const injected = pending.map((p) => ({
+    id: nextId--,
+    name: p.name ?? "logged item",
+    portion_estimate: null,
+    source: "optimistic",
+    confidence: null as null,
+    eaten_at: nowIso,
+    meal_slot: (p.meal_slot ?? null) as MealSlot | null,
+    scan_id: null as string | null,
+    photo_url: null as string | null,
     kcal_low: p.kcal_low,
     kcal_high: p.kcal_high,
     protein_g_low: p.protein_g_low,
@@ -912,1647 +1636,695 @@ function mergePendingIntoLedger(
     saturated_fat_g_low: p.saturated_fat_g_low ?? null,
     saturated_fat_g_high: p.saturated_fat_g_high ?? null,
   }));
-  const nextItems = [...prev.totals.items, ...pendingItems];
-  const bump = (
-    range: { low: number; high: number },
-    key: "kcal" | "protein_g" | "carb_g" | "fat_g" | "sodium_mg" | "fiber_g" | "sugar_g" | "saturated_fat_g"
+  const items = [...prev.totals.items, ...injected];
+  const sum = (
+    getter: (
+      it: (typeof items)[number]
+    ) => { low: number; high: number } | null
   ) => {
-    let low = range.low;
-    let high = range.high;
-    for (const it of pendingItems) {
-      const lowKey = `${key}_low` as keyof typeof it;
-      const highKey = `${key}_high` as keyof typeof it;
-      low += Number(it[lowKey] ?? 0);
-      high += Number(it[highKey] ?? 0);
+    let low = 0;
+    let high = 0;
+    for (const it of items) {
+      const r = getter(it);
+      if (r) {
+        low += r.low;
+        high += r.high;
+      }
     }
     return { low, high };
   };
   return {
     ...prev,
     totals: {
-      ...prev.totals,
-      items: nextItems,
-      kcal: bump(prev.totals.kcal, "kcal"),
-      protein_g: bump(prev.totals.protein_g, "protein_g"),
-      carb_g: bump(prev.totals.carb_g, "carb_g"),
-      fat_g: bump(prev.totals.fat_g, "fat_g"),
-      sodium_mg: bump(prev.totals.sodium_mg, "sodium_mg"),
-      fiber_g: bump(prev.totals.fiber_g, "fiber_g"),
-      sugar_g: bump(prev.totals.sugar_g, "sugar_g"),
-      saturated_fat_g: bump(prev.totals.saturated_fat_g, "saturated_fat_g"),
+      items,
+      kcal: sum((it) => ({ low: it.kcal_low, high: it.kcal_high })),
+      protein_g: sum((it) => ({ low: it.protein_g_low, high: it.protein_g_high })),
+      carb_g: sum((it) => ({ low: it.carb_g_low, high: it.carb_g_high })),
+      fat_g: sum((it) => ({ low: it.fat_g_low, high: it.fat_g_high })),
+      sodium_mg: sum((it) =>
+        it.sodium_mg_low != null && it.sodium_mg_high != null
+          ? { low: it.sodium_mg_low, high: it.sodium_mg_high }
+          : null
+      ),
+      fiber_g: sum((it) =>
+        it.fiber_g_low != null && it.fiber_g_high != null
+          ? { low: it.fiber_g_low, high: it.fiber_g_high }
+          : null
+      ),
+      sugar_g: sum((it) =>
+        it.sugar_g_low != null && it.sugar_g_high != null
+          ? { low: it.sugar_g_low, high: it.sugar_g_high }
+          : null
+      ),
+      saturated_fat_g: sum((it) =>
+        it.saturated_fat_g_low != null && it.saturated_fat_g_high != null
+          ? { low: it.saturated_fat_g_low, high: it.saturated_fat_g_high }
+          : null
+      ),
     },
   };
 }
 
-function SideStat({
-  label,
-  value,
-  unit,
-  tint,
-}: {
-  label: string;
-  value: string;
-  unit: string;
-  tint: string;
-}) {
-  return (
-    <View style={styles.sideStat}>
-      <Text style={[styles.sideStatLabel, { color: tint }]}>{label}</Text>
-      <Text style={styles.sideStatValue}>
-        {value}
-        <Text style={styles.sideStatUnit}> {unit}</Text>
-      </Text>
-    </View>
-  );
-}
-
-function Macro({
-  label,
-  value,
-  unit,
-  hi,
-}: {
-  label: string;
-  value: number | null;
-  unit: string;
-  hi?: boolean;
-}) {
-  return (
-    <View style={[styles.macro, hi && styles.macroHi]}>
-      <Text style={styles.macroLabel}>{label.toUpperCase()}</Text>
-      <Text style={[styles.macroValue, hi && { color: colors.gold }]}>
-        {value ?? "—"}
-        <Text style={styles.macroUnit}> {unit}</Text>
-      </Text>
-    </View>
-  );
-}
-
-function LedgerCard({
-  title,
-  low,
-  high,
-  unit,
-  remaining,
-}: {
-  title: string;
-  low: number;
-  high: number;
-  unit: string;
-  remaining?: boolean;
-}) {
-  const tint =
-    remaining && high < 0
-      ? colors.coral
-      : remaining && low < 0
-        ? colors.gold
-        : colors.ink;
-  return (
-    <View style={[styles.card, { flex: 1 }]}>
-      <Text style={styles.kicker}>{title.toUpperCase()}</Text>
-      <View style={styles.rangeRow}>
-        <Text style={[styles.rangeNum, { color: tint }]}>{Math.round(low)}</Text>
-        <Text style={styles.rangeDash}>–</Text>
-        <Text style={[styles.rangeNum, { color: tint }]}>{Math.round(high)}</Text>
-        <Text style={styles.rangeUnit}> {unit}</Text>
-      </View>
-    </View>
-  );
-}
-
-function RamadanBanner({
-  status,
-}: {
-  status: {
-    day_num: number | null;
-    total_days: number | null;
-    today: {
-      fajr: string;
-      maghrib: string;
-      in_fast_window: boolean;
-      seconds_until_maghrib: number | null;
-      seconds_until_fajr: number | null;
-    } | null;
-  };
-}) {
-  // Live countdown — seed from server-provided seconds, tick locally.
-  const seed = status.today?.in_fast_window
-    ? (status.today?.seconds_until_maghrib ?? 0)
-    : (status.today?.seconds_until_fajr ?? 0);
-  const [remaining, setRemaining] = useState(seed);
-  useEffect(() => {
-    setRemaining(seed);
-    const iv = setInterval(() => {
-      setRemaining((r) => Math.max(0, r - 1));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, [seed]);
-  const hh = Math.floor(remaining / 3600);
-  const mm = Math.floor((remaining % 3600) / 60);
-  const ss = remaining % 60;
-  const inFast = !!status.today?.in_fast_window;
-  return (
-    <View style={styles.ramadanBanner}>
-      <View style={styles.ramadanIcon}>
-        <Ionicons name="moon" size={22} color={colors.gold} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.ramadanKicker}>
-          RAMADAN · DAY {status.day_num}/{status.total_days}
-        </Text>
-        <Text style={styles.ramadanCountdown}>
-          {inFast ? "Iftar in" : "Suhoor closes in"} {String(hh).padStart(2, "0")}:
-          {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
-        </Text>
-        <Text style={styles.ramadanTimes}>
-          Fajr {status.today?.fajr} · Maghrib {status.today?.maghrib}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-/**
- * Compact micronutrient strip below the macros row.
- * Hides when the day has no micros yet (legacy items still logging
- * before the plate-scan v2 prompt landed) — showing all zeros would
- * misread as "hit zero sodium today" which is bad noise.
- */
-function MicrosRow({
-  profile,
-  totals,
-  t,
-}: {
-  profile: import("@/types").Profile;
-  totals: import("@/types").DailyTotals;
-  t: (key: string) => string;
-}) {
-  // Defensive: an older deployed backend can respond without the
-  // micronutrient totals, in which case totals.sodium_mg / etc. are
-  // undefined even though the type says otherwise. Zero-fallback so
-  // the client renders nothing rather than crashing the whole Home
-  // tab via the ErrorBoundary.
-  const zeroRange = { low: 0, high: 0 };
-  const sodium = totals.sodium_mg ?? zeroRange;
-  const fiber = totals.fiber_g ?? zeroRange;
-  const sugar = totals.sugar_g ?? zeroRange;
-  const satFat = totals.saturated_fat_g ?? zeroRange;
-
-  const anyData =
-    sodium.high > 0 ||
-    fiber.high > 0 ||
-    sugar.high > 0 ||
-    satFat.high > 0;
-  if (!anyData) return null;
-  return (
-    <View style={styles.microsRow}>
-      <MicroCell
-        label={t("home.micros.sodium")}
-        low={sodium.low}
-        high={sodium.high}
-        target={profile.daily_sodium_mg ?? null}
-        unit="mg"
-        overWarn
-      />
-      <View style={styles.microDivider} />
-      <MicroCell
-        label={t("home.micros.fiber")}
-        low={fiber.low}
-        high={fiber.high}
-        target={profile.daily_fiber_g ?? null}
-        unit="g"
-      />
-      <View style={styles.microDivider} />
-      <MicroCell
-        label={t("home.micros.sugar")}
-        low={sugar.low}
-        high={sugar.high}
-        target={profile.daily_sugar_g ?? null}
-        unit="g"
-        overWarn
-      />
-      <View style={styles.microDivider} />
-      <MicroCell
-        label={t("home.micros.sat_fat")}
-        low={satFat.low}
-        high={satFat.high}
-        target={profile.daily_saturated_fat_g ?? null}
-        unit="g"
-        overWarn
-      />
-    </View>
-  );
-}
-
-function MicroCell({
-  label,
-  low,
-  high,
-  target,
-  unit,
-  overWarn,
-}: {
-  label: string;
-  low: number;
-  high: number;
-  target: number | null;
-  unit: string;
-  overWarn?: boolean;
-}) {
-  // Show the mid-range for the number (matches how kcal cards elsewhere
-  // read); tint red when we're over the target on an over-warn metric
-  // (sodium/sugar/sat fat), green when comfortably under the target on
-  // fiber (which we want to hit, not avoid).
-  const mid = (low + high) / 2;
-  const overTarget = target !== null && high > target;
-  const underFiber =
-    !overWarn && target !== null && high < target * 0.5;
-  const tint = overTarget
-    ? colors.coral
-    : underFiber
-      ? colors.dim
-      : colors.ink;
-  return (
-    <View style={styles.microCell}>
-      <Text style={[styles.microLabel, overTarget && { color: colors.coral }]}>
-        {label}
-      </Text>
-      <Text style={[styles.microValue, { color: tint }]}>
-        {Math.round(mid).toLocaleString()}
-        <Text style={styles.microUnit}> {unit}</Text>
-      </Text>
-      {target !== null && (
-        <Text style={styles.microTarget}>/ {target.toLocaleString()}</Text>
-      )}
-    </View>
-  );
-}
-
-
-/**
- * Meal-slot log grid — one row per slot (Breakfast/Lunch/Dinner/Snack).
- * MyFitnessPal-style: shows kcal range + item count when the slot has
- * items.
- *
- * Interaction split:
- *   • Tap the card body → toggle expanded item list (shows what you ate).
- *   • Tap the "+" button → open meals-suggest with slot pre-selected.
- *   • Empty slot: tapping anywhere opens meals-suggest (no items to
- *     show, so the card acts as one big log button).
- *
- * Bucketing is client-side from ledger.totals.items so no extra fetch.
- */
-function MealSlotGrid({
-  items,
-  planned = false,
-  t,
-}: {
-  items: import("@/types").MealItemRow[];
-  /** True when the items came from a future-day meal plan preview.
-   *  Swaps empty-state copy + CTA labels so the row reads as "here's
-   *  what's on the plan" rather than "log this now." */
-  planned?: boolean;
-  t: (key: string) => string;
-}) {
-  const bySlot = new Map<
-    "breakfast" | "lunch" | "dinner" | "snack",
-    import("@/types").MealItemRow[]
-  >();
-  for (const s of SLOTS) bySlot.set(s, []);
-  for (const it of items) {
-    const slot = it.meal_slot;
-    if (!slot) continue;
-    if (bySlot.has(slot)) bySlot.get(slot)!.push(it);
-  }
-
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (s: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
-      return next;
-    });
-  };
-
-  const goLog = (s: "breakfast" | "lunch" | "dinner" | "snack") =>
-    router.push(
-      planned
-        ? { pathname: "/meal-plan" as const }
-        : {
-            pathname: "/meals-suggest" as const,
-            params: { slot: s },
-          }
-    );
-
-  return (
-    <View style={styles.slotGrid}>
-      {SLOTS.map((s) => {
-        const rows = bySlot.get(s) ?? [];
-        const meta = SLOT_META[s];
-        const kcalLow = rows.reduce((sum, r) => sum + Number(r.kcal_low ?? 0), 0);
-        const kcalHigh = rows.reduce(
-          (sum, r) => sum + Number(r.kcal_high ?? 0),
-          0
-        );
-        const hasRows = rows.length > 0;
-        const isExpanded = expanded.has(s);
-        // Empty slot → tapping the body is the log affordance (no items
-        // to reveal). Populated slot → body tap toggles the list, and
-        // the "+" button is the log affordance.
-        const onBodyPress = () => (hasRows ? toggle(s) : goLog(s));
-        return (
-          <View
-            key={s}
-            style={[styles.slotCard, { borderLeftColor: meta.tint }]}
-          >
-            <Pressable style={styles.slotHead} onPress={onBodyPress}>
-              <View style={styles.slotIcon}>
-                <Ionicons name={meta.icon} size={16} color={meta.tint} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.slotLabel, { color: meta.tint }]}>
-                  {meta.en}
-                  {planned && hasRows
-                    ? "  " + t("home.slot_card.planned_suffix")
-                    : ""}
-                </Text>
-                {hasRows ? (
-                  <Text style={styles.slotStat}>
-                    {Math.round(kcalLow)}–{Math.round(kcalHigh)}
-                    <Text style={styles.slotUnit}> {t("common.kcal")} · </Text>
-                    {rows.length}
-                    <Text style={styles.slotUnit}>
-                      {" "}
-                      {rows.length === 1
-                        ? t("home.slot_card.item_one")
-                        : t("home.slot_card.item_other")}
-                    </Text>
-                  </Text>
-                ) : (
-                  <Text style={styles.slotEmpty}>
-                    {planned
-                      ? t("home.slot_card.not_planned")
-                      : t("home.slot_card.nothing_logged")}
-                  </Text>
-                )}
-              </View>
-              {hasRows ? (
-                <Pressable
-                  onPress={() => goLog(s)}
-                  hitSlop={10}
-                  style={styles.slotPlus}
-                >
-                  <Ionicons name="add" size={20} color={colors.gold} />
-                </Pressable>
-              ) : (
-                <Text style={styles.slotCta}>
-                  {planned
-                    ? t("home.slot_card.view_cta")
-                    : t("home.slot_card.log_cta")}
-                </Text>
-              )}
-            </Pressable>
-            {hasRows && isExpanded && (
-              <View style={styles.slotItems}>
-                {rows.map((r) => (
-                  <View key={r.id} style={styles.slotItemRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.slotItemName} numberOfLines={1}>
-                        {r.name}
-                      </Text>
-                      {r.portion_estimate ? (
-                        <Text
-                          style={styles.slotItemPortion}
-                          numberOfLines={1}
-                        >
-                          {r.portion_estimate}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text style={styles.slotItemKcal}>
-                      {Math.round(Number(r.kcal_low ?? 0))}–
-                      {Math.round(Number(r.kcal_high ?? 0))}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-/**
- * Home surface for the 90-Day Plan.
- * - No report yet: gold-accented CTA "Get your 90-Day Plan · 19 AED"
- *   (or "Get your plan" for Pro users). Tapping routes to /report.
- * - Report present: compact pill "Week X of N · View your 90-Day Plan"
- *   that opens the full viewer.
- * All copy pulls from i18n so the AR variant reads naturally.
- */
-/**
- * Full-bleed celebration modal that appears once when the user hits
- * a Day 30 / 60 / 90 anniversary. Content is intentionally simple —
- * headline, a few numbers, one CTA, optional share. Tap "Keep going"
- * dismisses + marks the badge seen server-side.
- */
-function AnniversaryModal({
-  badge,
-  streakDays,
-  mealCount,
-  onDismiss,
-  t,
-}: {
-  badge: "anniv_30d" | "anniv_60d" | "anniv_90d" | null;
-  streakDays: number;
-  mealCount: number;
-  onDismiss: () => void;
-  t: (key: string, opts?: Record<string, string | number>) => string;
-}) {
-  if (!badge) return null;
-  const days = badge === "anniv_30d" ? 30 : badge === "anniv_60d" ? 60 : 90;
-  const kicker = t(`anniversary.kicker_${days}`);
-  const title = t(`anniversary.title_${days}`);
-  const sub = t(`anniversary.sub_${days}`);
-
-  const share = async () => {
-    await Share.share({
-      message: `${title} — ${sub}\n\nSE7A`,
-    }).catch(() => {});
-  };
-
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onDismiss}>
-      <View style={styles.annivBg}>
-        <View style={styles.annivCard}>
-          <Text style={styles.annivKicker}>{kicker}</Text>
-          <Text style={styles.annivBigNumber}>{days}</Text>
-          <Text style={styles.annivDaysLabel}>DAYS</Text>
-          <View style={styles.annivRule} />
-          <Text style={styles.annivTitle}>{title}</Text>
-          <Text style={styles.annivSub}>{sub}</Text>
-          <View style={styles.annivStatsRow}>
-            <AnnivStat
-              label={t("anniversary.stat_streak")}
-              value={String(streakDays)}
-            />
-            <View style={styles.annivStatDivider} />
-            <AnnivStat
-              label={t("anniversary.stat_meals")}
-              value={String(mealCount)}
-            />
-          </View>
-          <Pressable onPress={onDismiss} style={styles.annivCta}>
-            <Text style={styles.annivCtaText}>
-              {t("anniversary.cta_continue")}
-            </Text>
-          </Pressable>
-          <Pressable onPress={share} hitSlop={8} style={styles.annivShare}>
-            <Text style={styles.annivShareText}>{t("anniversary.share")}</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function AnnivStat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.annivStat}>
-      <Text style={styles.annivStatValue}>{value}</Text>
-      <Text style={styles.annivStatLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function ReportCard({
-  meta,
-  isPro,
-  t,
-}: {
-  meta: {
-    week_index: number;
-    total_weeks: number;
-    checkpoints_met: number[];
-  } | null;
-  isPro: boolean;
-  t: (key: string, opts?: Record<string, string | number>) => string;
-}) {
-  // Auto-scroll the chip strip so the current week is roughly centered
-  // when the card renders. Keeps context visible without hunting.
-  const scrollRef = useRef<ScrollView | null>(null);
-  useEffect(() => {
-    if (!meta || !scrollRef.current) return;
-    // ~52px per chip + spacing.xs (4) gap. Scroll to (current-1) * 56
-    // minus a bit to bias-center. Empirical, feels right on iPhone 15.
-    const target = Math.max(0, (meta.week_index - 2) * 56);
-    const id = setTimeout(() => {
-      scrollRef.current?.scrollTo({ x: target, animated: false });
-    }, 50);
-    return () => clearTimeout(id);
-  }, [meta]);
-
-  if (meta) {
-    return (
-      <Pressable
-        onPress={() => router.push("/report")}
-        style={styles.reportActiveCard}
-      >
-        <View style={styles.reportActiveHead}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.reportActiveKicker}>
-              {t("report.home_cta.title_active", {
-                week: meta.week_index,
-                total: meta.total_weeks,
-              })}
-            </Text>
-            <Text style={styles.reportActiveSub}>
-              {t("report.home_cta.sub_active")}
-            </Text>
-          </View>
-          <Text style={styles.reportActiveArrow}>→</Text>
-        </View>
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.roadmapStrip}
-          contentContainerStyle={styles.roadmapStripInner}
-        >
-          {Array.from({ length: meta.total_weeks }).map((_, i) => {
-            const weekNum = i + 1;
-            const isCurrent = weekNum === meta.week_index;
-            const isPast = weekNum < meta.week_index;
-            const isMet = meta.checkpoints_met.includes(weekNum);
-            return (
-              <View
-                key={weekNum}
-                style={[
-                  styles.roadmapChip,
-                  isCurrent && styles.roadmapChipCurrent,
-                  isPast && !isMet && styles.roadmapChipPast,
-                  isMet && styles.roadmapChipMet,
-                ]}
-              >
-                {isMet && !isCurrent ? (
-                  <Ionicons name="checkmark" size={14} color={colors.bg} />
-                ) : (
-                  <Text
-                    style={[
-                      styles.roadmapChipText,
-                      isCurrent && styles.roadmapChipTextCurrent,
-                      isPast && !isMet && styles.roadmapChipTextPast,
-                    ]}
-                  >
-                    {weekNum}
-                  </Text>
-                )}
-              </View>
-            );
-          })}
-        </ScrollView>
-      </Pressable>
-    );
-  }
-  return (
-    <Pressable
-      onPress={() => router.push("/report")}
-      style={styles.reportNewCard}
-    >
-      <View style={styles.reportNewRule} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.reportNewKicker}>
-          {t("report.home_cta.kicker")}
-        </Text>
-        <Text style={styles.reportNewTitle}>
-          {t("report.home_cta.title_new")}
-        </Text>
-        <Text style={styles.reportNewSub}>{t("report.home_cta.sub_new")}</Text>
-      </View>
-      <Text style={styles.reportNewCtaText}>
-        {isPro
-          ? t("report.home_cta.cta_new_pro")
-          : t("report.home_cta.cta_new")}
-      </Text>
-    </Pressable>
-  );
-}
-
-function StreakCard({
-  streak,
-  onFrozen,
-  t,
-}: {
-  streak: StreakResponse;
-  onFrozen: () => void;
-  t: (key: string, opts?: Record<string, string | number>) => string;
-}) {
-  const [freezing, setFreezing] = useState(false);
-  // Yesterday (in the user's local tz) in YYYY-MM-DD, matching how the
-  // server buckets days. This is the anchor for the freeze CTA.
-  const yesterdayKey = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
-
-  // Compute the longest run of consecutive freezable days starting
-  // from yesterday and walking back, capped by remaining budget. This
-  // is the "restore max" the CTA offers. Example: freezable_days =
-  // [Fri, Thu] with budget 2 → CTA restores 2 days in one confirm.
-  // freezable_days = [Fri] with budget 2 → CTA is a single-day freeze.
-  const freezableSet = useMemo(
-    () => new Set(streak.freezable_days),
-    [streak.freezable_days]
-  );
-  const consecutiveFreezable = useMemo(() => {
-    const out: string[] = [];
-    let cursor = new Date();
-    cursor.setDate(cursor.getDate() - 1);
-    // Cap by budget so we never propose more than the user can afford.
-    for (let i = 0; i < streak.freezes_available_this_month; i++) {
-      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
-      if (!freezableSet.has(key)) break;
-      out.push(key);
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return out;
-  }, [freezableSet, streak.freezes_available_this_month]);
-
-  const canRestore = consecutiveFreezable.length > 0;
-  const restoreCount = consecutiveFreezable.length;
-
-  const applyFreeze = () => {
-    const cost = restoreCount;
-    const budgetRemaining = streak.freezes_available_this_month;
-    const title =
-      restoreCount === 1
-        ? t("home.streak_card.prompt_save_title")
-        : t("home.streak_card.prompt_restore_title", { count: restoreCount });
-    const body =
-      restoreCount === 1
-        ? t(
-            budgetRemaining === 1
-              ? "home.streak_card.prompt_save_body_one"
-              : "home.streak_card.prompt_save_body_other",
-            { available: budgetRemaining }
-          )
-        : t("home.streak_card.prompt_restore_body", {
-            cost,
-            available: budgetRemaining,
-            count: restoreCount,
-          });
-    Alert.alert(title, body, [
-      { text: t("home.streak_card.prompt_cancel"), style: "cancel" },
-      {
-        text:
-          restoreCount === 1
-            ? t("home.streak_card.prompt_use_one")
-            : t("home.streak_card.prompt_use_many", { count: cost }),
-        style: "default",
-        onPress: async () => {
-          setFreezing(true);
-          const tzOffsetMin = -new Date().getTimezoneOffset();
-          try {
-            await api("/api/streaks/freeze", {
-              method: "POST",
-              body: JSON.stringify({
-                freeze_dates: consecutiveFreezable,
-                tz_offset_min: tzOffsetMin,
-              }),
-            });
-            onFrozen();
-          } catch {
-            Alert.alert(
-              t("home.streak_card.error_title"),
-              t("home.streak_card.error_body")
-            );
-          } finally {
-            setFreezing(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  return (
-    <View
-      style={[
-        styles.streakCard,
-        streak.current_days >= 7 && styles.streakCardHot,
-      ]}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.streakKicker}>
-          {streak.todays_status === "logged"
-            ? t("home.streak_card.kicker_today_logged")
-            : canRestore && streak.current_days === 0
-              ? restoreCount === 1
-                ? t("home.streak_card.kicker_yesterday_missed")
-                : t("home.streak_card.kicker_n_missed", { count: restoreCount })
-              : t("home.streak_card.kicker_log_today")}
-        </Text>
-        <View style={styles.streakNumRow}>
-          <Text style={styles.streakFlame}>
-            {streak.current_days === 0
-              ? "•"
-              : streak.current_days >= 7
-                ? "🔥"
-                : "✦"}
-          </Text>
-          <Text style={styles.streakNum}>{streak.current_days}</Text>
-          <Text style={styles.streakUnit}>
-            {t(
-              streak.current_days === 1
-                ? "home.streak_card.unit_day_one"
-                : "home.streak_card.unit_day_other"
-            )}
-          </Text>
-        </View>
-        <Text style={styles.streakSub}>
-          {t("home.streak_card.week_progress", {
-            count: streak.days_this_week,
-          })}
-          {streak.longest_days > streak.current_days &&
-            t("home.streak_card.best_suffix", { count: streak.longest_days })}
-          {streak.freezes_monthly_budget > 0 &&
-            t("home.streak_card.freeze_budget_suffix", {
-              available: streak.freezes_available_this_month,
-              total: streak.freezes_monthly_budget,
-            })}
-        </Text>
-        {canRestore && (
-          <Pressable
-            onPress={applyFreeze}
-            disabled={freezing}
-            style={styles.streakFreezeBtn}
-          >
-            <Text style={styles.streakFreezeBtnText}>
-              {freezing
-                ? t("home.streak_card.btn_saving")
-                : restoreCount === 1
-                  ? t("home.streak_card.btn_save_yesterday")
-                  : t("home.streak_card.btn_restore_gap", {
-                      count: restoreCount,
-                    })}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function greeting(d: Date): string {
-  const h = d.getHours();
-  if (h < 5) return "Late night";
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  if (h < 21) return "Good evening";
-  return "Good night";
-}
-
-function fmtDateIso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function formatFastElapsed(startIso: string): string {
-  const ms = Date.now() - new Date(startIso).getTime();
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  return `${h}h ${String(m).padStart(2, "0")}m`;
-}
-
-function formatHm(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.max(0, Math.round(minutes - h * 60));
-  return `${h}h ${String(m).padStart(2, "0")}m`;
-}
-
-function recoveryBandColor(
-  band: "poor" | "compromised" | "primed" | null
-): string {
-  if (band === "poor") return colors.coral;
-  if (band === "primed") return colors.mint;
-  return colors.gold;
-}
-
-/**
- * Wrapped is only surfaced on Mon–Wed local time — the recap covers
- * the just-completed Mon–Sun week, and it feels stale by Thursday.
- * Users can still open /weekly-wrapped directly outside this window.
- */
-function isWrappedWindow(d: Date): boolean {
-  const dow = d.getDay(); // 0 = Sun, 1 = Mon, ...
-  return dow === 1 || dow === 2 || dow === 3;
-}
+// ────────────────────────────────────────────────────────────────────
+// Styles
 
 const styles = StyleSheet.create({
-  center: {
+  shell: {
     flex: 1,
     backgroundColor: colors.bg,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  head: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(246,183,60,0.12)",
-    borderWidth: 1,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitial: {
-    fontFamily: font.displayBold,
-    fontSize: 16,
-    color: colors.gold,
-  },
-  headTitleCol: {
+  loading: {
     flex: 1,
-    gap: 2,
-  },
-  headGreet: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
-    color: colors.ink,
-  },
-  headDate: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-    letterSpacing: 0.6,
-  },
-  dayPickerRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 4,
-  },
-  dayChip: {
-    flex: 1,
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.panel,
   },
-  dayChipOn: {
-    borderColor: colors.gold,
-    backgroundColor: "rgba(246,183,60,0.10)",
+  // Header
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
-  dayChipText: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-    letterSpacing: 0.6,
-  },
-  dayChipTextOn: {
+  headerLogo: {
     color: colors.gold,
-    fontFamily: font.monoBold,
-  },
-  signout: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
+    fontFamily: font.displayBold,
+    fontSize: 22,
     letterSpacing: 1.5,
   },
-  kicker: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.4,
-  },
-  heroKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.4,
-    marginTop: spacing.md,
-  },
-  dayLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.4,
-    marginTop: 4,
-  },
-  planBadgeRow: {
-    alignItems: "center",
-    marginTop: spacing.xs,
-    marginBottom: 2,
-  },
-  planBadgeFreeRow: {
+  headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: spacing.xs,
   },
-  planBadgeFreeText: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.6,
-  },
-  planBadgeSep: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.line,
-  },
-  planBadgeUpgradeText: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.4,
-  },
-  planBadgeProText: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.6,
-  },
-  ringRow: {
+  fastingPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  ringSide: {
-    flex: 1,
-    gap: spacing.md,
-    paddingLeft: spacing.sm,
-  },
-  sideStat: { gap: 2 },
-  sideStatLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    letterSpacing: 1.2,
-  },
-  sideStatValue: {
-    fontFamily: font.displayBold,
-    fontSize: 20,
-    color: colors.ink,
-  },
-  sideStatUnit: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-  },
-  heroRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginTop: 4,
-  },
-  heroNum: {
-    fontFamily: font.displayBold,
-    fontSize: 52,
-    color: colors.gold,
-    lineHeight: 58,
-  },
-  heroDash: {
-    fontFamily: font.displayBold,
-    fontSize: 32,
-    color: colors.dim,
-    marginHorizontal: 6,
-  },
-  heroUnit: {
-    fontFamily: font.body,
-    fontSize: 16,
-    color: colors.dim,
-    marginLeft: 4,
-  },
-  heroSub: {
-    fontFamily: font.mono,
-    fontSize: 12,
-    color: colors.dim,
-    marginTop: 6,
-  },
-  macros: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  microsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-  },
-  microCell: {
-    flex: 1,
-    alignItems: "center",
-    gap: 2,
-  },
-  microDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: colors.line,
-  },
-  microLabel: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    color: colors.dim,
-    letterSpacing: 0.8,
-  },
-  microValue: {
-    fontFamily: font.displayBold,
-    fontSize: 14,
-    color: colors.ink,
-  },
-  microUnit: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    color: colors.dim,
-  },
-  microTarget: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    color: colors.dim,
-  },
-  slotGrid: {
-    gap: spacing.sm,
-  },
-  slotCard: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderLeftWidth: 3,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    overflow: "hidden",
-  },
-  slotHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  slotPlus: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: "rgba(246,183,60,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  slotItems: {
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: 6,
-  },
-  slotItemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  slotItemName: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.ink,
-  },
-  slotItemPortion: {
-    fontFamily: font.body,
-    fontSize: 11,
-    color: colors.dim,
-    marginTop: 1,
-  },
-  slotItemKcal: {
-    fontFamily: font.mono,
-    fontSize: 12,
-    color: colors.gold,
-  },
-  reportNewCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.line,
-  },
-  reportNewRule: {
-    width: 2,
-    alignSelf: "stretch",
-    backgroundColor: colors.gold,
-    marginRight: 2,
-  },
-  reportNewKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.6,
-  },
-  reportNewTitle: {
-    fontFamily: font.bodyBold,
-    fontSize: 15,
-    color: colors.ink,
-    marginTop: 3,
-  },
-  reportNewSub: {
-    fontFamily: font.body,
-    fontSize: 12,
-    color: colors.dim,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-  reportNewCtaText: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.6,
-  },
-  reportActiveCard: {
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.line,
-  },
-  reportActiveHead: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: spacing.md,
-  },
-  reportActiveKicker: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.6,
-  },
-  reportActiveSub: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.dim,
-    marginTop: 2,
-  },
-  reportActiveArrow: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
-    color: colors.dim,
-  },
-  roadmapStrip: {
-    marginTop: 2,
-  },
-  roadmapStripInner: {
-    gap: 6,
-    paddingRight: spacing.sm,
-  },
-  roadmapChip: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: "transparent",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  roadmapChipCurrent: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold,
-  },
-  roadmapChipPast: {
-    borderColor: colors.goldDim,
-    backgroundColor: "rgba(246,183,60,0.15)",
-  },
-  roadmapChipMet: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold,
-  },
-  annivBg: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    padding: spacing.xl,
-    justifyContent: "center",
-  },
-  annivCard: {
-    alignItems: "flex-start",
-    gap: spacing.sm,
-  },
-  annivKicker: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.8,
-    marginBottom: spacing.md,
-  },
-  annivBigNumber: {
-    fontFamily: font.displayBold,
-    fontSize: 128,
-    color: colors.ink,
-    lineHeight: 128,
-    letterSpacing: -4,
-  },
-  annivDaysLabel: {
-    fontFamily: font.mono,
-    fontSize: 12,
-    color: colors.dim,
-    letterSpacing: 1.6,
-    marginTop: -4,
-  },
-  annivRule: {
-    height: 1,
-    width: 60,
-    backgroundColor: colors.gold,
-    marginVertical: spacing.lg,
-  },
-  annivTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 26,
-    color: colors.ink,
-    lineHeight: 32,
-  },
-  annivSub: {
-    fontFamily: font.body,
-    fontSize: 15,
-    color: colors.dim,
-    lineHeight: 22,
-    marginBottom: spacing.lg,
-  },
-  annivStatsRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  annivStat: { alignItems: "flex-start", gap: 2 },
-  annivStatValue: {
-    fontFamily: font.displayBold,
-    fontSize: 32,
-    color: colors.ink,
-    lineHeight: 32,
-  },
-  annivStatLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.4,
-  },
-  annivStatDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: colors.line,
-    alignSelf: "center",
-  },
-  annivCta: {
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderColor: colors.line,
-    width: "100%",
-  },
-  annivCtaText: {
-    fontFamily: font.mono,
-    fontSize: 12,
-    color: colors.gold,
-    letterSpacing: 1.6,
-  },
-  annivShare: {
-    paddingVertical: 4,
-  },
-  annivShareText: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.4,
-  },
-  roadmapChipText: {
-    fontFamily: font.mono,
-    fontSize: 12,
-    color: colors.dim,
-  },
-  roadmapChipTextCurrent: {
-    color: colors.bg,
-    fontWeight: "700",
-  },
-  roadmapChipTextPast: {
-    color: colors.gold,
-  },
-  slotIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.panel2,
-    borderWidth: 1,
-    borderColor: colors.line,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  slotLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-  },
-  slotStat: {
-    fontFamily: font.displayBold,
-    fontSize: 15,
-    color: colors.ink,
-    marginTop: 2,
-  },
-  slotUnit: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-    letterSpacing: 0.6,
-  },
-  slotEmpty: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.dim,
-    marginTop: 2,
-  },
-  slotCta: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.2,
-    borderWidth: 1,
-    borderColor: colors.gold,
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
     borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: "rgba(246,183,60,0.10)",
+    backgroundColor: colors.gold + "18",
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
-  macro: {
+  fastingPillText: {
+    color: colors.gold,
+    fontFamily: font.bodyBold,
+    fontSize: 11,
+  },
+  planPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  planPillText: {
+    color: colors.dim,
+    fontFamily: font.bodyBold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  planPillArrow: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
+  },
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  streakChipText: {
+    color: colors.ink,
+    fontFamily: font.bodyBold,
+    fontSize: 12,
+  },
+  avatarBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Ramadan banner
+  ramadanBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.gold + "12",
+    borderWidth: 1,
+    borderColor: colors.gold + "44",
+  },
+  ramadanKicker: {
+    color: colors.gold,
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  ramadanBody: {
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  // Date strip
+  dateStrip: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  dateCell: {
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  dateLabel: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  dateLabelSelected: {
+    color: colors.gold,
+    fontFamily: font.bodyBold,
+  },
+  dateLabelToday: {
+    color: colors.ink,
+    fontFamily: font.bodyBold,
+  },
+  dateCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateCircleSelected: {
+    borderColor: colors.gold,
+    backgroundColor: colors.gold + "18",
+  },
+  dateDay: {
+    color: colors.ink,
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+  },
+  dateDaySelected: {
+    color: colors.gold,
+  },
+  // Day status chip
+  dayChipRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingBottom: spacing.sm,
+  },
+  dayChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  dayChipText: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  // Pager
+  page: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  ringWrap: {
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.line,
+  },
+  dotActive: {
+    backgroundColor: colors.gold,
+    width: 18,
+  },
+  // Tile row
+  tileRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  macroTile: {
     flex: 1,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     padding: spacing.md,
-  },
-  macroHi: { borderColor: colors.goldDim },
-  macroLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.2,
+    gap: 6,
   },
   macroValue: {
     fontFamily: font.displayBold,
-    fontSize: 26,
-    color: colors.ink,
-    marginTop: 4,
+    fontSize: 22,
   },
   macroUnit: {
     fontFamily: font.body,
     fontSize: 12,
     color: colors.dim,
   },
-  ledgerRow: { flexDirection: "row", gap: spacing.sm },
-  card: {
+  macroLabel: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  macroBarBg: {
+    height: 4,
+    backgroundColor: colors.line,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  macroBarFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  macroPct: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    textAlign: "right",
+  },
+  // Wellness
+  wellnessCard: {
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.xs,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
-  rangeRow: { flexDirection: "row", alignItems: "baseline" },
-  rangeNum: { fontFamily: font.displayBold, fontSize: 24 },
-  rangeDash: { color: colors.dim, marginHorizontal: 4 },
-  rangeUnit: { color: colors.dim, fontFamily: font.body, fontSize: 13 },
-  workoutCard: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.mint,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
+  wellnessKicker: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 10,
+    letterSpacing: 1.5,
+  },
+  wellnessRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  wellnessStat: {
+    flex: 1,
+    alignItems: "flex-start",
     gap: 4,
   },
-  workoutName: {
+  wellnessValue: {
+    color: colors.ink,
     fontFamily: font.displayBold,
-    fontSize: 22,
-    color: colors.ink,
-    marginTop: 4,
+    fontSize: 18,
   },
-  workoutFocus: {
-    fontFamily: font.body,
-    fontSize: 14,
-    color: colors.ink,
-    marginTop: 2,
-  },
-  workoutMeta: {
-    fontFamily: font.mono,
-    fontSize: 11,
+  wellnessLabel: {
     color: colors.dim,
-    marginTop: 6,
-  },
-  dayBanner: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: spacing.sm,
-    padding: spacing.sm,
-    backgroundColor: colors.panel2,
-    borderRadius: radius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.gold,
-  },
-  dayBannerKicker: {
-    fontFamily: font.mono,
+    fontFamily: font.body,
     fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.4,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
-  dayBannerBody: {
+  placeholderNote: {
+    color: colors.dim,
     fontFamily: font.body,
     fontSize: 12,
-    color: colors.dim,
+  },
+  // Activity
+  activityTile: {
     flex: 1,
-  },
-  fastingCard: {
     backgroundColor: colors.panel,
     borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: 2,
-  },
-  fastingBig: {
-    fontFamily: font.displayBold,
-    fontSize: 26,
-    color: colors.ink,
-    marginTop: 4,
-  },
-  fastingSub: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-    marginTop: 2,
-  },
-  ramadanBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.line,
     borderRadius: radius.md,
     padding: spacing.md,
+    gap: 6,
   },
-  ramadanIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(246,183,60,0.12)",
+  activityValue: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 22,
+  },
+  activityLabel: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  waterCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  waterHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  waterValue: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 20,
+  },
+  waterTarget: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 13,
+  },
+  waterAddBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.mint + "22",
+    borderWidth: 1,
+    borderColor: colors.mint,
+  },
+  waterAddText: {
+    color: colors.mint,
+    fontFamily: font.bodyBold,
+    fontSize: 12,
+  },
+  waterBarBg: {
+    height: 6,
+    backgroundColor: colors.line,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  waterBarFill: {
+    height: 6,
+    backgroundColor: colors.mint,
+    borderRadius: 3,
+  },
+  // Meals
+  mealsWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  mealsHeadRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  mealsHead: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 16,
+  },
+  mealsCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  mealRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  mealRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  mealIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
-  ramadanKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.4,
-  },
-  ramadanCountdown: {
-    fontFamily: font.displayBold,
-    fontSize: 20,
+  mealName: {
     color: colors.ink,
-    marginTop: 2,
-    fontVariant: ["tabular-nums"],
+    fontFamily: font.bodyBold,
+    fontSize: 14,
   },
-  ramadanTimes: {
-    fontFamily: font.mono,
-    fontSize: 11,
+  mealMeta: {
     color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
     marginTop: 2,
   },
-  cardioRow: {
+  mealItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.md + 32 + spacing.sm,
+  },
+  mealItemName: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 13,
+  },
+  mealItemMeta: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 12,
+  },
+  // Footer cards
+  footerCards: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  footerCard: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
     padding: spacing.md,
-    justifyContent: "space-between",
+    overflow: "hidden",
   },
-  cardioStat: {
+  footerRule: {
+    width: 3,
+    alignSelf: "stretch",
+    borderRadius: 2,
+    marginRight: spacing.xs,
+  },
+  footerKicker: {
+    color: colors.gold,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+  },
+  footerTitle: {
+    color: colors.ink,
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  // Streak sheet
+  sheetBg: {
     flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  sheetCard: {
+    backgroundColor: colors.panel,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.line,
+    marginBottom: spacing.md,
+  },
+  sheetKicker: {
+    color: colors.gold,
+    fontFamily: font.mono,
+    fontSize: 11,
+    letterSpacing: 1.5,
+  },
+  sheetBig: {
+    color: colors.gold,
+    fontFamily: font.displayBold,
+    fontSize: 64,
+    lineHeight: 68,
+  },
+  sheetUnit: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
+    marginBottom: spacing.md,
+  },
+  sheetStatsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  sheetStat: {
     alignItems: "center",
     gap: 4,
   },
-  cardioValue: {
+  sheetStatValue: {
+    color: colors.ink,
     fontFamily: font.displayBold,
     fontSize: 18,
-    color: colors.ink,
   },
-  cardioLabel: {
-    fontFamily: font.mono,
-    fontSize: 10,
+  sheetStatLabel: {
     color: colors.dim,
-    letterSpacing: 0.6,
+    fontFamily: font.body,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
-  cardioDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: colors.line,
-  },
-  streakCard: {
+  sheetFreezeBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  streakCardHot: {
-    borderColor: colors.gold,
-    backgroundColor: "rgba(246,183,60,0.05)",
-  },
-  streakKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.4,
-  },
-  streakNumRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginTop: 4,
     gap: 6,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold,
   },
-  streakFlame: {
-    fontSize: 22,
-  },
-  streakNum: {
-    fontFamily: font.displayBold,
-    fontSize: 32,
-    color: colors.ink,
-  },
-  streakUnit: {
-    fontFamily: font.mono,
-    fontSize: 12,
-    color: colors.dim,
-    marginLeft: 2,
-  },
-  streakSub: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-    marginTop: 4,
-  },
-  streakFreezeBtn: {
-    marginTop: spacing.sm,
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: colors.panel,
-  },
-  streakFreezeBtnText: {
-    fontFamily: font.displayBold,
+  sheetFreezeText: {
+    color: colors.bg,
+    fontFamily: font.bodyBold,
     fontSize: 13,
-    color: colors.gold,
-    letterSpacing: 0.3,
   },
-  wrappedCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+  sheetCloseBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
   },
-  suggestTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 22,
-    color: colors.ink,
-    marginTop: 4,
-  },
-  suggestSub: {
+  sheetCloseText: {
+    color: colors.dim,
     fontFamily: font.body,
     fontSize: 13,
-    color: colors.dim,
-    marginTop: 2,
   },
-  suggestArrow: {
-    fontFamily: font.displayBold,
-    fontSize: 26,
+  // Anniversary modal
+  annivBg: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+  },
+  annivCard: {
+    alignItems: "center",
+    gap: spacing.sm,
+    maxWidth: 320,
+  },
+  annivKicker: {
     color: colors.gold,
+    fontFamily: font.mono,
+    fontSize: 11,
+    letterSpacing: 1.5,
+  },
+  annivBig: {
+    color: colors.gold,
+    fontFamily: font.displayBold,
+    fontSize: 96,
+    lineHeight: 100,
+  },
+  annivUnit: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
+    letterSpacing: 1.2,
+  },
+  annivRule: {
+    width: 40,
+    height: 1,
+    backgroundColor: colors.line,
+    marginVertical: spacing.md,
+  },
+  annivStatsRow: {
+    flexDirection: "row",
+    gap: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  annivStat: {
+    alignItems: "center",
+    gap: 4,
+  },
+  annivStatValue: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 22,
+  },
+  annivStatLabel: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  annivCta: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold,
+    marginBottom: spacing.sm,
+  },
+  annivCtaText: {
+    color: colors.bg,
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+  },
+  annivShareText: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textDecorationLine: "underline",
   },
 });

@@ -280,19 +280,6 @@ export default function More() {
           </>
         )}
 
-        {/* ── Preview (dev) ────────────────────────────────────────── */}
-        <SectionHeader
-          label={isArabic ? "معاينة" : "Preview"}
-          isArabic={isArabic}
-        />
-        <MoreRow
-          icon="sparkles-outline"
-          label={isArabic ? "الشاشة الرئيسية (POC)" : "Home tab (POC)"}
-          hint={isArabic ? "تصميم جديد" : "New layout preview"}
-          onPress={() => router.push("/home-poc")}
-          tint={colors.gold}
-        />
-
         {/* ── Habits ───────────────────────────────────────────────── */}
         <SectionHeader
           label={isArabic ? "العادات" : "Habits"}
