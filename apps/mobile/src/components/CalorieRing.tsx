@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { colors, font, spacing } from "@/lib/theme";
@@ -14,7 +15,7 @@ import { colors, font, spacing } from "@/lib/theme";
  * remaining bounds) with the low–high range as a smaller line below.
  * If the user has overshot the target, the ring turns coral.
  */
-export function CalorieRing({
+export const CalorieRing = memo(function CalorieRing({
   target,
   eatenLow,
   eatenHigh,
@@ -134,7 +135,7 @@ export function CalorieRing({
       </View>
     </View>
   );
-}
+});
 
 function clamp01(x: number): number {
   if (!Number.isFinite(x)) return 0;

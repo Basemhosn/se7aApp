@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -265,7 +265,32 @@ export default function Home() {
       return;
     }
     setProfile(profileData as Profile);
-    setLedger(ledgerRes);
+    // Merge any still-pending optimistic items into the fresh server
+    // response so a just-logged meal doesn't vanish if the server
+    // ledger hasn't propagated yet. Dedup by lowercased name — good
+    // enough since names are user-supplied strings that rarely collide
+    // twice on the same day. Clear the buffer only when every item in
+    // it appears in the server response; otherwise keep them alive so
+    // the next focus re-tries the merge.
+    const pending = peekOptimisticLogItems();
+    if (pending.length > 0) {
+      const serverNames = new Set(
+        ledgerRes.totals.items.map((it) => it.name.toLowerCase())
+      );
+      const stillPending = pending.filter(
+        (p) => !serverNames.has(p.name.toLowerCase())
+      );
+      setLedger(
+        stillPending.length > 0
+          ? mergePendingIntoLedger(ledgerRes, stillPending)
+          : ledgerRes
+      );
+      if (stillPending.length === 0) {
+        clearOptimisticLogItems();
+      }
+    } else {
+      setLedger(ledgerRes);
+    }
     setWater(waterRes);
     setDayStatus(dayRes);
     setFasting(fastingRes);
@@ -286,12 +311,15 @@ export default function Home() {
 
   useFocusEffect(
     useCallback(() => {
+      // Optimistic pre-merge so a returning user sees their just-logged
+      // meal within a frame — before load() completes. load() then does
+      // its own merge against the fresh server response and clears the
+      // buffer only when server has caught up.
       const pending = peekOptimisticLogItems();
       if (pending.length > 0) {
         setLedger((prev) =>
           prev ? mergePendingIntoLedger(prev, pending) : prev
         );
-        clearOptimisticLogItems();
       }
       load();
     }, [load])
@@ -367,6 +395,11 @@ export default function Home() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: spacing.xxl * 3 }}
+        // Perf: lock scroll to one axis at a time so horizontal
+        // swipes on the metric pager don't fight this vertical
+        // ScrollView for the pan responder.
+        directionalLockEnabled
+        showsVerticalScrollIndicator={false}
       >
         <Header
           streakDays={streak?.current_days ?? 0}
@@ -835,7 +868,7 @@ interface ActivityData {
   onAddWater: () => void;
 }
 
-function MetricPager({
+const MetricPager = memo(function MetricPager({
   pageIndex,
   onPageChange,
   nutrition,
@@ -863,6 +896,19 @@ function MetricPager({
         showsHorizontalScrollIndicator={false}
         snapToInterval={SCREEN_WIDTH}
         decelerationRate="fast"
+        // Perf: render one page at a time, keep a small window around
+        // the visible page, and let RN detach off-screen page views so
+        // the CalorieRing SVG on page 0 doesn't stay mounted when the
+        // user swipes to Wellness / Activity.
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        removeClippedSubviews
+        getItemLayout={(_, index) => ({
+          length: SCREEN_WIDTH,
+          offset: SCREEN_WIDTH * index,
+          index,
+        })}
         onMomentumScrollEnd={(e) => {
           const idx = Math.round(
             e.nativeEvent.contentOffset.x / SCREEN_WIDTH
@@ -880,7 +926,7 @@ function MetricPager({
       <Dots count={3} active={pageIndex} />
     </View>
   );
-}
+});
 
 function Dots({ count, active }: { count: number; active: number }) {
   return (
@@ -898,7 +944,7 @@ function Dots({ count, active }: { count: number; active: number }) {
 // ────────────────────────────────────────────────────────────────────
 // Page 0 — Nutrition
 
-function NutritionPage({
+const NutritionPage = memo(function NutritionPage({
   data,
   isArabic,
 }: {
@@ -940,9 +986,9 @@ function NutritionPage({
       </View>
     </View>
   );
-}
+});
 
-function MacroTile({
+const MacroTile = memo(function MacroTile({
   label,
   value,
   target,
@@ -974,12 +1020,12 @@ function MacroTile({
       <Text style={styles.macroPct}>{pct}%</Text>
     </View>
   );
-}
+});
 
 // ────────────────────────────────────────────────────────────────────
 // Page 1 — Wellness (micros + sleep summary)
 
-function WellnessPage({
+const WellnessPage = memo(function WellnessPage({
   data,
   isArabic,
 }: {
@@ -1066,12 +1112,12 @@ function WellnessPage({
       )}
     </View>
   );
-}
+});
 
 // ────────────────────────────────────────────────────────────────────
 // Page 2 — Activity (steps / burned / water)
 
-function ActivityPage({
+const ActivityPage = memo(function ActivityPage({
   data,
   isArabic,
 }: {
@@ -1124,7 +1170,7 @@ function ActivityPage({
       </View>
     </View>
   );
-}
+});
 
 // ────────────────────────────────────────────────────────────────────
 // Meals list
@@ -1289,6 +1335,76 @@ function MealsList({
             </View>
           );
         })}
+        {/* Unslotted items — fallback so a log that didn't specify a
+            slot (older paths, voice-log with no slot picker) still
+            shows up somewhere instead of vanishing. */}
+        {(() => {
+          const unslotted = items.filter(
+            (it) => !it.meal_slot || !SLOTS.includes(it.meal_slot)
+          );
+          if (unslotted.length === 0 || usePlanned) return null;
+          const otherKey = "__other";
+          const isExpanded = expanded.has(otherKey);
+          const otherKcal = Math.round(
+            unslotted.reduce(
+              (s, it) => s + (it.kcal_low + it.kcal_high) / 2,
+              0
+            )
+          );
+          return (
+            <View>
+              <View style={styles.mealRowDivider} />
+              <Pressable
+                style={styles.mealRow}
+                onPress={() => onToggle(otherKey)}
+              >
+                <View
+                  style={[
+                    styles.mealIcon,
+                    { backgroundColor: colors.dim + "22" },
+                  ]}
+                >
+                  <Ionicons
+                    name="ellipsis-horizontal"
+                    size={16}
+                    color={colors.dim}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mealName}>
+                    {isArabic ? "أخرى" : "Other"}
+                  </Text>
+                  <Text style={styles.mealMeta}>
+                    {`${otherKcal} kcal · ${unslotted.length}`}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={isExpanded ? "chevron-up" : "chevron-forward"}
+                  size={18}
+                  color={colors.dim}
+                />
+              </Pressable>
+              {isExpanded
+                ? unslotted.map((it, idx) => (
+                    <View
+                      key={it.id}
+                      style={[
+                        styles.mealItemRow,
+                        idx < unslotted.length - 1 && styles.mealRowDivider,
+                      ]}
+                    >
+                      <Text style={styles.mealItemName} numberOfLines={1}>
+                        {it.name}
+                      </Text>
+                      <Text style={styles.mealItemMeta}>
+                        {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+                      </Text>
+                    </View>
+                  ))
+                : null}
+            </View>
+          );
+        })()}
       </View>
     </View>
   );
@@ -1612,10 +1728,13 @@ function mergePendingIntoLedger(
   const injected = pending.map((p) => ({
     id: nextId--,
     name: p.name ?? "logged item",
-    portion_estimate: null,
-    source: "optimistic",
-    confidence: null as null,
-    eaten_at: nowIso,
+    portion_estimate: p.portion_estimate ?? null,
+    source: p.source ?? "optimistic",
+    confidence: p.confidence ?? null,
+    // Preserve the item's own eaten_at so dedup vs server response
+    // works. Only fall back to now for items that somehow slipped in
+    // without one (older paths).
+    eaten_at: p.eaten_at ?? nowIso,
     meal_slot: (p.meal_slot ?? null) as MealSlot | null,
     scan_id: null as string | null,
     photo_url: null as string | null,
