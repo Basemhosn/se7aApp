@@ -9,10 +9,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { TrendChart } from "@/components/TrendChart";
 import {
@@ -23,6 +23,27 @@ import { AdherenceRing } from "@/components/AdherenceRing";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
+
+/**
+ * Progress tab (2026-09-07 revamp).
+ *
+ * Refactored from a single 1350-line vertical scroll into three
+ * segmented sub-tabs so users can jump straight to what they came
+ * for. Nothing was removed; every endpoint + interactive control
+ * survived, just re-homed to the appropriate sub-tab:
+ *
+ *   Body      · weight trend + projection + weighin form + photos +
+ *               measurements + body scan link
+ *   Nutrition · adherence ring + comparison + top-foods + nutrients +
+ *               calendar link
+ *   Training  · streak card + PRs
+ *
+ * The 30/60/90D range chip persists across all three sub-tabs so a
+ * user comparing food + weight trends over the same window doesn't
+ * have to re-select the range each time.
+ */
+
+// ── Types (identical to prior file) ─────────────────────────────────
 
 interface TrendResponse {
   days: number;
@@ -95,8 +116,12 @@ const RANGES = [
   { days: 90, label: "90D" },
 ];
 
+type SubTab = "body" | "nutrition" | "training";
+
 export default function Progress() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === "ar";
+  const [subTab, setSubTab] = useState<SubTab>("body");
   const [trend, setTrend] = useState<TrendResponse | null>(null);
   const [adherence, setAdherence] = useState<AdherenceResponse | null>(null);
   const [prs, setPrs] = useState<PrsResponse | null>(null);
@@ -174,7 +199,7 @@ export default function Progress() {
       });
       await load(days);
     } catch {
-      /* silent — user can retry */
+      /* silent */
     }
     setSavingGoal(false);
   };
@@ -203,115 +228,221 @@ export default function Progress() {
   };
 
   return (
-    <Screen>
-      <View style={styles.head}>
-        <Text style={styles.title}>{t("progress.title")}</Text>
-        <Text style={styles.sub}>{t("progress.sub")}</Text>
-      </View>
-
-      {adherence && (
-        <View style={styles.heroRow}>
-          <AdherenceRing
-            value={adherence.days_logged}
-            outOf={adherence.days_window}
-            kicker={t("progress.adherence_kicker")}
-            tint={colors.mint}
-            size={180}
-          />
-          <View style={styles.heroSide}>
-            <MiniStat
-              label={t("progress.ministat_streak")}
-              value={streak ? String(streak.current_days) : "—"}
-              unit={
-                streak && streak.current_days === 1
-                  ? t("progress.unit_day")
-                  : t("progress.unit_days")
-              }
-              tint={colors.gold}
-              icon="flame"
-            />
-            <MiniStat
-              label={t("progress.ministat_delta", { days })}
-              value={weightDelta(trend?.points)}
-              unit="kg"
-              tint={weightDeltaTint(trend?.points)}
-              icon="trending-down"
-            />
-            <MiniStat
-              label={t("progress.ministat_latest")}
-              value={
-                trend && trend.points.length > 0
-                  ? String(trend.points[trend.points.length - 1]!.weight_kg)
-                  : "—"
-              }
-              unit="kg"
-              tint={colors.ink}
-              icon="fitness"
-            />
-          </View>
+    <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.headRow}>
+          <Text style={styles.headTitle}>{t("progress.title")}</Text>
+          <Pressable
+            style={styles.headAvatar}
+            onPress={() => router.push("/settings")}
+          >
+            <Ionicons name="person-outline" size={18} color={colors.ink} />
+          </Pressable>
         </View>
-      )}
 
-      {adherence && (
-        <Text style={styles.compareLine}>{adherence.comparison}.</Text>
-      )}
+        {/* Segmented sub-tab control */}
+        <View style={styles.segRow}>
+          <SegBtn
+            label={isArabic ? "الجسم" : "Body"}
+            active={subTab === "body"}
+            onPress={() => setSubTab("body")}
+          />
+          <SegBtn
+            label={isArabic ? "التغذية" : "Nutrition"}
+            active={subTab === "nutrition"}
+            onPress={() => setSubTab("nutrition")}
+          />
+          <SegBtn
+            label={isArabic ? "التمرين" : "Training"}
+            active={subTab === "training"}
+            onPress={() => setSubTab("training")}
+          />
+        </View>
 
-      {prs && prs.prs.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.prKicker}>{t("progress.prs_kicker")}</Text>
-          <Text style={styles.cardTitle}>{t("progress.prs_title")}</Text>
-          <Text style={styles.cardSub}>
-            {t("progress.prs_sub", {
-              shown: Math.min(5, prs.prs.length),
-              total: prs.count,
-            })}
-          </Text>
-          {prs.prs.slice(0, 5).map((pr) => (
-            <View key={pr.exercise} style={styles.prRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.prName}>{pr.exercise}</Text>
-                <Text style={styles.prMeta}>
-                  {pr.best_weight_kg} kg × {pr.best_reps}
-                  {"  ·  "}
-                  {t("progress.prs_meta_est_1rm", { value: pr.est_1rm_kg })}
-                </Text>
-              </View>
-              <Text style={styles.prDate}>{shortDate(pr.achieved_at)}</Text>
-            </View>
+        {/* Range chips — persist across sub-tabs */}
+        <View style={styles.rangeRow}>
+          {RANGES.map((r) => (
+            <Pressable
+              key={r.days}
+              onPress={() => setDays(r.days)}
+              style={[
+                styles.rangeChip,
+                days === r.days && styles.rangeChipOn,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.rangeText,
+                  days === r.days && styles.rangeTextOn,
+                ]}
+              >
+                {r.label}
+              </Text>
+            </Pressable>
           ))}
         </View>
-      )}
 
-      <View style={styles.card}>
-        <View style={styles.cardHead}>
-          <Text style={styles.cardTitle}>{t("progress.weight_trend")}</Text>
-          <View style={styles.rangeRow}>
-            {RANGES.map((r) => (
-              <Pressable
-                key={r.days}
-                onPress={() => setDays(r.days)}
-                style={[styles.rangeChip, days === r.days && styles.rangeChipOn]}
-              >
-                <Text
-                  style={[
-                    styles.rangeText,
-                    days === r.days && styles.rangeTextOn,
-                  ]}
-                >
-                  {r.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+        {subTab === "body" ? (
+          <BodySubtab
+            trend={trend}
+            projection={projection}
+            photos={photos}
+            measurements={measurements}
+            weight={weight}
+            bf={bf}
+            logging={logging}
+            logErr={logErr}
+            goalWeightInput={goalWeightInput}
+            savingGoal={savingGoal}
+            days={days}
+            loading={loading}
+            isArabic={isArabic}
+            t={t}
+            onWeightChange={setWeight}
+            onBfChange={setBf}
+            onGoalWeightChange={setGoalWeightInput}
+            onLogWeight={logWeight}
+            onSaveGoal={saveGoalWeight}
+          />
+        ) : subTab === "nutrition" ? (
+          <NutritionSubtab
+            adherence={adherence}
+            days={days}
+            isArabic={isArabic}
+            t={t}
+          />
+        ) : (
+          <TrainingSubtab
+            streak={streak}
+            prs={prs}
+            trend={trend}
+            days={days}
+            isArabic={isArabic}
+            t={t}
+          />
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Segmented control
+
+function SegBtn({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.segBtn, active && styles.segBtnActive]}
+      onPress={onPress}
+    >
+      <Text
+        style={[styles.segBtnText, active && styles.segBtnTextActive]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Body sub-tab
+
+function BodySubtab({
+  trend,
+  projection,
+  photos,
+  measurements,
+  weight,
+  bf,
+  logging,
+  logErr,
+  goalWeightInput,
+  savingGoal,
+  days,
+  loading,
+  isArabic,
+  t,
+  onWeightChange,
+  onBfChange,
+  onGoalWeightChange,
+  onLogWeight,
+  onSaveGoal,
+}: {
+  trend: TrendResponse | null;
+  projection: ProjectionResponse | null;
+  photos: ProgressPhoto[];
+  measurements: MeasurementsResponse | null;
+  weight: string;
+  bf: string;
+  logging: boolean;
+  logErr: string;
+  goalWeightInput: string;
+  savingGoal: boolean;
+  days: number;
+  loading: boolean;
+  isArabic: boolean;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+  onWeightChange: (v: string) => void;
+  onBfChange: (v: string) => void;
+  onGoalWeightChange: (v: string) => void;
+  onLogWeight: () => void;
+  onSaveGoal: () => void;
+}) {
+  const latestKg =
+    trend && trend.points.length > 0
+      ? trend.points[trend.points.length - 1]!.weight_kg
+      : null;
+  const deltaLabel = weightDelta(trend?.points);
+  const deltaTint = weightDeltaTint(trend?.points);
+
+  return (
+    <View style={styles.subtabWrap}>
+      {/* Hero: latest weight + delta */}
+      <View style={styles.heroCard}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heroKicker}>
+            {isArabic ? "الوزن الحالي" : "CURRENT WEIGHT"}
+          </Text>
+          <Text style={styles.heroValue}>
+            {latestKg != null ? `${latestKg}` : "—"}
+            <Text style={styles.heroUnit}> kg</Text>
+          </Text>
+          <Text style={[styles.heroDelta, { color: deltaTint }]}>
+            {deltaLabel === "—"
+              ? isArabic
+                ? "لا تغيير بعد"
+                : "No change yet"
+              : `${deltaLabel} kg · ${days}d`}
+          </Text>
         </View>
+      </View>
+
+      {/* Weight trend chart */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t("progress.weight_trend")}</Text>
         {loading ? (
-          <ActivityIndicator color={colors.gold} style={{ marginVertical: spacing.lg }} />
+          <ActivityIndicator
+            color={colors.gold}
+            style={{ marginVertical: spacing.lg }}
+          />
         ) : (
           <TrendChart points={trend?.points ?? []} />
         )}
       </View>
 
-      {projection && !projection.insufficient && projection.regression && (
+      {/* Projection */}
+      {projection && !projection.insufficient && projection.regression ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
             {t("progress_cards.projection.title")}
@@ -373,9 +504,11 @@ export default function Progress() {
               </Text>
               <TextInput
                 value={goalWeightInput}
-                onChangeText={setGoalWeightInput}
+                onChangeText={onGoalWeightChange}
                 keyboardType="numeric"
-                placeholder={t("progress_cards.projection.target_placeholder")}
+                placeholder={t(
+                  "progress_cards.projection.target_placeholder"
+                )}
                 placeholderTextColor={colors.dim}
                 style={styles.input}
               />
@@ -387,30 +520,25 @@ export default function Progress() {
                     ? t("progress_cards.projection.target_cta_saving")
                     : t("progress_cards.projection.target_cta_save")
                 }
-                onPress={saveGoalWeight}
+                onPress={onSaveGoal}
                 disabled={savingGoal}
                 variant="ghost"
               />
             </View>
           </View>
         </View>
-      )}
+      ) : null}
 
-      <TopFoods days={days} />
-
-      <Nutrients days={days} />
-
+      {/* Log weighin form */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("progress.log_weighin")}</Text>
-        <Text style={styles.cardSub}>
-          {t("progress.log_weighin_sub")}
-        </Text>
+        <Text style={styles.cardSub}>{t("progress.log_weighin_sub")}</Text>
         <View style={styles.formRow}>
           <View style={{ flex: 2 }}>
             <Text style={styles.label}>{t("progress.weight_label")}</Text>
             <TextInput
               value={weight}
-              onChangeText={setWeight}
+              onChangeText={onWeightChange}
               keyboardType="numeric"
               placeholder="75"
               placeholderTextColor={colors.dim}
@@ -421,7 +549,7 @@ export default function Progress() {
             <Text style={styles.label}>{t("progress.bf_label")}</Text>
             <TextInput
               value={bf}
-              onChangeText={setBf}
+              onChangeText={onBfChange}
               keyboardType="numeric"
               placeholder="—"
               placeholderTextColor={colors.dim}
@@ -432,12 +560,13 @@ export default function Progress() {
         {!!logErr && <Text style={styles.err}>{logErr}</Text>}
         <Btn
           label={logging ? t("progress.logging") : t("progress.log_weighin_cta")}
-          onPress={logWeight}
+          onPress={onLogWeight}
           loading={logging}
           disabled={!weight || Number(weight) <= 0}
         />
       </View>
 
+      {/* Photos preview */}
       <Pressable
         onPress={() => router.push("/progress-photos")}
         style={styles.previewCard}
@@ -445,12 +574,18 @@ export default function Progress() {
         <View style={styles.previewHeadRow}>
           <View>
             <Text style={[styles.kicker, { color: colors.gold }]}>
-              PROGRESS PHOTOS
+              {isArabic ? "صور التقدم" : "PROGRESS PHOTOS"}
             </Text>
             <Text style={styles.linkTitle}>
               {photos.length === 0
-                ? "Watch yourself change"
-                : `${photos.length} photo${photos.length === 1 ? "" : "s"}`}
+                ? isArabic
+                  ? "شاهد تغيّرك"
+                  : "Watch yourself change"
+                : `${photos.length} ${
+                    isArabic
+                      ? "صورة"
+                      : `photo${photos.length === 1 ? "" : "s"}`
+                  }`}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.gold} />
@@ -473,11 +608,14 @@ export default function Progress() {
           </ScrollView>
         ) : (
           <Text style={styles.linkSub}>
-            Weekly front/side/back photos, private, side-by-side compare.
+            {isArabic
+              ? "صور أمامية / جانبية / خلفية أسبوعية، خاصة، مقارنة جنبًا إلى جنب."
+              : "Weekly front/side/back photos, private, side-by-side compare."}
           </Text>
         )}
       </Pressable>
 
+      {/* Measurements preview */}
       <Pressable
         onPress={() => router.push("/measurements")}
         style={styles.previewCard}
@@ -485,12 +623,18 @@ export default function Progress() {
         <View style={styles.previewHeadRow}>
           <View>
             <Text style={[styles.kicker, { color: colors.mint }]}>
-              TAPE MEASURE
+              {isArabic ? "قياس الشريط" : "TAPE MEASURE"}
             </Text>
             <Text style={styles.linkTitle}>
               {measurements && measurements.count > 0
-                ? `${measurements.count} entr${measurements.count === 1 ? "y" : "ies"}`
-                : "Measurements"}
+                ? `${measurements.count} ${
+                    isArabic
+                      ? "قياس"
+                      : `entr${measurements.count === 1 ? "y" : "ies"}`
+                  }`
+                : isArabic
+                  ? "القياسات"
+                  : "Measurements"}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.mint} />
@@ -535,89 +679,176 @@ export default function Progress() {
           </View>
         ) : (
           <Text style={styles.linkSub}>
-            Waist / hip / arm / chest / thigh / neck. Deltas vs your first entry.
+            {isArabic
+              ? "الخصر / الورك / الذراع / الصدر / الفخذ / الرقبة."
+              : "Waist / hip / arm / chest / thigh / neck. Deltas vs your first entry."}
           </Text>
         )}
       </Pressable>
 
+      {/* Body scan link */}
       <Pressable
         onPress={() => router.push("/scan/body")}
         style={styles.linkCard}
       >
         <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.coral }]}>{t("progress.body_scan_kicker")}</Text>
-          <Text style={styles.linkTitle}>{t("progress.body_scan_title")}</Text>
-          <Text style={styles.linkSub}>
-            {t("progress.body_scan_sub")}
+          <Text style={[styles.kicker, { color: colors.coral }]}>
+            {t("progress.body_scan_kicker")}
           </Text>
+          <Text style={styles.linkTitle}>{t("progress.body_scan_title")}</Text>
+          <Text style={styles.linkSub}>{t("progress.body_scan_sub")}</Text>
         </View>
         <Text style={[styles.linkArrow, { color: colors.coral }]}>→</Text>
       </Pressable>
+    </View>
+  );
+}
 
+// ────────────────────────────────────────────────────────────────────
+// Nutrition sub-tab
+
+function NutritionSubtab({
+  adherence,
+  days,
+  isArabic,
+  t,
+}: {
+  adherence: AdherenceResponse | null;
+  days: number;
+  isArabic: boolean;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  return (
+    <View style={styles.subtabWrap}>
+      {/* Adherence hero */}
+      {adherence ? (
+        <View style={styles.adherenceHero}>
+          <AdherenceRing
+            value={adherence.days_logged}
+            outOf={adherence.days_window}
+            kicker={t("progress.adherence_kicker")}
+            tint={colors.mint}
+            size={180}
+          />
+          <Text style={styles.compareLine}>{adherence.comparison}.</Text>
+        </View>
+      ) : null}
+
+      <TopFoods days={days} />
+      <Nutrients days={days} />
+
+      {/* Calendar link */}
       <Pressable
         onPress={() => router.push("/calendar")}
         style={styles.linkCard}
       >
         <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.gold }]}>{t("progress.calendar_kicker")}</Text>
-          <Text style={styles.linkTitle}>{t("progress.calendar_title")}</Text>
-          <Text style={styles.linkSub}>
-            {t("progress.calendar_sub")}
+          <Text style={[styles.kicker, { color: colors.gold }]}>
+            {t("progress.calendar_kicker")}
           </Text>
+          <Text style={styles.linkTitle}>{t("progress.calendar_title")}</Text>
+          <Text style={styles.linkSub}>{t("progress.calendar_sub")}</Text>
         </View>
         <Text style={[styles.linkArrow, { color: colors.gold }]}>→</Text>
       </Pressable>
-    </Screen>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  unit,
-  tint,
-  icon,
-}: {
-  label: string;
-  value: string;
-  unit: string;
-  tint: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={styles.miniStat}>
-      <View style={styles.miniIconRow}>
-        <Ionicons name={icon} size={14} color={tint} />
-        <Text style={[styles.miniLabel, { color: tint }]}>{label}</Text>
-      </View>
-      <Text style={styles.miniValue}>
-        {value}
-        <Text style={styles.miniUnit}> {unit}</Text>
-      </Text>
     </View>
   );
 }
 
-function weightDelta(
-  points: TrendResponse["points"] | undefined
-): string {
-  if (!points || points.length < 2) return "—";
-  const first = Number(points[0]!.weight_kg);
-  const last = Number(points[points.length - 1]!.weight_kg);
-  const d = Math.round((last - first) * 10) / 10;
-  return `${d > 0 ? "+" : ""}${d}`;
+// ────────────────────────────────────────────────────────────────────
+// Training sub-tab
+
+function TrainingSubtab({
+  streak,
+  prs,
+  trend,
+  days,
+  isArabic,
+  t,
+}: {
+  streak: StreakResponse | null;
+  prs: PrsResponse | null;
+  trend: TrendResponse | null;
+  days: number;
+  isArabic: boolean;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  return (
+    <View style={styles.subtabWrap}>
+      {/* Streak card */}
+      {streak ? (
+        <View style={styles.card}>
+          <Text style={[styles.kicker, { color: colors.gold }]}>
+            {isArabic ? "السلسلة" : "STREAK"}
+          </Text>
+          <View style={styles.streakRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.streakBig}>
+                {streak.current_days}
+                <Text style={styles.streakUnit}>
+                  {" "}
+                  {streak.current_days === 1
+                    ? t("progress.unit_day")
+                    : t("progress.unit_days")}
+                </Text>
+              </Text>
+              <Text style={styles.streakMeta}>
+                {isArabic
+                  ? `${streak.days_this_week}/7 هذا الأسبوع · أفضل ${streak.longest_days}`
+                  : `${streak.days_this_week}/7 this week · best ${streak.longest_days}`}
+              </Text>
+            </View>
+            <View style={styles.streakFlame}>
+              <Ionicons name="flame" size={36} color={colors.gold} />
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {/* PRs card */}
+      {prs && prs.prs.length > 0 ? (
+        <View style={styles.card}>
+          <Text style={styles.prKicker}>{t("progress.prs_kicker")}</Text>
+          <Text style={styles.cardTitle}>{t("progress.prs_title")}</Text>
+          <Text style={styles.cardSub}>
+            {t("progress.prs_sub", {
+              shown: Math.min(5, prs.prs.length),
+              total: prs.count,
+            })}
+          </Text>
+          {prs.prs.slice(0, 5).map((pr) => (
+            <View key={pr.exercise} style={styles.prRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.prName}>{pr.exercise}</Text>
+                <Text style={styles.prMeta}>
+                  {pr.best_weight_kg} kg × {pr.best_reps}
+                  {"  ·  "}
+                  {t("progress.prs_meta_est_1rm", { value: pr.est_1rm_kg })}
+                </Text>
+              </View>
+              <Text style={styles.prDate}>{shortDate(pr.achieved_at)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyCard}>
+          <Ionicons name="barbell-outline" size={24} color={colors.dim} />
+          <Text style={styles.emptyTitle}>
+            {isArabic ? "لا PRs بعد" : "No PRs yet"}
+          </Text>
+          <Text style={styles.emptyBody}>
+            {isArabic
+              ? "سجّل تمارينك لتظهر PRs هنا."
+              : "Log workouts to see your PRs here."}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
-function weightDeltaTint(
-  points: TrendResponse["points"] | undefined
-): string {
-  if (!points || points.length < 2) return colors.dim;
-  const d =
-    Number(points[points.length - 1]!.weight_kg) - Number(points[0]!.weight_kg);
-  if (d < -0.05) return colors.mint;
-  if (d > 0.05) return colors.coral;
-  return colors.dim;
-}
+// ────────────────────────────────────────────────────────────────────
+// TopFoods (unchanged shape, just re-homed under Nutrition sub-tab)
 
 type TopFoodsMacro = "kcal" | "protein" | "carb" | "fat";
 
@@ -648,11 +879,6 @@ const TOP_MACRO_META: Record<
   fat: { labelKey: "progress_cards.top_foods.macro_fat", tint: "#8b7dd6" },
 };
 
-/**
- * "What's driving your calories/protein/carbs/fat?" card. Same time
- * window as the parent Progress screen (30/60/90D chips) so users see
- * the offenders that match the trend they're looking at.
- */
 function TopFoods({ days }: { days: number }) {
   const { t } = useTranslation();
   const [macro, setMacro] = useState<TopFoodsMacro>("kcal");
@@ -684,13 +910,11 @@ function TopFoods({ days }: { days: number }) {
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardHead}>
-        <Text style={styles.cardTitle}>
-          {t("progress_cards.top_foods.title", {
-            macro: macroLabel.toLowerCase(),
-          })}
-        </Text>
-      </View>
+      <Text style={styles.cardTitle}>
+        {t("progress_cards.top_foods.title", {
+          macro: macroLabel.toLowerCase(),
+        })}
+      </Text>
       <Text style={styles.cardSub}>
         {t("progress_cards.top_foods.sub", { days })}
       </Text>
@@ -726,9 +950,7 @@ function TopFoods({ days }: { days: number }) {
           {data.foods.map((f, i) => (
             <View key={i} style={styles.topFoodRow}>
               <View style={styles.topFoodRank}>
-                <Text
-                  style={[styles.topFoodRankText, { color: meta.tint }]}
-                >
+                <Text style={[styles.topFoodRankText, { color: meta.tint }]}>
                   {i + 1}
                 </Text>
               </View>
@@ -744,9 +966,7 @@ function TopFoods({ days }: { days: number }) {
                 </Text>
               </View>
               <View style={styles.topFoodShare}>
-                <Text
-                  style={[styles.topFoodShareVal, { color: meta.tint }]}
-                >
+                <Text style={[styles.topFoodShareVal, { color: meta.tint }]}>
                   {f.share_pct}%
                 </Text>
                 <Text style={styles.topFoodShareUnit}>
@@ -760,6 +980,9 @@ function TopFoods({ days }: { days: number }) {
     </View>
   );
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Nutrients (unchanged shape)
 
 interface NutrientRow {
   key: string;
@@ -777,22 +1000,11 @@ interface NutrientsResponse {
   nutrients: NutrientRow[];
 }
 
-/**
- * Nutrients card — daily-average of every tracked nutrient over the
- * parent Progress window (7/30/90D). Ranges preserved. Coloring:
- * coral for over-target on over-warn nutrients (sodium/sugar/sat fat),
- * mint for hitting the target on want-hit nutrients (protein/fiber),
- * neutral otherwise. Rows with no per-item data (all zeros) render
- * as "—" so a legacy-only week doesn't misread as a real zero intake.
- */
 function Nutrients({ days }: { days: number }) {
   const { t } = useTranslation();
   const [data, setData] = useState<NutrientsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Localized nutrient labels by key — falls back to the server label
-  // when a nutrient we don't have a translation for shows up (future-
-  // proofs the endpoint adding new nutrients without a mobile bump).
   const nutrientLabel = (key: string, fallback: string): string => {
     const map: Record<string, string> = {
       kcal: t("progress_cards.nutrients.name_calories"),
@@ -860,22 +1072,19 @@ function Nutrients({ days }: { days: number }) {
           </View>
           {data.nutrients.map((n) => {
             const hasData = n.avg_high > 0;
-            const overTarget =
-              n.target !== null && n.avg_high > n.target;
-            const hitTarget =
-              n.target !== null && n.avg_high >= n.target;
-            const tint =
-              !hasData
-                ? colors.dim
-                : n.polarity === "over_warn" && overTarget
-                  ? colors.coral
-                  : n.polarity === "want_hit" && hitTarget
-                    ? colors.mint
-                    : n.polarity === "want_hit" &&
-                        n.target !== null &&
-                        n.avg_high < n.target * 0.5
-                      ? colors.coral
-                      : colors.ink;
+            const overTarget = n.target !== null && n.avg_high > n.target;
+            const hitTarget = n.target !== null && n.avg_high >= n.target;
+            const tint = !hasData
+              ? colors.dim
+              : n.polarity === "over_warn" && overTarget
+                ? colors.coral
+                : n.polarity === "want_hit" && hitTarget
+                  ? colors.mint
+                  : n.polarity === "want_hit" &&
+                      n.target !== null &&
+                      n.avg_high < n.target * 0.5
+                    ? colors.coral
+                    : colors.ink;
             return (
               <View key={n.key} style={styles.nutrientRow}>
                 <Text style={[styles.nutrientName, { flex: 2 }]}>
@@ -908,6 +1117,9 @@ function fmtNutrient(n: number, unit: string): string {
   return n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10);
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Helpers
+
 function ProjStat({
   label,
   value,
@@ -930,6 +1142,27 @@ function ProjStat({
   );
 }
 
+function weightDelta(
+  points: TrendResponse["points"] | undefined
+): string {
+  if (!points || points.length < 2) return "—";
+  const first = Number(points[0]!.weight_kg);
+  const last = Number(points[points.length - 1]!.weight_kg);
+  const d = Math.round((last - first) * 10) / 10;
+  return `${d > 0 ? "+" : ""}${d}`;
+}
+
+function weightDeltaTint(
+  points: TrendResponse["points"] | undefined
+): string {
+  if (!points || points.length < 2) return colors.dim;
+  const d =
+    Number(points[points.length - 1]!.weight_kg) - Number(points[0]!.weight_kg);
+  if (d < -0.05) return colors.mint;
+  if (d > 0.05) return colors.coral;
+  return colors.dim;
+}
+
 function formatProjectionSub(
   p: ProjectionResponse,
   t: (key: string, opts?: Record<string, string | number>) => string
@@ -943,136 +1176,75 @@ function formatProjectionSub(
     currentKg !== null
       ? `progress_cards.projection.sub_${dir}`
       : `progress_cards.projection.sub_${dir}_no_weight`;
-  // "holding" branch doesn't render {{rate}} — the copy is intentionally
-  // absent — but passing rate through is harmless because i18next skips
-  // unknown placeholders.
   return t(key, { rate, weight: currentKg ?? 0 });
 }
 
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Styles
+
 const styles = StyleSheet.create({
-  head: { marginTop: spacing.sm, gap: 4 },
-  title: {
-    fontFamily: font.displayBold,
-    fontSize: 32,
-    color: colors.ink,
-  },
-  sub: {
-    fontFamily: font.body,
-    fontSize: 14,
-    color: colors.dim,
-  },
-  kicker: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    letterSpacing: 1.4,
-  },
-  heroRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  heroSide: {
-    flex: 1,
-    gap: spacing.sm,
-    paddingLeft: spacing.sm,
-  },
-  miniStat: { gap: 2 },
-  miniIconRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  miniLabel: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    letterSpacing: 1.2,
-  },
-  miniValue: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
-    color: colors.ink,
-    marginTop: 2,
-  },
-  miniUnit: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-  },
-  compareLine: {
-    fontFamily: font.body,
-    fontSize: 12,
-    color: colors.dim,
-    lineHeight: 18,
-    marginTop: -spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  previewCard: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  previewHeadRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  previewThumb: {
-    width: 76,
-    height: 100,
-    borderRadius: radius.sm,
-    backgroundColor: colors.panel2,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  deltaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
-    paddingTop: 4,
-  },
-  deltaCell: { minWidth: 60, gap: 2 },
-  deltaLabel: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    color: colors.dim,
-    letterSpacing: 1.2,
-  },
-  deltaValue: {
-    fontFamily: font.displayBold,
-    fontSize: 16,
-  },
-  deltaUnit: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-  },
-  card: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.lg,
+  shell: { flex: 1, backgroundColor: colors.bg },
+  content: {
     padding: spacing.lg,
-    gap: spacing.sm,
+    paddingBottom: spacing.xxl * 2,
+    gap: spacing.md,
   },
-  cardHead: {
+  // Header
+  headRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
   },
-  cardTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
+  headTitle: {
     color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 28,
   },
-  cardSub: {
-    fontFamily: font.body,
-    fontSize: 13,
+  headAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Segmented control
+  segRow: {
+    flexDirection: "row",
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.pill,
+    padding: 3,
+    gap: 2,
+  },
+  segBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  segBtnActive: {
+    backgroundColor: colors.gold,
+  },
+  segBtnText: {
     color: colors.dim,
+    fontFamily: font.bodyBold,
+    fontSize: 13,
   },
+  segBtnTextActive: {
+    color: colors.bg,
+  },
+  // Range chips
   rangeRow: { flexDirection: "row", gap: 4 },
   rangeChip: {
     paddingVertical: 4,
@@ -1082,7 +1254,10 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.panel2,
   },
-  rangeChipOn: { borderColor: colors.gold, backgroundColor: "rgba(246,183,60,0.10)" },
+  rangeChipOn: {
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.10)",
+  },
   rangeText: {
     fontFamily: font.mono,
     fontSize: 11,
@@ -1090,16 +1265,125 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   rangeTextOn: { color: colors.gold },
-  formRow: { flexDirection: "row", gap: spacing.sm },
+  // Sub-tab wrapper
+  subtabWrap: {
+    gap: spacing.md,
+  },
+  // Body hero (latest weight + delta)
+  heroCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  heroKicker: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.5,
+  },
+  heroValue: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 44,
+    lineHeight: 48,
+    marginTop: 4,
+  },
+  heroUnit: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 16,
+  },
+  heroDelta: {
+    fontFamily: font.mono,
+    fontSize: 13,
+    marginTop: 4,
+    letterSpacing: 0.4,
+  },
+  // Adherence hero (Nutrition sub-tab)
+  adherenceHero: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  compareLine: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  // Cards
+  card: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  cardTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 17,
+    color: colors.ink,
+  },
+  cardSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+  },
+  kicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+  },
+  // Streak in Training
+  streakRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  streakBig: {
+    color: colors.gold,
+    fontFamily: font.displayBold,
+    fontSize: 44,
+    lineHeight: 48,
+  },
+  streakUnit: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 14,
+  },
+  streakMeta: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  streakFlame: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.gold + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Projection
   projStatsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.md,
     marginTop: spacing.md,
   },
-  projStat: {
-    minWidth: 68,
-  },
+  projStat: { minWidth: 68 },
   projStatLabel: {
     fontFamily: font.mono,
     fontSize: 9,
@@ -1123,6 +1407,99 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     alignItems: "flex-end",
   },
+  // Form
+  formRow: { flexDirection: "row", gap: spacing.sm },
+  label: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  input: {
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 16,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
+  // Preview cards
+  previewCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  previewHeadRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  previewThumb: {
+    width: 76,
+    height: 100,
+    borderRadius: radius.sm,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  linkTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  linkSub: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  linkCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  linkArrow: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+  },
+  deltaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingTop: 4,
+  },
+  deltaCell: { minWidth: 60, gap: 2 },
+  deltaLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 1.2,
+  },
+  deltaValue: {
+    fontFamily: font.displayBold,
+    fontSize: 16,
+  },
+  deltaUnit: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+  },
+  // TopFoods
   topFoodsEmpty: {
     fontFamily: font.body,
     fontSize: 13,
@@ -1178,6 +1555,7 @@ const styles = StyleSheet.create({
     color: colors.dim,
     letterSpacing: 0.8,
   },
+  // Nutrients
   nutrientHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1225,95 +1603,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "right",
   },
-  label: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: colors.panel2,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    color: colors.ink,
-    fontFamily: font.body,
-    fontSize: 16,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
-  linkCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  linkTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 17,
-    color: colors.ink,
-    marginTop: 4,
-  },
-  linkSub: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.dim,
-    marginTop: 2,
-    lineHeight: 19,
-  },
-  linkArrow: {
-    fontFamily: font.displayBold,
-    fontSize: 22,
-  },
-  adherenceCard: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.mint,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: 4,
-  },
-  adherenceKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.mint,
-    letterSpacing: 1.4,
-  },
-  adherenceRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 6,
-    marginTop: 4,
-  },
-  adherenceNum: {
-    fontFamily: font.displayBold,
-    fontSize: 44,
-    color: colors.ink,
-    lineHeight: 48,
-  },
-  adherenceOf: {
-    fontFamily: font.body,
-    fontSize: 16,
-    color: colors.dim,
-  },
-  adherencePct: {
-    fontFamily: font.mono,
-    fontSize: 14,
-    color: colors.dim,
-  },
-  adherenceCompare: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.dim,
-    lineHeight: 20,
-    marginTop: 8,
-  },
+  // PRs
   prKicker: {
     fontFamily: font.mono,
     fontSize: 10,
@@ -1344,9 +1634,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.dim,
   },
+  // Empty state
+  emptyCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    marginTop: 4,
+  },
+  emptyBody: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 17,
+  },
 });
-
-function shortDate(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-}

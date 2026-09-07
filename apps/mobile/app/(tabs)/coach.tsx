@@ -206,27 +206,36 @@ export default function Coach() {
             </View>
           ) : messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyKicker}>COACH</Text>
-              <View style={styles.emptyRule} />
               <Text style={styles.emptyTitle}>
-                {isArabic ? "أهلاً — أنا كوتشك." : "Hey — I'm your coach."}
+                {isArabic ? "كيف أقدر أساعد؟" : "How can I help?"}
               </Text>
               <Text style={styles.emptyBody}>
                 {isArabic
-                  ? "اسألني عن الأكل، التمرين، أو تقدمك. أعرف سجلك."
-                  : "Ask about your food, workouts, or progress. I've got your logs."}
+                  ? "أعرف سجل وجباتك، PRs، وأهدافك. اسألني أي شيء."
+                  : "I've got your food logs, PRs, and goals. Ask me anything."}
               </Text>
-              <View style={styles.suggestGrid}>
+              <View style={styles.promptStack}>
                 {SUGGESTIONS.map((s) => {
                   const text = isArabic ? s.ar : s.en;
                   return (
                     <Pressable
                       key={s.en}
                       onPress={() => sendMessage(text)}
-                      style={styles.suggestChip}
+                      style={styles.promptCard}
                     >
-                      <Ionicons name={s.icon} size={14} color={colors.gold} />
-                      <Text style={styles.suggestText}>{text}</Text>
+                      <View style={styles.promptIcon}>
+                        <Ionicons
+                          name={s.icon}
+                          size={18}
+                          color={colors.gold}
+                        />
+                      </View>
+                      <Text style={styles.promptText}>{text}</Text>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={colors.dim}
+                      />
                     </Pressable>
                   );
                 })}
@@ -470,26 +479,35 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: spacing.md,
   },
-  suggestGrid: {
+  promptStack: {
     marginTop: spacing.lg,
     gap: spacing.sm,
-    alignItems: "center",
+    width: "100%",
   },
-  suggestChip: {
+  promptCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing.sm,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
-  suggestText: {
+  promptIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.gold + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  promptText: {
+    flex: 1,
     fontFamily: font.body,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.ink,
+    lineHeight: 20,
   },
   bubble: {
     padding: spacing.md,

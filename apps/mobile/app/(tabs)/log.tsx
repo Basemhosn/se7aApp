@@ -9,16 +9,31 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import type { LedgerDayResponse } from "@/types";
 import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
+
+/**
+ * Log tab (2026-09-07 revamp).
+ *
+ * Redesigned to match the Home tab visual language:
+ *   • One dominant scan CTA (thumb-reachable, 60% of viewport)
+ *   • Compact 3-tile row for the remaining primary log methods
+ *   • Ask-coach pair (suggestions + meal plan)
+ *   • Recent items horizontal scroller (tap to relog)
+ *   • Today's meals flat list (mirrors Home meals card)
+ *
+ * Every prior entry point survived: plate, menu, barcode, manual,
+ * meal suggest, meal plan, recipes, and relog. Pro badges kept on
+ * menu + meal plan.
+ */
 
 interface RecentItem {
   id: number;
@@ -43,8 +58,9 @@ interface RecentResponse {
 }
 
 export default function Log() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { ent } = useEntitlement();
+  const isArabic = i18n.language === "ar";
   const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,202 +125,261 @@ export default function Log() {
   };
 
   return (
-    <Screen>
-      <View style={styles.head}>
-        <Text style={styles.title}>{t("log.title")}</Text>
-        <Text style={styles.sub}>{t("log.sub")}</Text>
-      </View>
-
-      <HeroCta
-        icon="camera"
-        kicker={t("log.hero_kicker")}
-        title={t("log.cta_plate_title")}
-        subtitle={t("log.cta_plate_sub")}
-        onPress={() => router.push("/scan/plate")}
-      />
-
-      <Text style={styles.sectionKicker}>{t("log.quick_kicker")}</Text>
-      <View style={styles.rowGrid}>
-        <TileCta
-          icon="restaurant-outline"
-          label={t("log.tile_menu")}
-          tint={colors.mint}
-          proBadge={!ent.is_pro}
-          onPress={() => router.push("/scan/menu")}
-        />
-        <TileCta
-          icon="barcode-outline"
-          label={t("log.tile_barcode")}
-          tint={colors.gold}
-          onPress={() => router.push("/scan/barcode")}
-        />
-        <TileCta
-          icon="create-outline"
-          label={t("log.tile_manual")}
-          tint={colors.ink}
-          onPress={() => router.push("/manual-meal")}
-        />
-      </View>
-
-      <Text style={styles.sectionKicker}>{t("log.ask_kicker")}</Text>
-      <View style={styles.pairGrid}>
-        <PairCta
-          icon="sparkles"
-          kicker={t("log.suggest_kicker")}
-          title={t("log.suggest_title")}
-          subtitle={t("log.suggest_sub")}
-          tint={colors.gold}
-          onPress={() => router.push("/meals-suggest")}
-        />
-        <PairCta
-          icon="calendar"
-          kicker={t("log.plan_kicker")}
-          title={t("log.plan_title")}
-          subtitle={t("log.plan_sub")}
-          tint={colors.gold}
-          proBadge={!ent.is_pro}
-          onPress={() => router.push("/meal-plan")}
-        />
-      </View>
-
-      <Text style={styles.sectionKicker}>{t("log.browse_kicker")}</Text>
-      <BrowseCta
-        icon="book-outline"
-        title={t("log.browse_recipes_title")}
-        subtitle={t("log.browse_recipes_sub")}
-        onPress={() => router.push("/recipes")}
-      />
-
-      {recent.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t("log.recent_title")}</Text>
-          <Text style={styles.cardSub}>{t("log.recent_sub")}</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: spacing.sm, paddingVertical: 4 }}
+    <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.headRow}>
+          <Text style={styles.headTitle}>{t("log.title")}</Text>
+          <Pressable
+            style={styles.headAvatar}
+            onPress={() => router.push("/settings")}
           >
-            {recent.map((it) => (
-              <Pressable
-                key={it.id}
-                onPress={() => relog(it)}
-                disabled={relogBusy === it.id}
-                style={styles.recentChip}
-              >
-                {relogBusy === it.id ? (
-                  <ActivityIndicator color={colors.gold} />
-                ) : (
-                  <>
-                    {it.photo_url ? (
-                      <Image
-                        source={{ uri: it.photo_url }}
-                        style={styles.recentImg}
-                      />
-                    ) : (
-                      <View style={[styles.recentImg, styles.recentImgPh]}>
-                        <Ionicons
-                          name="restaurant-outline"
-                          size={20}
-                          color={colors.dim}
-                        />
-                      </View>
-                    )}
-                    <Text style={styles.recentName} numberOfLines={1}>
-                      {it.name}
-                    </Text>
-                    <Text style={styles.recentKcal}>
-                      {it.kcal_low}–{it.kcal_high} kcal
-                    </Text>
-                    {it.times_logged > 1 && (
-                      <Text style={styles.recentTimes}>
-                        {t("log.recent_times", { count: it.times_logged })}
-                      </Text>
-                    )}
-                  </>
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
+            <Ionicons name="person-outline" size={18} color={colors.ink} />
+          </Pressable>
         </View>
-      )}
 
-      {loading ? (
-        <View style={{ alignItems: "center", paddingVertical: spacing.xl }}>
-          <ActivityIndicator color={colors.gold} />
+        {/* Primary scan CTA — dominant, thumb-reachable */}
+        <PrimaryScan
+          title={t("log.cta_plate_title")}
+          voiceLabel={isArabic ? "صوت" : "Voice"}
+          barcodeLabel={isArabic ? "باركود" : "Barcode"}
+          onScan={() => router.push("/scan/plate")}
+          onVoice={() => router.push("/voice-log")}
+          onBarcode={() => router.push("/scan/barcode")}
+        />
+
+        {/* Compact chip row — remaining log methods */}
+        <SectionKicker>
+          {isArabic ? "طرق أخرى" : "MORE WAYS TO LOG"}
+        </SectionKicker>
+        <View style={styles.chipRow}>
+          <LogChip
+            icon="create-outline"
+            label={t("log.tile_manual")}
+            tint={colors.ink}
+            onPress={() => router.push("/manual-meal")}
+          />
+          <LogChip
+            icon="restaurant-outline"
+            label={t("log.tile_menu")}
+            tint={colors.mint}
+            proBadge={!ent.is_pro}
+            onPress={() => router.push("/scan/menu")}
+          />
+          <LogChip
+            icon="book-outline"
+            label={isArabic ? "وصفات" : "Recipes"}
+            tint={colors.coral}
+            onPress={() => router.push("/recipes")}
+          />
         </View>
-      ) : ledger && ledger.totals.items.length > 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t("log.todays_log_title")}</Text>
-          <Text style={styles.cardSub}>
-            {t("log.todays_log_sub", {
-              items: ledger.totals.items.length,
-              low: ledger.totals.kcal.low,
-              high: ledger.totals.kcal.high,
-            })}
-          </Text>
-          {ledger.totals.items.map((it) => (
-            <View key={it.id} style={styles.row}>
-              {it.photo_url ? (
-                <Image source={{ uri: it.photo_url }} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbPlaceholder]}>
-                  <Text style={styles.thumbPlaceholderText}>
-                    {it.name.slice(0, 1).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowName}>{it.name}</Text>
-                <Text style={styles.rowMeta}>
-                  {it.portion_estimate || ""}
-                  {it.confidence ? ` · ${it.confidence}` : ""}
-                </Text>
-              </View>
-              <Text style={styles.rowKcal}>
-                {it.kcal_low}–{it.kcal_high} {t("common.kcal")}
+
+        {/* Ask coach pair */}
+        <SectionKicker>
+          {isArabic ? "اطلب من الكوتش" : "ASK COACH"}
+        </SectionKicker>
+        <View style={styles.pairRow}>
+          <PairCard
+            icon="sparkles"
+            title={t("log.suggest_title")}
+            subtitle={t("log.suggest_sub")}
+            tint={colors.gold}
+            onPress={() => router.push("/meals-suggest")}
+          />
+          <PairCard
+            icon="calendar"
+            title={t("log.plan_title")}
+            subtitle={t("log.plan_sub")}
+            tint={colors.mint}
+            proBadge={!ent.is_pro}
+            onPress={() => router.push("/meal-plan")}
+          />
+        </View>
+
+        {/* Recent items — horizontal scroller */}
+        {recent.length > 0 && (
+          <>
+            <SectionKicker>
+              {isArabic ? "الأخيرة · انقر لإعادة التسجيل" : "RECENT · TAP TO RELOG"}
+            </SectionKicker>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentScroll}
+            >
+              {recent.map((it) => (
+                <Pressable
+                  key={it.id}
+                  onPress={() => relog(it)}
+                  disabled={relogBusy === it.id}
+                  style={styles.recentChip}
+                >
+                  {relogBusy === it.id ? (
+                    <View style={styles.recentBusy}>
+                      <ActivityIndicator color={colors.gold} />
+                    </View>
+                  ) : (
+                    <>
+                      {it.photo_url ? (
+                        <Image
+                          source={{ uri: it.photo_url }}
+                          style={styles.recentImg}
+                        />
+                      ) : (
+                        <View style={[styles.recentImg, styles.recentImgPh]}>
+                          <Ionicons
+                            name="restaurant-outline"
+                            size={20}
+                            color={colors.dim}
+                          />
+                        </View>
+                      )}
+                      <Text style={styles.recentName} numberOfLines={1}>
+                        {it.name}
+                      </Text>
+                      <Text style={styles.recentKcal}>
+                        {it.kcal_low}–{it.kcal_high} kcal
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* Today's log — flat list, mirrors Home meals card */}
+        <SectionKicker>
+          {isArabic
+            ? `اليوم · ${ledger?.totals.items.length ?? 0} عناصر`
+            : `TODAY · ${ledger?.totals.items.length ?? 0} ITEMS`}
+        </SectionKicker>
+        {loading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={colors.gold} />
+          </View>
+        ) : ledger && ledger.totals.items.length > 0 ? (
+          <View style={styles.todayCard}>
+            <View style={styles.todayHead}>
+              <Text style={styles.todayKcal}>
+                {ledger.totals.kcal.low}–{ledger.totals.kcal.high} kcal
+              </Text>
+              <Text style={styles.todayMeta}>
+                {isArabic ? "نطاق اليوم" : "Today's range"}
               </Text>
             </View>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.emptyTitle}>{t("log.empty_title")}</Text>
-          <Text style={styles.emptyBody}>{t("log.empty_body")}</Text>
-        </View>
-      )}
-    </Screen>
+            {ledger.totals.items.map((it, idx) => (
+              <View
+                key={it.id}
+                style={[
+                  styles.itemRow,
+                  idx < ledger.totals.items.length - 1 && styles.itemRowDivider,
+                ]}
+              >
+                {it.photo_url ? (
+                  <Image source={{ uri: it.photo_url }} style={styles.thumb} />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbPh]}>
+                    <Text style={styles.thumbPhText}>
+                      {it.name.slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {it.name}
+                  </Text>
+                  {it.portion_estimate ? (
+                    <Text style={styles.itemMeta}>{it.portion_estimate}</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.itemKcal}>
+                  {Math.round((it.kcal_low + it.kcal_high) / 2)}
+                  <Text style={styles.itemKcalUnit}> kcal</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyCard}>
+            <Ionicons name="restaurant-outline" size={24} color={colors.dim} />
+            <Text style={styles.emptyTitle}>{t("log.empty_title")}</Text>
+            <Text style={styles.emptyBody}>{t("log.empty_body")}</Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-function HeroCta({
-  icon,
-  kicker,
+// ────────────────────────────────────────────────────────────────────
+// Section kicker
+
+function SectionKicker({ children }: { children: string }) {
+  return <Text style={styles.sectionKicker}>{children}</Text>;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Primary scan CTA — dominant hero
+
+function PrimaryScan({
   title,
-  subtitle,
-  onPress,
+  voiceLabel,
+  barcodeLabel,
+  onScan,
+  onVoice,
+  onBarcode,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  kicker: string;
   title: string;
-  subtitle: string;
-  onPress: () => void;
+  voiceLabel: string;
+  barcodeLabel: string;
+  onScan: () => void;
+  onVoice: () => void;
+  onBarcode: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.hero}>
-      <View style={styles.heroIcon}>
-        <Ionicons name={icon} size={30} color={colors.bg} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.heroKicker}>{kicker}</Text>
-        <Text style={styles.heroTitle}>{title}</Text>
-        <Text style={styles.heroSub}>{subtitle}</Text>
-      </View>
-      <Text style={styles.heroArrow}>→</Text>
-    </Pressable>
+    <View style={styles.primaryWrap}>
+      <Pressable style={styles.primaryCard} onPress={onScan}>
+        <View style={styles.primaryIconWrap}>
+          <Ionicons name="camera" size={40} color={colors.bg} />
+        </View>
+        <Text style={styles.primaryTitle}>{title}</Text>
+        <View style={styles.primaryHintRow}>
+          <Pressable
+            hitSlop={8}
+            style={styles.primaryHint}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onVoice();
+            }}
+          >
+            <Ionicons name="mic" size={12} color={colors.dim} />
+            <Text style={styles.primaryHintText}>{voiceLabel}</Text>
+          </Pressable>
+          <View style={styles.primaryHintDot} />
+          <Pressable
+            hitSlop={8}
+            style={styles.primaryHint}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onBarcode();
+            }}
+          >
+            <Ionicons name="barcode" size={12} color={colors.dim} />
+            <Text style={styles.primaryHintText}>{barcodeLabel}</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
-function TileCta({
+// ────────────────────────────────────────────────────────────────────
+// Compact log chip
+
+function LogChip({
   icon,
   label,
   tint,
@@ -318,23 +393,25 @@ function TileCta({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.tile}>
-      <View style={[styles.tileIcon, { borderColor: tint }]}>
-        <Ionicons name={icon} size={22} color={tint} />
+    <Pressable style={styles.chip} onPress={onPress}>
+      <View style={[styles.chipIcon, { backgroundColor: tint + "22" }]}>
+        <Ionicons name={icon} size={18} color={tint} />
       </View>
-      <Text style={styles.tileLabel}>{label}</Text>
-      {proBadge && (
-        <View style={styles.tileProBadge}>
-          <Text style={styles.proBadgeText}>PRO</Text>
+      <Text style={styles.chipLabel}>{label}</Text>
+      {proBadge ? (
+        <View style={styles.chipProBadge}>
+          <Text style={styles.chipProText}>PRO</Text>
         </View>
-      )}
+      ) : null}
     </Pressable>
   );
 }
 
-function PairCta({
+// ────────────────────────────────────────────────────────────────────
+// Ask-coach pair card
+
+function PairCard({
   icon,
-  kicker,
   title,
   subtitle,
   tint,
@@ -342,7 +419,6 @@ function PairCta({
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  kicker: string;
   title: string;
   subtitle: string;
   tint: string;
@@ -350,162 +426,175 @@ function PairCta({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.pair}>
-      <View style={styles.pairIconRow}>
-        <Ionicons name={icon} size={20} color={tint} />
-        <Text style={[styles.pairKicker, { color: tint }]}>{kicker}</Text>
+    <Pressable style={styles.pair} onPress={onPress}>
+      <View style={[styles.pairIcon, { backgroundColor: tint + "22" }]}>
+        <Ionicons name={icon} size={18} color={tint} />
       </View>
       <Text style={styles.pairTitle}>{title}</Text>
-      <Text style={styles.pairSub}>{subtitle}</Text>
-      {proBadge && (
-        <View style={styles.tileProBadge}>
-          <Text style={styles.proBadgeText}>PRO</Text>
+      <Text style={styles.pairSub} numberOfLines={2}>
+        {subtitle}
+      </Text>
+      {proBadge ? (
+        <View style={styles.chipProBadge}>
+          <Text style={styles.chipProText}>PRO</Text>
         </View>
-      )}
+      ) : null}
     </Pressable>
   );
 }
 
-function BrowseCta({
-  icon,
-  title,
-  subtitle,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={styles.browse}>
-      <View style={styles.browseIcon}>
-        <Ionicons name={icon} size={22} color={colors.mint} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.browseTitle}>{title}</Text>
-        <Text style={styles.browseSub}>{subtitle}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.dim} />
-    </Pressable>
-  );
-}
+// ────────────────────────────────────────────────────────────────────
+// Styles
 
 const styles = StyleSheet.create({
-  head: { marginTop: spacing.sm, gap: 4 },
-  title: {
-    fontFamily: font.displayBold,
-    fontSize: 32,
-    color: colors.ink,
+  shell: {
+    flex: 1,
+    backgroundColor: colors.bg,
   },
-  sub: {
-    fontFamily: font.body,
-    fontSize: 14,
-    color: colors.dim,
+  content: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl * 2,
+    gap: spacing.md,
   },
-  kicker: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.gold,
-    letterSpacing: 1.4,
-  },
-  sectionKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.dim,
-    letterSpacing: 1.4,
-    marginTop: spacing.md,
-    marginBottom: 2,
-  },
-  hero: {
+  // Header
+  headRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
+  },
+  headTitle: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 28,
+  },
+  headAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Section kicker
+  sectionKicker: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    marginTop: spacing.sm,
+    marginBottom: -spacing.xs,
+  },
+  // Primary scan CTA
+  primaryWrap: {
+    marginTop: spacing.sm,
+  },
+  primaryCard: {
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.gold,
     borderRadius: radius.lg,
-    padding: spacing.md,
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: spacing.md,
+    shadowColor: colors.gold,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  primaryIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.gold,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    elevation: 8,
   },
-  heroKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.4,
-  },
-  heroTitle: {
+  primaryTitle: {
+    color: colors.ink,
     fontFamily: font.displayBold,
     fontSize: 22,
-    color: colors.ink,
-    marginTop: 2,
+    letterSpacing: 0.3,
   },
-  heroSub: {
-    fontFamily: font.body,
-    fontSize: 13,
+  primaryHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: 4,
+  },
+  primaryHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel2,
+  },
+  primaryHintText: {
     color: colors.dim,
-    marginTop: 2,
-    lineHeight: 19,
+    fontFamily: font.body,
+    fontSize: 11,
   },
-  heroArrow: {
-    fontFamily: font.displayBold,
-    fontSize: 26,
-    color: colors.gold,
+  primaryHintDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.line,
   },
-  rowGrid: {
+  // Chip row
+  chipRow: {
     flexDirection: "row",
     gap: spacing.sm,
   },
-  tile: {
+  chip: {
     flex: 1,
-    aspectRatio: 1,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.sm,
-    gap: 8,
+    gap: 6,
     position: "relative",
   },
-  tileIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
+  chipIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.panel2,
   },
-  tileLabel: {
-    fontFamily: font.displayBold,
-    fontSize: 14,
+  chipLabel: {
     color: colors.ink,
-    letterSpacing: 0.3,
+    fontFamily: font.bodyBold,
+    fontSize: 12,
   },
-  tileProBadge: {
+  chipProBadge: {
     position: "absolute",
-    top: 6,
-    right: 6,
-    paddingHorizontal: 6,
+    top: 4,
+    right: 4,
+    paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: radius.pill,
     backgroundColor: colors.gold,
   },
-  pairGrid: {
+  chipProText: {
+    color: colors.bg,
+    fontFamily: font.mono,
+    fontSize: 8,
+    letterSpacing: 1,
+  },
+  // Pair card
+  pairRow: {
     flexDirection: "row",
     gap: spacing.sm,
   },
@@ -516,172 +605,38 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: radius.md,
     padding: spacing.md,
-    gap: 2,
+    gap: 6,
+    minHeight: 108,
     position: "relative",
   },
-  pairIconRow: {
-    flexDirection: "row",
+  pairIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
-    gap: 6,
-  },
-  pairKicker: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    letterSpacing: 1.4,
+    justifyContent: "center",
   },
   pairTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 16,
     color: colors.ink,
-    marginTop: 4,
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+    marginTop: 2,
   },
   pairSub: {
-    fontFamily: font.body,
-    fontSize: 12,
     color: colors.dim,
-    marginTop: 2,
-    lineHeight: 17,
-  },
-  browse: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  browseIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.mint,
-    backgroundColor: colors.panel2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  browseTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 15,
-    color: colors.ink,
-  },
-  browseSub: {
     fontFamily: font.body,
-    fontSize: 12,
-    color: colors.dim,
-    marginTop: 2,
-    lineHeight: 17,
-  },
-  ctaCol: { gap: spacing.sm },
-  cta: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    position: "relative",
-  },
-  ctaTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
-    color: colors.ink,
-    marginTop: 4,
-  },
-  ctaSub: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.dim,
-    marginTop: 4,
-  },
-  ctaArrow: {
-    position: "absolute",
-    right: spacing.lg,
-    bottom: spacing.md,
-    fontFamily: font.displayBold,
-    fontSize: 22,
-  },
-  proBadge: {
-    position: "absolute",
-    top: spacing.md,
-    right: spacing.md,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.gold,
-  },
-  proBadgeText: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    color: colors.bg,
-    letterSpacing: 1.2,
-  },
-  card: {
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: 4,
-  },
-  cardTitle: { fontFamily: font.displayBold, fontSize: 18, color: colors.ink },
-  cardSub: {
-    fontFamily: font.mono,
     fontSize: 11,
-    color: colors.dim,
-    marginBottom: spacing.sm,
+    lineHeight: 16,
   },
-  row: {
-    flexDirection: "row",
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    alignItems: "center",
+  // Recent scroller
+  recentScroll: {
     gap: spacing.sm,
-  },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.sm,
-    backgroundColor: colors.panel2,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  thumbPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbPlaceholderText: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
-    color: colors.dim,
-  },
-  rowName: { fontFamily: font.body, fontSize: 14, color: colors.ink },
-  rowMeta: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    color: colors.dim,
-    marginTop: 2,
-  },
-  rowKcal: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
-  emptyTitle: {
-    fontFamily: font.displayBold,
-    fontSize: 16,
-    color: colors.ink,
-  },
-  emptyBody: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.dim,
-    marginTop: 4,
-    lineHeight: 20,
+    paddingVertical: 4,
   },
   recentChip: {
     width: 140,
     padding: spacing.sm,
-    backgroundColor: colors.panel2,
+    backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
@@ -691,7 +646,7 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 4 / 3,
     borderRadius: radius.sm,
-    backgroundColor: colors.panel,
+    backgroundColor: colors.panel2,
     marginBottom: 2,
   },
   recentImgPh: {
@@ -701,20 +656,116 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   recentName: {
+    color: colors.ink,
     fontFamily: font.body,
     fontSize: 13,
-    color: colors.ink,
   },
   recentKcal: {
+    color: colors.gold,
     fontFamily: font.mono,
     fontSize: 11,
+  },
+  recentBusy: {
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Today's log
+  loadingRow: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+  },
+  todayCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  todayHead: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+    gap: 2,
+  },
+  todayKcal: {
     color: colors.gold,
+    fontFamily: font.displayBold,
+    fontSize: 20,
+  },
+  todayMeta: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
+  },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  itemRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  thumb: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  thumbPh: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbPhText: {
+    color: colors.dim,
+    fontFamily: font.displayBold,
+    fontSize: 16,
+  },
+  itemName: {
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 14,
+  },
+  itemMeta: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
     marginTop: 2,
   },
-  recentTimes: {
+  itemKcal: {
+    color: colors.ink,
     fontFamily: font.mono,
-    fontSize: 10,
+    fontSize: 13,
+  },
+  itemKcalUnit: {
     color: colors.dim,
-    marginTop: 2,
+    fontSize: 10,
+  },
+  emptyCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    marginTop: 4,
+  },
+  emptyBody: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 17,
   },
 });
