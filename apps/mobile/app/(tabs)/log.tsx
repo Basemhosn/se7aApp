@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -65,6 +66,7 @@ export default function Log() {
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [relogBusy, setRelogBusy] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -129,6 +131,17 @@ export default function Log() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await load();
+              setRefreshing(false);
+            }}
+            tintColor={colors.gold}
+          />
+        }
       >
         <View style={styles.headRow}>
           <Text style={styles.headTitle}>{t("log.title")}</Text>

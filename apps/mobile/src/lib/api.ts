@@ -138,12 +138,18 @@ export async function api<T>(
     ...(await bearerHeader()),
     ...(init.headers ?? {}),
   };
-  // Belt-and-suspenders with the server-side no-store: some iOS
-  // URLSession configs still stash responses briefly even when the
-  // server says no-store. Setting cache: 'no-store' on the request
-  // side guarantees a fresh fetch. Server headers remain authoritative
-  // for external tools.
-  const res = await fetch(`${BASE}${path}`, {
+  // iOS URLSession ignores `cache: 'no-store'` — RN fetch on iOS
+  // hands the request straight to NSURLSession, which respects its
+  // own cache policy. To guarantee a fresh fetch for GETs (idempotent
+  // ledger reads etc.), append a monotonic cache-buster to the URL.
+  // POSTs are never cached by NSURLSession so we skip the buster
+  // there to keep server logs clean.
+  const method = (init.method ?? "GET").toUpperCase();
+  const bustedPath =
+    method === "GET"
+      ? `${path}${path.includes("?") ? "&" : "?"}_t=${Date.now()}`
+      : path;
+  const res = await fetch(`${BASE}${bustedPath}`, {
     ...init,
     headers,
     cache: "no-store",

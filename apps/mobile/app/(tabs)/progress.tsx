@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -139,6 +140,7 @@ export default function Progress() {
 
   const [goalWeightInput, setGoalWeightInput] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (d: number) => {
     setLoading(true);
@@ -232,6 +234,17 @@ export default function Progress() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await load(days);
+              setRefreshing(false);
+            }}
+            tintColor={colors.gold}
+          />
+        }
       >
         <View style={styles.headRow}>
           <Text style={styles.headTitle}>{t("progress.title")}</Text>

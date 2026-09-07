@@ -8,6 +8,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -171,6 +172,7 @@ export default function Home() {
   const [pageIndex, setPageIndex] = useState(0);
   const [expandedSlots, setExpandedSlots] = useState<Set<string>>(new Set());
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const viewDateIso = useMemo(() => isoOffset(viewOffset), [viewOffset]);
   const isToday = viewOffset === 0;
@@ -217,6 +219,7 @@ export default function Home() {
   // ── Data load ────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!user) return;
+    try {
     const tzOffsetMin = -new Date().getTimezoneOffset();
     const ledgerPath = isToday
       ? `/api/ledger/today?tz_offset_min=${tzOffsetMin}`
@@ -307,7 +310,21 @@ export default function Home() {
         : null
     );
     setLoading(false);
-  }, [user, isToday, viewDateIso]);
+    } catch (e) {
+      // Never swallow silently — a failed ledger fetch was previously
+      // invisible, so a just-logged meal that didn't appear looked like
+      // it hadn't persisted. Surface it now so the user can pull-to-
+      // refresh or reopen.
+      setLoading(false);
+      Alert.alert(
+        isArabic ? "تعذّر التحديث" : "Couldn't refresh",
+        (e as Error).message ||
+          (isArabic
+            ? "أعد المحاولة أو اسحب للأسفل لإعادة التحميل."
+            : "Try again or pull down to refresh.")
+      );
+    }
+  }, [user, isToday, viewDateIso, isArabic]);
 
   useFocusEffect(
     useCallback(() => {
@@ -400,6 +417,17 @@ export default function Home() {
         // ScrollView for the pan responder.
         directionalLockEnabled
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await load();
+              setRefreshing(false);
+            }}
+            tintColor={colors.gold}
+          />
+        }
       >
         <Header
           streakDays={streak?.current_days ?? 0}
