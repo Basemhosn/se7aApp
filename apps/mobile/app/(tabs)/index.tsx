@@ -1396,13 +1396,6 @@ function MealsList({
                 )
               );
           const isExpanded = expanded.has(slot);
-          const emptyPress = () => {
-            if (usePlanned) {
-              router.push("/meal-plan");
-            } else if (isToday) {
-              router.push({ pathname: "/meals-suggest", params: { slot } });
-            }
-          };
           return (
             <View key={slot}>
               <Pressable
@@ -1410,9 +1403,7 @@ function MealsList({
                   styles.mealRow,
                   i < SLOTS.length - 1 && !isExpanded && styles.mealRowDivider,
                 ]}
-                onPress={() =>
-                  displayCount > 0 ? onToggle(slot) : emptyPress()
-                }
+                onPress={() => onToggle(slot)}
               >
                 <View
                   style={[
@@ -1441,53 +1432,94 @@ function MealsList({
                   </Text>
                 </View>
                 <Ionicons
-                  name={
-                    displayCount === 0
-                      ? "add"
-                      : isExpanded
-                        ? "chevron-up"
-                        : "chevron-forward"
-                  }
+                  name={isExpanded ? "chevron-up" : "chevron-forward"}
                   size={18}
                   color={colors.dim}
                 />
               </Pressable>
-              {isExpanded && !usePlanned
-                ? slotItems.map((it, idx) => (
-                    <View
-                      key={it.id}
-                      style={[
-                        styles.mealItemRow,
-                        idx < slotItems.length - 1 && styles.mealRowDivider,
-                      ]}
-                    >
-                      <Text style={styles.mealItemName} numberOfLines={1}>
-                        {it.name}
-                      </Text>
-                      <Text style={styles.mealItemMeta}>
-                        {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+              {isExpanded ? (
+                <View style={styles.mealDrawer}>
+                  {/* Item list (real logs OR planned preview). Empty
+                      state renders a single dim line inside the drawer
+                      so the user can still see the recommendation CTA
+                      below it. */}
+                  {(usePlanned ? slotPlanned : slotItems).length === 0 ? (
+                    <View style={styles.mealEmptyRow}>
+                      <Text style={styles.mealEmptyText}>
+                        {isArabic
+                          ? "لا شيء بعد"
+                          : "Nothing logged yet"}
                       </Text>
                     </View>
-                  ))
-                : null}
-              {isExpanded && usePlanned
-                ? slotPlanned.map((p, idx) => (
-                    <View
-                      key={`p-${slot}-${idx}`}
-                      style={[
-                        styles.mealItemRow,
-                        idx < slotPlanned.length - 1 && styles.mealRowDivider,
-                      ]}
+                  ) : !usePlanned ? (
+                    slotItems.map((it, idx) => (
+                      <View
+                        key={it.id}
+                        style={[
+                          styles.mealItemRow,
+                          idx < slotItems.length - 1 &&
+                            styles.mealRowDivider,
+                        ]}
+                      >
+                        <Text style={styles.mealItemName} numberOfLines={1}>
+                          {it.name}
+                        </Text>
+                        <Text style={styles.mealItemMeta}>
+                          {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    slotPlanned.map((p, idx) => (
+                      <View
+                        key={`p-${slot}-${idx}`}
+                        style={[
+                          styles.mealItemRow,
+                          idx < slotPlanned.length - 1 &&
+                            styles.mealRowDivider,
+                        ]}
+                      >
+                        <Text style={styles.mealItemName} numberOfLines={1}>
+                          {p.name}
+                        </Text>
+                        <Text style={styles.mealItemMeta}>
+                          {Math.round((p.kcal_low + p.kcal_high) / 2)} kcal
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                  {/* Recommendation CTA — hidden for planned-preview
+                      days (that's the meal-plan editor's job) and for
+                      non-today views (recs are always for today). */}
+                  {isToday && !usePlanned ? (
+                    <Pressable
+                      style={styles.recBtn}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/meals-suggest",
+                          params: { slot },
+                        })
+                      }
                     >
-                      <Text style={styles.mealItemName} numberOfLines={1}>
-                        {p.name}
+                      <Ionicons
+                        name="sparkles"
+                        size={14}
+                        color={colors.gold}
+                      />
+                      <Text style={styles.recBtnText}>
+                        {isArabic
+                          ? "احصل على توصيات"
+                          : "Get recommendations"}
                       </Text>
-                      <Text style={styles.mealItemMeta}>
-                        {Math.round((p.kcal_low + p.kcal_high) / 2)} kcal
-                      </Text>
-                    </View>
-                  ))
-                : null}
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color={colors.gold}
+                      />
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           );
         })}
@@ -2405,6 +2437,39 @@ const styles = StyleSheet.create({
     color: colors.dim,
     fontFamily: font.mono,
     fontSize: 12,
+  },
+  // Slot drawer (always-expandable meal slots)
+  mealDrawer: {
+    backgroundColor: colors.panel2,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  mealEmptyRow: {
+    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.md + 32 + spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  mealEmptyText: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 13,
+    fontStyle: "italic",
+  },
+  recBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.md + 32 + spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  recBtnText: {
+    flex: 1,
+    color: colors.gold,
+    fontFamily: font.bodyBold,
+    fontSize: 13,
   },
   // Footer cards
   footerCards: {
