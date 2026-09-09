@@ -1,15 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import * as Notifications from "expo-notifications";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
+import {
+  getScan,
+  markAnalyzing,
+  markFailed,
+  markReady,
+  registerScan,
+  removeScan,
+} from "@/lib/scanStore";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -22,6 +31,7 @@ type Phase = "idle" | "analyzing" | "review" | "saving";
 
 export default function PlateScan() {
   const { t } = useTranslation();
+  const params = useLocalSearchParams<{ resume?: string }>();
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -31,6 +41,28 @@ export default function PlateScan() {
   const [invisible, setInvisible] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [slot, setSlot] = useState<MealSlot>(slotForNow());
+  // Local ID from the scan store when this screen was reached via the
+  // Home tab's pending-scan card. Null on a fresh scan.
+  const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
+
+  // If we arrived via ?resume=<localId>, hydrate the review UI from
+  // the store instead of forcing the user through the picker again.
+  useEffect(() => {
+    const resumeId = params.resume;
+    if (!resumeId || phase !== "idle") return;
+    const stored = getScan(resumeId);
+    if (!stored || stored.status !== "ready" || !stored.items || !stored.scanId) {
+      return;
+    }
+    setResumeLocalId(resumeId);
+    setPreviewUri(stored.previewUri);
+    setScanId(stored.scanId);
+    setItems(stored.items);
+    setConfidence(stored.confidence ?? "medium");
+    setInvisible(stored.invisibleCosts ?? []);
+    setSelected(new Set(stored.items.map((_, i) => i)));
+    setPhase("review");
+  }, [params.resume, phase]);
   // Per-item portion overrides. Scale of 1 = as-scanned. Label overrides
   // the portion_estimate string in both the UI and the ledger row so
   // the user's edit is what gets persisted.
@@ -60,34 +92,62 @@ export default function PlateScan() {
       [{ resize: { width: 1024 } }],
       { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
     );
-    setPreviewUri(resized.uri);
-    await analyze(resized.uri);
+    // Async plate scan (Cal.ai pattern): register a pending entry in
+    // the store, navigate to Home immediately, and let the AI call
+    // run in background. Home renders a card for each pending entry;
+    // tapping a "ready" one hops back here with ?resume=<localId>.
+    const localId = registerScan(resized.uri);
+    router.replace("/");
+    void runScanInBackground(localId, resized.uri);
   };
 
-  const analyze = async (uri: string) => {
-    setPhase("analyzing");
+  /**
+   * Kick off the AI upload and mark the store entry ready/failed when
+   * the call settles. Runs detached from any screen — the user has
+   * already navigated to Home by the time this awaits.
+   */
+  const runScanInBackground = async (
+    localId: string,
+    uri: string
+  ): Promise<void> => {
+    markAnalyzing(localId);
     try {
       const body = await apiUpload<PlateScanResponse>(
         "/api/scan/plate",
         "image",
         { uri, mimeType: "image/jpeg", fileName: "plate.jpg" }
       );
-      setScanId(body.scan_id);
-      setItems(body.result.items);
-      setConfidence(body.result.confidence);
-      setInvisible(body.result.invisible_costs ?? []);
-      setSelected(new Set(body.result.items.map((_, i) => i)));
-      setEdits({});
-      setPhase("review");
+      markReady(localId, {
+        scanId: body.scan_id,
+        items: body.result.items,
+        confidence: body.result.confidence,
+        invisibleCosts: body.result.invisible_costs ?? [],
+      });
+      // Fire a local notification so the user knows results are
+      // ready even if the app is backgrounded. Silent failure —
+      // notification permission is opportunistic.
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: t("scan.plate.ready_notification_title"),
+            body: t("scan.plate.ready_notification_body"),
+            data: { deeplink: `/scan/plate?resume=${localId}` },
+          },
+          trigger: null,
+        });
+      } catch {
+        /* silent */
+      }
     } catch (e) {
       if (e instanceof RateLimitedError) {
-        const { title, body } = rateLimitMessage(e);
-        Alert.alert(title, body);
-        setPhase("idle");
+        const { body: msg } = rateLimitMessage(e);
+        markFailed(localId, msg);
         return;
       }
-      setErr((e as Error).message || t("scan.plate.couldnt_analyze"));
-      setPhase("idle");
+      markFailed(
+        localId,
+        (e as Error).message || t("scan.plate.couldnt_analyze")
+      );
     }
   };
 
@@ -222,6 +282,9 @@ export default function PlateScan() {
         }),
       });
       markDayDirty();
+      // Clean up the pending-scan card on Home now that the review
+      // is committed to the ledger.
+      if (resumeLocalId) removeScan(resumeLocalId);
       // Plate scan currently doesn't carry micronutrients in the
       // scaled review shape — the server extracts them from scan_id
       // instead. Optimistic merge just uses macros; the fresh fetch
@@ -251,6 +314,10 @@ export default function PlateScan() {
   };
 
   const reset = () => {
+    if (resumeLocalId) {
+      removeScan(resumeLocalId);
+      setResumeLocalId(null);
+    }
     setPhase("idle");
     setPreviewUri(null);
     setScanId(null);

@@ -133,14 +133,14 @@ export default function Coach() {
   if (!entLoading && !ent.is_pro) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.head}>
-          <View style={styles.avatar}>
-            <Ionicons name="sparkles" size={20} color={colors.gold} />
-          </View>
-          <View>
-            <Text style={styles.title}>SE7A Coach</Text>
-            <Text style={styles.sub}>{t("coach.sub")}</Text>
-          </View>
+        <View style={styles.headRow}>
+          <Text style={styles.headTitle}>{t("coach.title")}</Text>
+          <Pressable
+            style={styles.headAvatar}
+            onPress={() => router.push("/settings")}
+          >
+            <Ionicons name="person-outline" size={18} color={colors.ink} />
+          </Pressable>
         </View>
         <View style={styles.gate}>
           <Text style={styles.gateKicker}>PRO</Text>
@@ -171,22 +171,21 @@ export default function Coach() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.head}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarMark}>C</Text>
+      <View style={styles.headRow}>
+        <View>
+          <Text style={styles.headTitle}>{t("coach.title")}</Text>
+          {busy ? (
+            <Text style={styles.headSub}>
+              {isArabic ? "يفكر…" : "Thinking…"}
+            </Text>
+          ) : null}
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>SE7A Coach</Text>
-          <Text style={styles.sub}>
-            {busy
-              ? isArabic
-                ? "يفكر…"
-                : "Thinking…"
-              : isArabic
-                ? "كوتشك الشخصي"
-                : "Your AI dietitian"}
-          </Text>
-        </View>
+        <Pressable
+          style={styles.headAvatar}
+          onPress={() => router.push("/settings")}
+        >
+          <Ionicons name="person-outline" size={18} color={colors.ink} />
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -206,14 +205,8 @@ export default function Coach() {
             </View>
           ) : messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>
-                {isArabic ? "كيف أقدر أساعد؟" : "How can I help?"}
-              </Text>
-              <Text style={styles.emptyBody}>
-                {isArabic
-                  ? "أعرف سجل وجباتك، PRs، وأهدافك. اسألني أي شيء."
-                  : "I've got your food logs, PRs, and goals. Ask me anything."}
-              </Text>
+              <Text style={styles.emptyTitle}>{t("coach.empty_title")}</Text>
+              <Text style={styles.emptyBody}>{t("coach.empty_body")}</Text>
               <View style={styles.promptStack}>
                 {SUGGESTIONS.map((s) => {
                   const text = isArabic ? s.ar : s.en;
@@ -261,9 +254,7 @@ export default function Coach() {
             <TextInput
               value={input}
               onChangeText={setInput}
-              placeholder={
-                isArabic ? "اكتب رسالتك…" : "Message SE7A Coach…"
-              }
+              placeholder={t("coach.input_placeholder")}
               placeholderTextColor={colors.dim}
               style={styles.input}
               multiline
@@ -380,42 +371,35 @@ function TypingDots() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  head: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+  headRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarMark: {
-    fontFamily: font.displayBold,
-    fontSize: 15,
-    color: colors.gold,
-  },
-  title: {
-    fontFamily: font.displayBold,
-    fontSize: 18,
+  headTitle: {
     color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 28,
   },
-  sub: {
+  headSub: {
+    color: colors.dim,
     fontFamily: font.mono,
     fontSize: 11,
-    color: colors.dim,
-    marginTop: 1,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
+    marginTop: 2,
+  },
+  headAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
   },
   gate: {
     flex: 1,

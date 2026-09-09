@@ -156,17 +156,15 @@ export default function Log() {
         {/* Primary scan CTA — dominant, thumb-reachable */}
         <PrimaryScan
           title={t("log.cta_plate_title")}
-          voiceLabel={isArabic ? "صوت" : "Voice"}
-          barcodeLabel={isArabic ? "باركود" : "Barcode"}
+          voiceLabel={t("log.hint_voice")}
+          barcodeLabel={t("log.hint_barcode")}
           onScan={() => router.push("/scan/plate")}
           onVoice={() => router.push("/voice-log")}
           onBarcode={() => router.push("/scan/barcode")}
         />
 
         {/* Compact chip row — remaining log methods */}
-        <SectionKicker>
-          {isArabic ? "طرق أخرى" : "MORE WAYS TO LOG"}
-        </SectionKicker>
+        <SectionKicker>{t("log.section_more_ways")}</SectionKicker>
         <View style={styles.chipRow}>
           <LogChip
             icon="create-outline"
@@ -183,16 +181,14 @@ export default function Log() {
           />
           <LogChip
             icon="book-outline"
-            label={isArabic ? "وصفات" : "Recipes"}
+            label={t("log.tile_recipes")}
             tint={colors.coral}
             onPress={() => router.push("/recipes")}
           />
         </View>
 
         {/* Ask coach pair */}
-        <SectionKicker>
-          {isArabic ? "اطلب من الكوتش" : "ASK COACH"}
-        </SectionKicker>
+        <SectionKicker>{t("log.section_ask_coach")}</SectionKicker>
         <View style={styles.pairRow}>
           <PairCard
             icon="sparkles"
@@ -214,9 +210,7 @@ export default function Log() {
         {/* Recent items — horizontal scroller */}
         {recent.length > 0 && (
           <>
-            <SectionKicker>
-              {isArabic ? "الأخيرة · انقر لإعادة التسجيل" : "RECENT · TAP TO RELOG"}
-            </SectionKicker>
+            <SectionKicker>{t("log.section_recent")}</SectionKicker>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -265,9 +259,9 @@ export default function Log() {
 
         {/* Today's log — flat list, mirrors Home meals card */}
         <SectionKicker>
-          {isArabic
-            ? `اليوم · ${ledger?.totals.items.length ?? 0} عناصر`
-            : `TODAY · ${ledger?.totals.items.length ?? 0} ITEMS`}
+          {t("log.section_today", {
+            count: ledger?.totals.items.length ?? 0,
+          })}
         </SectionKicker>
         {loading ? (
           <View style={styles.loadingRow}>
@@ -279,9 +273,7 @@ export default function Log() {
               <Text style={styles.todayKcal}>
                 {ledger.totals.kcal.low}–{ledger.totals.kcal.high} kcal
               </Text>
-              <Text style={styles.todayMeta}>
-                {isArabic ? "نطاق اليوم" : "Today's range"}
-              </Text>
+              <Text style={styles.todayMeta}>{t("log.today_range")}</Text>
             </View>
             {ledger.totals.items.map((it, idx) => (
               <View

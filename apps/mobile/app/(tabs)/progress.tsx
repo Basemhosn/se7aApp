@@ -259,17 +259,17 @@ export default function Progress() {
         {/* Segmented sub-tab control */}
         <View style={styles.segRow}>
           <SegBtn
-            label={isArabic ? "الجسم" : "Body"}
+            label={t("progress.tab_body")}
             active={subTab === "body"}
             onPress={() => setSubTab("body")}
           />
           <SegBtn
-            label={isArabic ? "التغذية" : "Nutrition"}
+            label={t("progress.tab_nutrition")}
             active={subTab === "nutrition"}
             onPress={() => setSubTab("nutrition")}
           />
           <SegBtn
-            label={isArabic ? "التمرين" : "Training"}
+            label={t("progress.tab_training")}
             active={subTab === "training"}
             onPress={() => setSubTab("training")}
           />
@@ -425,7 +425,7 @@ function BodySubtab({
       <View style={styles.heroCard}>
         <View style={{ flex: 1 }}>
           <Text style={styles.heroKicker}>
-            {isArabic ? "الوزن الحالي" : "CURRENT WEIGHT"}
+            {t("progress.body_current_weight")}
           </Text>
           <Text style={styles.heroValue}>
             {latestKg != null ? `${latestKg}` : "—"}
@@ -433,9 +433,7 @@ function BodySubtab({
           </Text>
           <Text style={[styles.heroDelta, { color: deltaTint }]}>
             {deltaLabel === "—"
-              ? isArabic
-                ? "لا تغيير بعد"
-                : "No change yet"
+              ? t("progress.body_no_change")
               : `${deltaLabel} kg · ${days}d`}
           </Text>
         </View>
@@ -587,18 +585,17 @@ function BodySubtab({
         <View style={styles.previewHeadRow}>
           <View>
             <Text style={[styles.kicker, { color: colors.gold }]}>
-              {isArabic ? "صور التقدم" : "PROGRESS PHOTOS"}
+              {t("progress.photos_kicker")}
             </Text>
             <Text style={styles.linkTitle}>
               {photos.length === 0
-                ? isArabic
-                  ? "شاهد تغيّرك"
-                  : "Watch yourself change"
-                : `${photos.length} ${
-                    isArabic
-                      ? "صورة"
-                      : `photo${photos.length === 1 ? "" : "s"}`
-                  }`}
+                ? t("progress.photos_watch")
+                : t(
+                    photos.length === 1
+                      ? "progress.photos_count"
+                      : "progress.photos_count_plural",
+                    { n: photos.length }
+                  )}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.gold} />
@@ -620,11 +617,7 @@ function BodySubtab({
             )}
           </ScrollView>
         ) : (
-          <Text style={styles.linkSub}>
-            {isArabic
-              ? "صور أمامية / جانبية / خلفية أسبوعية، خاصة، مقارنة جنبًا إلى جنب."
-              : "Weekly front/side/back photos, private, side-by-side compare."}
-          </Text>
+          <Text style={styles.linkSub}>{t("progress.photos_body")}</Text>
         )}
       </Pressable>
 
@@ -636,18 +629,17 @@ function BodySubtab({
         <View style={styles.previewHeadRow}>
           <View>
             <Text style={[styles.kicker, { color: colors.mint }]}>
-              {isArabic ? "قياس الشريط" : "TAPE MEASURE"}
+              {t("progress.measurements_kicker")}
             </Text>
             <Text style={styles.linkTitle}>
               {measurements && measurements.count > 0
-                ? `${measurements.count} ${
-                    isArabic
-                      ? "قياس"
-                      : `entr${measurements.count === 1 ? "y" : "ies"}`
-                  }`
-                : isArabic
-                  ? "القياسات"
-                  : "Measurements"}
+                ? t(
+                    measurements.count === 1
+                      ? "progress.measurements_count"
+                      : "progress.measurements_count_plural",
+                    { n: measurements.count }
+                  )
+                : t("progress.measurements_title")}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.mint} />
@@ -691,11 +683,7 @@ function BodySubtab({
             })}
           </View>
         ) : (
-          <Text style={styles.linkSub}>
-            {isArabic
-              ? "الخصر / الورك / الذراع / الصدر / الفخذ / الرقبة."
-              : "Waist / hip / arm / chest / thigh / neck. Deltas vs your first entry."}
-          </Text>
+          <Text style={styles.linkSub}>{t("progress.measurements_body")}</Text>
         )}
       </Pressable>
 
@@ -792,7 +780,7 @@ function TrainingSubtab({
       {streak ? (
         <View style={styles.card}>
           <Text style={[styles.kicker, { color: colors.gold }]}>
-            {isArabic ? "السلسلة" : "STREAK"}
+            {t("progress.streak_kicker")}
           </Text>
           <View style={styles.streakRow}>
             <View style={{ flex: 1 }}>
@@ -806,9 +794,10 @@ function TrainingSubtab({
                 </Text>
               </Text>
               <Text style={styles.streakMeta}>
-                {isArabic
-                  ? `${streak.days_this_week}/7 هذا الأسبوع · أفضل ${streak.longest_days}`
-                  : `${streak.days_this_week}/7 this week · best ${streak.longest_days}`}
+                {t("progress.streak_this_week", {
+                  done: streak.days_this_week,
+                  best: streak.longest_days,
+                })}
               </Text>
             </View>
             <View style={styles.streakFlame}>
@@ -847,12 +836,10 @@ function TrainingSubtab({
         <View style={styles.emptyCard}>
           <Ionicons name="barbell-outline" size={24} color={colors.dim} />
           <Text style={styles.emptyTitle}>
-            {isArabic ? "لا PRs بعد" : "No PRs yet"}
+            {t("progress.training_no_prs_title")}
           </Text>
           <Text style={styles.emptyBody}>
-            {isArabic
-              ? "سجّل تمارينك لتظهر PRs هنا."
-              : "Log workouts to see your PRs here."}
+            {t("progress.training_no_prs_body")}
           </Text>
         </View>
       )}

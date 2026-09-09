@@ -163,7 +163,15 @@
     "plan_sub": "قائمة تسوّق تلقائية.",
     "browse_kicker": "تصفّح",
     "browse_recipes_title": "وصفات خليجية",
-    "browse_recipes_sub": "مجبوس، كبسة، شاورما — مع الماكرو. اضغط للتسجيل."
+    "browse_recipes_sub": "مجبوس، كبسة، شاورما — مع الماكرو. اضغط للتسجيل.",
+    "hint_voice": "صوت",
+    "hint_barcode": "باركود",
+    "section_more_ways": "طرق أخرى",
+    "section_ask_coach": "اطلب من الكوتش",
+    "section_recent": "الأخيرة · اضغط لإعادة التسجيل",
+    "section_today": "اليوم · {{count}} عناصر",
+    "today_range": "نطاق اليوم",
+    "tile_recipes": "وصفات"
   },
   "progress": {
     "title": "التقدم",
@@ -192,7 +200,27 @@
     "prs_kicker": "أرقامك القياسية",
     "prs_title": "الأرقام الشخصية",
     "prs_sub": "أعلى {{shown}} من {{total}} تمرين متتبَّع.",
-    "prs_meta_est_1rm": "تقدير 1RM {{value}} كغ"
+    "prs_meta_est_1rm": "تقدير 1RM {{value}} كغ",
+    "tab_body": "الجسم",
+    "tab_nutrition": "التغذية",
+    "tab_training": "التمرين",
+    "body_current_weight": "الوزن الحالي",
+    "body_no_change": "لا تغيير بعد",
+    "training_no_prs_title": "لا PRs بعد",
+    "training_no_prs_body": "سجّل تمارينك لتظهر PRs هنا.",
+    "streak_kicker": "السلسلة",
+    "streak_this_week": "{{done}}/7 هذا الأسبوع · أفضل {{best}}",
+    "photos_watch": "شاهد تغيّرك",
+    "photos_count": "{{n}} صورة",
+    "photos_count_plural": "{{n}} صور",
+    "photos_kicker": "صور التقدم",
+    "measurements_kicker": "قياس الشريط",
+    "measurements_title": "القياسات",
+    "measurements_count": "{{n}} قياس",
+    "measurements_count_plural": "{{n}} قياسات",
+    "measurements_body": "الخصر / الورك / الذراع / الصدر / الفخذ / الرقبة.",
+    "photos_body": "صور أمامية / جانبية / خلفية أسبوعية، خاصة، مقارنة جنبًا إلى جنب.",
+    "couldnt_refresh": "تعذّر التحديث"
   },
   "coach": {
     "title": "المدرب",
@@ -360,7 +388,16 @@
       "couldnt_save": "تعذّر الحفظ — حاول مجددًا.",
       "edit_portion_title": "تعديل الكمية",
       "edit_portion_grams_body": "حاليًا ~{{g}} جم. أدخل الوزن الفعلي بالجرام.",
-      "edit_portion_multiplier_body": "أدخل معامل (مثلاً 0.5 للنصف، 1.5 لزيادة 50%)."
+      "edit_portion_multiplier_body": "أدخل معامل (مثلاً 0.5 للنصف، 1.5 لزيادة 50%).",
+      "ready_notification_title": "مسح الطبق جاهز",
+      "ready_notification_body": "اضغط لمراجعة ما رأيناه وتسجيله.",
+      "pending_estimating": "جاري تقدير التغذية",
+      "pending_wait_body": "سنُعلمك عند الانتهاء.",
+      "pending_ready_title": "جاهز للمراجعة",
+      "pending_ready_body": "اضغط لرؤية ما رأيناه · {{n}} عناصر",
+      "pending_failed_title": "فشل المسح",
+      "pending_failed_body": "اضغط للمحاولة مرة أخرى",
+      "pending_uploaded_header": "تم رفعه مؤخرًا"
     },
     "menu": {
       "kicker": "مسح القائمة",

@@ -66,8 +66,15 @@ function handleResponse(
   response: Notifications.NotificationResponse | null | undefined
 ) {
   const raw = response?.notification.request.content.data as
-    | { kind?: string }
+    | { kind?: string; deeplink?: string }
     | undefined;
+  // Prefer an explicit deeplink field (used by async scan notifications
+  // and any future ad-hoc route) over the kind-based lookup.
+  const deeplink = raw?.deeplink;
+  if (deeplink && typeof deeplink === "string" && deeplink.startsWith("/")) {
+    router.push(deeplink as never);
+    return;
+  }
   const kind = raw?.kind;
   if (!kind || typeof kind !== "string") return;
   const path = routeForKind(kind);

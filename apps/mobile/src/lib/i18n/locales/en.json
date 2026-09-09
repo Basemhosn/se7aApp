@@ -163,7 +163,15 @@
     "plan_sub": "Auto shopping list.",
     "browse_kicker": "BROWSE",
     "browse_recipes_title": "Gulf recipes",
-    "browse_recipes_sub": "Machboos, kabsa, shawarma — with macros. Tap to log."
+    "browse_recipes_sub": "Machboos, kabsa, shawarma — with macros. Tap to log.",
+    "hint_voice": "Voice",
+    "hint_barcode": "Barcode",
+    "section_more_ways": "MORE WAYS TO LOG",
+    "section_ask_coach": "ASK COACH",
+    "section_recent": "RECENT · TAP TO RELOG",
+    "section_today": "TODAY · {{count}} ITEMS",
+    "today_range": "Today's range",
+    "tile_recipes": "Recipes"
   },
   "progress": {
     "title": "Progress",
@@ -192,7 +200,27 @@
     "prs_kicker": "YOUR PRs",
     "prs_title": "Personal records",
     "prs_sub": "Top {{shown}} of {{total}} tracked lifts.",
-    "prs_meta_est_1rm": "est. 1RM {{value}} kg"
+    "prs_meta_est_1rm": "est. 1RM {{value}} kg",
+    "tab_body": "Body",
+    "tab_nutrition": "Nutrition",
+    "tab_training": "Training",
+    "body_current_weight": "CURRENT WEIGHT",
+    "body_no_change": "No change yet",
+    "training_no_prs_title": "No PRs yet",
+    "training_no_prs_body": "Log workouts to see your PRs here.",
+    "streak_kicker": "STREAK",
+    "streak_this_week": "{{done}}/7 this week · best {{best}}",
+    "photos_watch": "Watch yourself change",
+    "photos_count": "{{n}} photo",
+    "photos_count_plural": "{{n}} photos",
+    "photos_kicker": "PROGRESS PHOTOS",
+    "measurements_kicker": "TAPE MEASURE",
+    "measurements_title": "Measurements",
+    "measurements_count": "{{n}} entry",
+    "measurements_count_plural": "{{n}} entries",
+    "measurements_body": "Waist / hip / arm / chest / thigh / neck. Deltas vs your first entry.",
+    "photos_body": "Weekly front/side/back photos, private, side-by-side compare.",
+    "couldnt_refresh": "Couldn't refresh"
   },
   "coach": {
     "title": "Coach",
@@ -360,7 +388,16 @@
       "couldnt_save": "Couldn't save — try again.",
       "edit_portion_title": "Adjust portion",
       "edit_portion_grams_body": "Currently ~{{g}}g. Enter actual weight in grams.",
-      "edit_portion_multiplier_body": "Enter a multiplier (e.g. 0.5 for half, 1.5 for 50% more)."
+      "edit_portion_multiplier_body": "Enter a multiplier (e.g. 0.5 for half, 1.5 for 50% more).",
+      "ready_notification_title": "Plate scan ready",
+      "ready_notification_body": "Tap to review what we saw and log it.",
+      "pending_estimating": "Estimating nutrition",
+      "pending_wait_body": "We'll notify you when done.",
+      "pending_ready_title": "Ready to review",
+      "pending_ready_body": "Tap to see what we saw · {{n}} items",
+      "pending_failed_title": "Scan failed",
+      "pending_failed_body": "Tap to retry",
+      "pending_uploaded_header": "Recently uploaded"
     },
     "menu": {
       "kicker": "MENU SCAN",

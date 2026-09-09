@@ -5,6 +5,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -38,6 +39,11 @@ import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerDayResponse, MealSlot, Profile } from "@/types";
 import { SLOTS, SLOT_META } from "@/lib/slot";
+import {
+  type PendingScan,
+  removeScan as removeScanFromStore,
+  subscribeScans,
+} from "@/lib/scanStore";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -173,6 +179,13 @@ export default function Home() {
   const [expandedSlots, setExpandedSlots] = useState<Set<string>>(new Set());
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
+
+  // Subscribe to the async scan store so the "Recently uploaded" card
+  // reflects in-flight scans without needing a screen refresh.
+  useEffect(() => {
+    return subscribeScans(setPendingScans);
+  }, []);
 
   const viewDateIso = useMemo(() => isoOffset(viewOffset), [viewOffset]);
   const isToday = viewOffset === 0;
@@ -502,6 +515,10 @@ export default function Home() {
           }}
           isArabic={isArabic}
         />
+
+        {isToday && pendingScans.length > 0 ? (
+          <PendingScansSection scans={pendingScans} t={t} />
+        ) : null}
 
         <MealsList
           totals={totals}
@@ -1199,6 +1216,117 @@ const ActivityPage = memo(function ActivityPage({
     </View>
   );
 });
+
+// ────────────────────────────────────────────────────────────────────
+// Pending scans (Cal.ai "Recently uploaded" pattern)
+
+function PendingScansSection({
+  scans,
+  t,
+}: {
+  scans: PendingScan[];
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  return (
+    <View style={styles.pendingWrap}>
+      <Text style={styles.pendingHead}>
+        {t("scan.plate.pending_uploaded_header")}
+      </Text>
+      <View style={{ gap: spacing.sm }}>
+        {scans.map((s) => (
+          <PendingScanCard key={s.localId} scan={s} t={t} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function PendingScanCard({
+  scan,
+  t,
+}: {
+  scan: PendingScan;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  const ready = scan.status === "ready";
+  const failed = scan.status === "failed";
+  const busy = scan.status === "uploading" || scan.status === "analyzing";
+  const onPress = () => {
+    if (ready || failed) {
+      router.push({
+        pathname: "/scan/plate",
+        params: { resume: scan.localId },
+      });
+    }
+  };
+  return (
+    <Pressable
+      style={styles.pendingCard}
+      onPress={onPress}
+      disabled={busy}
+    >
+      <View style={styles.pendingThumbWrap}>
+        {scan.previewUri ? (
+          <Image
+            source={{ uri: scan.previewUri }}
+            style={styles.pendingThumb}
+          />
+        ) : (
+          <View style={[styles.pendingThumb, styles.pendingThumbPh]}>
+            <Ionicons name="restaurant" size={20} color={colors.dim} />
+          </View>
+        )}
+        {busy ? (
+          <View style={styles.pendingThumbOverlay}>
+            <ActivityIndicator color={colors.gold} />
+          </View>
+        ) : null}
+        {ready ? (
+          <View style={[styles.pendingBadge, styles.pendingBadgeReady]}>
+            <Ionicons name="checkmark" size={12} color={colors.bg} />
+          </View>
+        ) : null}
+        {failed ? (
+          <View style={[styles.pendingBadge, styles.pendingBadgeFailed]}>
+            <Ionicons name="alert" size={12} color={colors.bg} />
+          </View>
+        ) : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.pendingTitle}>
+          {ready
+            ? t("scan.plate.pending_ready_title")
+            : failed
+              ? t("scan.plate.pending_failed_title")
+              : t("scan.plate.pending_estimating")}
+        </Text>
+        <Text style={styles.pendingBody}>
+          {ready
+            ? t("scan.plate.pending_ready_body", {
+                n: scan.items?.length ?? 0,
+              })
+            : failed
+              ? scan.errorMessage ?? t("scan.plate.pending_failed_body")
+              : t("scan.plate.pending_wait_body")}
+        </Text>
+      </View>
+      {(ready || failed) ? (
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={ready ? colors.gold : colors.coral}
+        />
+      ) : (
+        <Pressable
+          hitSlop={12}
+          onPress={() => removeScanFromStore(scan.localId)}
+        >
+          <Ionicons name="close" size={18} color={colors.dim} />
+        </Pressable>
+      )}
+    </Pressable>
+  );
+}
 
 // ────────────────────────────────────────────────────────────────────
 // Meals list
@@ -2473,5 +2601,84 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.2,
     textDecorationLine: "underline",
+  },
+  // Pending scans (Cal.ai "Recently uploaded" pattern)
+  pendingWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  pendingHead: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    marginBottom: spacing.xs,
+  },
+  pendingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  pendingThumbWrap: {
+    position: "relative",
+    width: 52,
+    height: 52,
+  },
+  pendingThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.panel2,
+  },
+  pendingThumbPh: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  pendingThumbOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 26,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.panel,
+  },
+  pendingBadgeReady: {
+    backgroundColor: colors.gold,
+  },
+  pendingBadgeFailed: {
+    backgroundColor: colors.coral,
+  },
+  pendingTitle: {
+    color: colors.ink,
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+  },
+  pendingBody: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 12,
+    marginTop: 2,
   },
 });
