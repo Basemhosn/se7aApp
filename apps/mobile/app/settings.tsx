@@ -28,6 +28,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { useReferral } from "@/lib/useReferral";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { restorePurchases, hasProEntitlement } from "@/lib/rc";
+import { track } from "@/lib/analytics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 const WEB_BASE = "https://se7a.vercel.app";
@@ -64,6 +65,7 @@ export default function Settings() {
   const isArabic = i18n.language === "ar";
   const [deleting, setDeleting] = useState<Deleting>("idle");
   const [restoring, setRestoring] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { stats: referral } = useReferral(user?.id);
   const { ent, refresh: refreshEnt } = useEntitlement();
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
@@ -220,8 +222,8 @@ export default function Settings() {
     try {
       await Share.share({
         message: isArabic
-          ? `انضم إلى SE7A — مدرب غذائي ولياقة بالذكاء الاصطناعي. ${referral.link}`
-          : `Try SE7A — AI food + fitness coach for the Gulf. ${referral.link}`,
+          ? `جربت SE7A — مدرب غذاء ولياقة بالذكاء الاصطناعي بناسب الخليج. ${referral.link}`
+          : `I'm using SE7A — AI food + fitness coach built for the Gulf. Give it a look: ${referral.link}`,
         url: referral.link,
       });
     } catch {
@@ -268,6 +270,46 @@ export default function Settings() {
   const openSupport = () =>
     Linking.openURL("mailto:hello@se7a.app?subject=SE7A%20support");
 
+  const doExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const bundle = await api<Record<string, unknown>>("/api/account/export");
+      const json = JSON.stringify(bundle, null, 2);
+      const today = new Date().toISOString().slice(0, 10);
+      // iOS share sheet handles multi-MB text; user can pick
+      // "Save to Files" / "Mail" / "Copy". Not ideal for very heavy
+      // accounts but avoids a native file-system dep and rebuild.
+      await Share.share({
+        message: json,
+        title: `SE7A data export · ${today}`,
+      });
+      track("data_exported", { size_kb: Math.round(json.length / 1024) });
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "تعذّر التصدير" : "Export failed",
+        (e as Error).message
+      );
+    }
+    setExporting(false);
+  };
+
+  const confirmExport = () => {
+    Alert.alert(
+      isArabic ? "تحميل بياناتك" : "Download your data",
+      isArabic
+        ? "سنجهّز نسخة JSON من ملفك الشخصي وسجلاتك وتمارينك وخططك — يمكنك حفظها في الملفات أو إرسالها بالبريد. قد يستغرق ذلك بضع ثوانٍ."
+        : "We'll prepare a JSON copy of your profile, logs, workouts, and plans — then hand it to the share sheet so you can save it to Files or email it. Takes a few seconds.",
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: isArabic ? "متابعة" : "Continue",
+          onPress: doExport,
+        },
+      ]
+    );
+  };
+
   const doDelete = async () => {
     setDeleting("deleting");
     try {
@@ -310,6 +352,10 @@ export default function Settings() {
 
       <Section title={isArabic ? "الحساب" : "Account"}>
         <Info label={isArabic ? "البريد" : "Email"} value={user?.email ?? "—"} />
+        <RowLink
+          label={isArabic ? "تعديل الملف الشخصي" : "Edit profile"}
+          onPress={() => router.push("/edit-profile" as never)}
+        />
         <RowLink
           label={t("home.change_my_plan")}
           onPress={() => router.push("/onboarding")}
@@ -519,23 +565,58 @@ export default function Settings() {
       </Section>
 
       {referral && (
-        <Section title={isArabic ? "ادعُ صديقًا" : "Invite a friend"}>
+        <Section title={isArabic ? "ادعُ صديقًا · اكسب أشهر" : "Invite friends · earn months"}>
           <View style={styles.inviteBody}>
-            <Text style={styles.inviteCount}>
-              {referral.referred_count === 0
-                ? isArabic
-                  ? "لم ينضم أحد بعد."
-                  : "No one has joined yet."
-                : isArabic
-                  ? `انضم ${referral.referred_count} عبر رابطك`
-                  : `${referral.referred_count} joined via your link`}
+            <Text style={styles.inviteHeadline}>
+              {isArabic
+                ? "شهر Pro مجاني لكل صديق يشترك"
+                : "1 free month of Pro for every friend who upgrades"}
             </Text>
+            <Text style={styles.inviteSubcopy}>
+              {isArabic
+                ? "يُطبَّق تلقائياً على حسابك بعد اشتراكهم. لا حدّ للأشهر التي تكسبها."
+                : "Auto-applied to your account after they subscribe. No cap on how many months you can stack."}
+            </Text>
+
+            <View style={styles.inviteStats}>
+              <View style={styles.inviteStatCol}>
+                <Text style={styles.inviteStatValue}>
+                  {referral.referred_count}
+                </Text>
+                <Text style={styles.inviteStatLabel}>
+                  {isArabic ? "انضموا" : "Joined"}
+                </Text>
+              </View>
+              <View style={styles.inviteStatDivider} />
+              <View style={styles.inviteStatCol}>
+                <Text style={styles.inviteStatValue}>
+                  {Math.floor((referral.rewards_earned_days ?? 0) / 30)}
+                </Text>
+                <Text style={styles.inviteStatLabel}>
+                  {isArabic ? "أشهر مكتسبة" : "Months earned"}
+                </Text>
+              </View>
+              {referral.rewards_pending > 0 && (
+                <>
+                  <View style={styles.inviteStatDivider} />
+                  <View style={styles.inviteStatCol}>
+                    <Text style={styles.inviteStatValue}>
+                      {referral.rewards_pending}
+                    </Text>
+                    <Text style={styles.inviteStatLabel}>
+                      {isArabic ? "قيد المعالجة" : "Pending"}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+
             <Text style={styles.inviteLink}>{referral.link}</Text>
             <View style={styles.inviteRow}>
               <Pressable onPress={shareLink} style={styles.invitePrimary}>
                 <Ionicons name="share-outline" size={16} color={colors.bg} />
                 <Text style={styles.invitePrimaryLabel}>
-                  {isArabic ? "شارك" : "Share"}
+                  {isArabic ? "شارك الرابط" : "Share link"}
                 </Text>
               </Pressable>
               <Pressable onPress={copyLink} style={styles.inviteSecondary}>
@@ -565,6 +646,18 @@ export default function Settings() {
       </View>
 
       <Section title={isArabic ? "قانوني" : "Legal"}>
+        <RowLink
+          label={
+            exporting
+              ? isArabic
+                ? "جارٍ التحضير…"
+                : "Preparing…"
+              : isArabic
+                ? "حمّل بياناتي"
+                : "Download my data"
+          }
+          onPress={confirmExport}
+        />
         <RowLink
           label={isArabic ? "الشروط والأحكام" : "Terms of Service"}
           onPress={openTerms}
@@ -1460,6 +1553,55 @@ const styles = StyleSheet.create({
     fontFamily: font.body,
     fontSize: 13,
     color: colors.dim,
+  },
+  inviteHeadline: {
+    fontFamily: font.displayBold,
+    fontSize: 17,
+    color: colors.ink,
+    lineHeight: 22,
+  },
+  inviteSubcopy: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  inviteStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.gold + "44",
+    backgroundColor: colors.gold + "10",
+  },
+  inviteStatCol: {
+    alignItems: "center",
+    flex: 1,
+    gap: 2,
+  },
+  inviteStatValue: {
+    fontFamily: font.displayBold,
+    fontSize: 22,
+    color: colors.gold,
+    lineHeight: 26,
+  },
+  inviteStatLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  inviteStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.gold + "33",
   },
   inviteLink: {
     fontFamily: font.mono,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/server";
+import { grantPromotionalEntitlement } from "@/lib/rcApi";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -210,10 +211,98 @@ export async function POST(request: Request) {
     );
   }
 
+  // Referral reward — grant when a *referred* user first purchases a
+  // real Pro product. Only INITIAL_PURCHASE (not renewals) so a user
+  // can't cancel + re-sub to farm rewards for their referrer. Not
+  // TRIAL (users must actually pay). The unique constraint on
+  // referral_rewards guarantees at-most-once even under duplicate
+  // webhook delivery.
+  const referralReward =
+    event.type === "INITIAL_PURCHASE" &&
+    tier === "pro" &&
+    status === "active"
+      ? await maybeGrantReferralReward(admin, userId)
+      : null;
+
   return NextResponse.json({
     ok: true,
     tier,
     status,
     expires_at: upsertRow.expires_at,
+    referral_reward: referralReward,
   });
+}
+
+/**
+ * If the purchasing user has a referrer, grant that referrer 30 free
+ * days via RC promotional entitlement. Returns a short status object
+ * for observability in the webhook response. Never throws — a referral
+ * failure must not fail the purchase-processing path.
+ */
+async function maybeGrantReferralReward(
+  admin: ReturnType<typeof getAdminClient>,
+  purchaserUserId: string
+): Promise<{
+  granted: boolean;
+  reason?: string;
+  referrer_user_id?: string;
+} | null> {
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("referred_by")
+    .eq("user_id", purchaserUserId)
+    .maybeSingle();
+  const referrerId = profile?.referred_by;
+  if (!referrerId || referrerId === purchaserUserId) {
+    return { granted: false, reason: "no_referrer" };
+  }
+
+  // Reserve the reward row first — unique(referrer, referred) means a
+  // duplicate INITIAL_PURCHASE webhook (RC retries) collapses to a
+  // single row. Pending rows have applied_at=null.
+  const { data: rewardRow, error: insertErr } = await admin
+    .from("referral_rewards")
+    .insert({
+      referrer_user_id: referrerId,
+      referred_user_id: purchaserUserId,
+      days_granted: 30,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr) {
+    // Unique violation = already granted, treat as success (idempotent).
+    if (insertErr.code === "23505") {
+      return { granted: false, reason: "already_granted", referrer_user_id: referrerId };
+    }
+    return { granted: false, reason: `insert_failed:${insertErr.message}` };
+  }
+
+  const grantRes = await grantPromotionalEntitlement({
+    appUserId: referrerId,
+    duration: "monthly",
+  });
+
+  if (!grantRes.ok) {
+    await admin
+      .from("referral_rewards")
+      .update({ applied_error: grantRes.error ?? `http_${grantRes.status}` })
+      .eq("id", rewardRow.id);
+    return {
+      granted: false,
+      reason: `rc_grant_failed:${grantRes.error ?? grantRes.status}`,
+      referrer_user_id: referrerId,
+    };
+  }
+
+  await admin
+    .from("referral_rewards")
+    .update({
+      applied_at: new Date().toISOString(),
+      applied_via: "rc_promo_grant",
+      applied_error: null,
+    })
+    .eq("id", rewardRow.id);
+
+  return { granted: true, referrer_user_id: referrerId };
 }

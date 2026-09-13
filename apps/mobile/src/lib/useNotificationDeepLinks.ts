@@ -51,6 +51,8 @@ function routeForKind(kind: string): string | null {
       return "/progress";
     case "lunch_nudge":
       return "/manual-meal";
+    case "trial_expiring":
+      return "/paywall";
     case "streak_at_risk":
     case "ramadan_reminder":
       // Home already surfaces the right affordance (QuickLogFab for

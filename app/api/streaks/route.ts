@@ -118,9 +118,26 @@ export async function GET(request: Request) {
   const localNow = new Date(now.getTime() + tzOffsetMin * 60_000);
   const dow = (localNow.getUTCDay() + 6) % 7; // 0 = Monday
   let daysThisWeek = 0;
-  for (let i = 0; i <= dow; i++) {
-    const d = offsetDays(now, -i);
-    if (coveredDays.has(localDayKey(d, tzOffsetMin))) daysThisWeek += 1;
+  const weekDays: {
+    day_key: string;
+    covered: boolean;
+    is_today: boolean;
+    is_future: boolean;
+  }[] = [];
+  // Walk Mon → Sun by offsetting from today. `dow` is today's index
+  // in the Mon-zero week, so day 0 (Mon) is `-dow` from today.
+  for (let i = 0; i < 7; i++) {
+    const offset = i - dow; // -dow..(6-dow)
+    const d = offsetDays(now, offset);
+    const key = localDayKey(d, tzOffsetMin);
+    const covered = coveredDays.has(key);
+    if (covered && offset <= 0) daysThisWeek += 1;
+    weekDays.push({
+      day_key: key,
+      covered,
+      is_today: offset === 0,
+      is_future: offset > 0,
+    });
   }
 
   // Freeze budget for the current calendar month (by created_at).
@@ -147,6 +164,7 @@ export async function GET(request: Request) {
     freezes_available_this_month: freezesAvailable,
     freezes_monthly_budget: MONTHLY_FREEZE_BUDGET,
     freezable_days: freezableDays,
+    week_days: weekDays,
   });
 }
 

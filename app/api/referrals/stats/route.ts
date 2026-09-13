@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const [{ data: me }, { count }] = await Promise.all([
+  const [{ data: me }, { count }, { data: rewards }] = await Promise.all([
     supabase
       .from("profiles")
       .select("referral_code, display_name")
@@ -26,6 +26,10 @@ export async function GET(request: Request) {
       .from("profiles")
       .select("user_id", { count: "exact", head: true })
       .eq("referred_by", user.id),
+    supabase
+      .from("referral_rewards")
+      .select("days_granted, applied_at")
+      .eq("referrer_user_id", user.id),
   ]);
 
   if (!me?.referral_code) {
@@ -35,10 +39,18 @@ export async function GET(request: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://se7a.vercel.app";
 
+  const rewardRows = rewards ?? [];
+  const rewardsEarnedDays = rewardRows
+    .filter((r) => r.applied_at != null)
+    .reduce((sum, r) => sum + (r.days_granted ?? 0), 0);
+  const rewardsPending = rewardRows.filter((r) => r.applied_at == null).length;
+
   return NextResponse.json({
     code: me.referral_code,
     link: `${baseUrl}/join/${me.referral_code}`,
     display_name: me.display_name,
     referred_count: count ?? 0,
+    rewards_earned_days: rewardsEarnedDays,
+    rewards_pending: rewardsPending,
   });
 }

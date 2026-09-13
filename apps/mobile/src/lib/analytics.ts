@@ -83,4 +83,6 @@ export type EventName =
   | "referral_shared"
   | "referral_attributed"
   | "account_deleted"
-  | "language_changed";
+  | "language_changed"
+  | "profile_edited"
+  | "data_exported";

@@ -31,6 +31,10 @@ export const maxDuration = 120;
  *    for this week yet. "Sunday planning session?"
  *  - weekly_wrapped (Monday local 08:00) — user has any activity last
  *    week worth recapping. "Your week is wrapped."
+ *  - trial_expiring (local 11:00, trial subscribers) — fires at 3d, 1d,
+ *    and 0d marks before subscriptions.expires_at. Dedupe keys are
+ *    kind-specific (trial_expiring_3d / _1d / _0d) so each fires once.
+ *    Not gated by notification_prefs — transactional/billing lifecycle.
  */
 
 const DAY_MS = 86_400_000;
@@ -53,6 +57,14 @@ interface ProfileRow {
   ramadan_prefs: RamadanPrefs | null;
 }
 
+interface TrialRow {
+  user_id: string;
+  status: string;
+  expires_at: string | null;
+  will_renew: boolean;
+  rc_product_id: string | null;
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -69,7 +81,7 @@ export async function GET(request: Request) {
   }
 
   const userIds = [...tokensByUser.keys()];
-  const [profilesRes, subsRes] = await Promise.all([
+  const [profilesRes, proRes, subsRes] = await Promise.all([
     admin
       .from("profiles")
       .select(
@@ -80,6 +92,11 @@ export async function GET(request: Request) {
       .from("v_active_pro")
       .select("user_id, is_pro")
       .in("user_id", userIds),
+    admin
+      .from("subscriptions")
+      .select("user_id, status, expires_at, will_renew, rc_product_id")
+      .in("user_id", userIds)
+      .eq("status", "trial"),
   ]);
 
   const profileByUser = new Map<string, ProfileRow>();
@@ -87,8 +104,12 @@ export async function GET(request: Request) {
     profileByUser.set(p.user_id, p);
   }
   const proByUser = new Map<string, boolean>();
-  for (const s of (subsRes.data ?? []) as { user_id: string; is_pro: boolean }[]) {
+  for (const s of (proRes.data ?? []) as { user_id: string; is_pro: boolean }[]) {
     proByUser.set(s.user_id, !!s.is_pro);
+  }
+  const trialByUser = new Map<string, TrialRow>();
+  for (const s of (subsRes.data ?? []) as TrialRow[]) {
+    trialByUser.set(s.user_id, s);
   }
 
   const messages: PushMessage[] = [];
@@ -99,6 +120,7 @@ export async function GET(request: Request) {
     weigh_in: 0,
     plan_your_week: 0,
     weekly_wrapped: 0,
+    trial_expiring: 0,
   };
 
   for (const userId of userIds) {
@@ -225,6 +247,32 @@ export async function GET(request: Request) {
             });
           }
           stats.weekly_wrapped += 1;
+        }
+      }
+    }
+
+    // ── Rule 6: trial_expiring (local 11:00, trial subscribers) ───────
+    // Transactional / billing lifecycle — bypasses notification_prefs.
+    // Fires distinct dedupe kinds so 3d/1d/0d each land exactly once.
+    if (hour === 11) {
+      const trial = trialByUser.get(userId);
+      const decision = evalTrialExpiring(trial, tz, now);
+      if (decision.fire) {
+        const kind = `trial_expiring_${decision.daysLeft}d`;
+        if (await claimNotification(admin, userId, kind, today)) {
+          const { title, body } = trialCopy(
+            decision.daysLeft,
+            decision.willRenew
+          );
+          for (const tok of tokens) {
+            messages.push({
+              to: tok.expo_token,
+              title,
+              body,
+              data: { kind: "trial_expiring", days_left: decision.daysLeft },
+            });
+          }
+          stats.trial_expiring += 1;
         }
       }
     }
@@ -445,4 +493,73 @@ async function evalPlanYourWeek(
     .eq("week_start", weekStart)
     .maybeSingle();
   return { fire: !existing };
+}
+
+// Trial-expiring evaluator. Synchronous — no DB reads; the trial row
+// was already loaded in the top-level query. Returns the discrete
+// countdown mark (3/1/0) or {fire:false} so dedupe keys stay
+// deterministic across cron ticks.
+function evalTrialExpiring(
+  trial: TrialRow | undefined,
+  tz: number,
+  now: Date
+):
+  | { fire: false }
+  | { fire: true; daysLeft: 0 | 1 | 3; willRenew: boolean } {
+  if (!trial || !trial.expires_at) return { fire: false };
+  const expiresLocal = new Date(trial.expires_at).getTime() + tz * 60_000;
+  const nowLocal = now.getTime() + tz * 60_000;
+  const localDayStart = (t: number) => {
+    const d = new Date(t);
+    d.setUTCHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  const daysLeft = Math.round(
+    (localDayStart(expiresLocal) - localDayStart(nowLocal)) / DAY_MS
+  );
+  if (daysLeft === 3 || daysLeft === 1 || daysLeft === 0) {
+    return {
+      fire: true,
+      daysLeft: daysLeft as 0 | 1 | 3,
+      willRenew: !!trial.will_renew,
+    };
+  }
+  return { fire: false };
+}
+
+function trialCopy(
+  daysLeft: 0 | 1 | 3,
+  willRenew: boolean
+): { title: string; body: string } {
+  if (daysLeft === 0) {
+    return willRenew
+      ? {
+          title: "Trial ends today.",
+          body: "You'll continue on Pro automatically — cancel anytime in Settings.",
+        }
+      : {
+          title: "Trial ends today.",
+          body: "Continue with Pro to keep meal plans, Coach, and scans.",
+        };
+  }
+  if (daysLeft === 1) {
+    return willRenew
+      ? {
+          title: "1 day left in your trial.",
+          body: "You'll continue on Pro tomorrow — cancel anytime in Settings.",
+        }
+      : {
+          title: "1 day left in your trial.",
+          body: "Tap to continue with Pro before your access ends.",
+        };
+  }
+  return willRenew
+    ? {
+        title: "3 days left in your trial.",
+        body: "You'll continue on Pro after that — a good time to check what you've built.",
+      }
+    : {
+        title: "3 days left in your trial.",
+        body: "Tap to see what you'd keep with Pro.",
+      };
 }

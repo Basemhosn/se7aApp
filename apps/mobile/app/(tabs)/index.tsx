@@ -95,6 +95,12 @@ interface StreakResponse {
   freezes_available_this_month: number;
   freezes_monthly_budget: number;
   freezable_days: string[];
+  week_days: {
+    day_key: string;
+    covered: boolean;
+    is_today: boolean;
+    is_future: boolean;
+  }[];
 }
 
 interface SleepTodayResponse {
@@ -449,6 +455,12 @@ export default function Home() {
           isPro={isPro}
           isArabic={isArabic}
         />
+        <TrialBanner
+          status={ent.status}
+          expiresAt={ent.expires_at}
+          willRenew={ent.will_renew}
+          isArabic={isArabic}
+        />
         {ramadan?.active ? (
           <RamadanBanner status={ramadan} isArabic={isArabic} />
         ) : null}
@@ -737,6 +749,68 @@ function RamadanBanner({
         </Text>
       </View>
     </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Trial-ending banner. Renders whenever a Pro trial is active and
+// expires within 7 local days. Tapping opens the paywall — for
+// will_renew=true users this is manage-subscription-style, for
+// will_renew=false it's the standard "continue with Pro" CTA. The
+// backend fires push nudges at 3d/1d/0d marks; this banner is the
+// always-visible companion so users don't miss it if push is off.
+
+function TrialBanner({
+  status,
+  expiresAt,
+  willRenew,
+  isArabic,
+}: {
+  status: string;
+  expiresAt: string | null;
+  willRenew: boolean;
+  isArabic: boolean;
+}) {
+  if (status !== "trial" || !expiresAt) return null;
+  const msLeft = new Date(expiresAt).getTime() - Date.now();
+  const daysLeft = Math.max(0, Math.ceil(msLeft / 86_400_000));
+  if (daysLeft > 7) return null;
+
+  const timeLabel =
+    daysLeft === 0
+      ? isArabic
+        ? "ينتهي اليوم"
+        : "Ends today"
+      : daysLeft === 1
+        ? isArabic
+          ? "يوم واحد متبقّي"
+          : "1 day left"
+        : isArabic
+          ? `${daysLeft} أيام متبقية`
+          : `${daysLeft} days left`;
+
+  const body = willRenew
+    ? isArabic
+      ? "ستستمر تلقائياً على Pro. يمكن الإلغاء من الإعدادات."
+      : "You'll continue on Pro automatically — cancel anytime in Settings."
+    : isArabic
+      ? "تابع مع Pro لتحتفظ بكل شيء جربته."
+      : "Continue with Pro to keep everything you've tried.";
+
+  return (
+    <Pressable
+      onPress={() => router.push("/paywall")}
+      style={styles.trialBanner}
+    >
+      <Ionicons name="sparkles" size={14} color={colors.gold} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.trialKicker}>
+          {isArabic ? `تجربة · ${timeLabel}` : `TRIAL · ${timeLabel}`}
+        </Text>
+        <Text style={styles.trialBody}>{body}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.dim} />
+    </Pressable>
   );
 }
 
@@ -1676,25 +1750,106 @@ function StreakCardCompact({
   onTap: () => void;
   isArabic: boolean;
 }) {
+  // "At risk" = current streak worth protecting (≥2) but today isn't
+  // covered yet. Signals to the user that a quick log will keep it.
+  const atRisk =
+    streak.current_days >= 2 && streak.todays_status === "not_yet";
+  const nextMilestone = nextStreakMilestone(streak.current_days);
+  const dayLetters = isArabic
+    ? ["إ", "ث", "ر", "خ", "ج", "س", "ح"] // Mon..Sun in Arabic
+    : ["M", "T", "W", "T", "F", "S", "S"];
   return (
-    <Pressable style={styles.footerCard} onPress={onTap}>
-      <View style={[styles.footerRule, { backgroundColor: colors.coral }]} />
+    <Pressable
+      style={[styles.footerCard, atRisk && styles.streakCardAtRisk]}
+      onPress={onTap}
+    >
+      <View
+        style={[
+          styles.footerRule,
+          { backgroundColor: atRisk ? colors.coral : colors.gold },
+        ]}
+      />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.footerKicker, { color: colors.coral }]}>
-          {isArabic ? "السلسلة" : "STREAK"}
+        <Text
+          style={[
+            styles.footerKicker,
+            { color: atRisk ? colors.coral : colors.gold },
+          ]}
+        >
+          {isArabic
+            ? atRisk
+              ? "السلسلة · في خطر"
+              : "السلسلة"
+            : atRisk
+              ? "STREAK · AT RISK"
+              : "STREAK"}
         </Text>
         <Text style={styles.footerTitle}>
           {isArabic
             ? `${streak.current_days} ${streak.current_days === 1 ? "يوم" : "أيام"}`
             : `${streak.current_days} ${streak.current_days === 1 ? "day" : "days"}`}
-          {streak.days_this_week > 0
-            ? ` · ${streak.days_this_week}/7 ${isArabic ? "هذا الأسبوع" : "this week"}`
-            : ""}
         </Text>
+        <View style={styles.streakDotRow}>
+          {streak.week_days.map((d, i) => (
+            <View key={d.day_key} style={styles.streakDotCol}>
+              <View
+                style={[
+                  styles.streakDot,
+                  d.covered && styles.streakDotCovered,
+                  d.is_today && !d.covered && styles.streakDotToday,
+                  d.is_future && styles.streakDotFuture,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.streakDotLabel,
+                  d.is_today && { color: colors.ink },
+                ]}
+              >
+                {dayLetters[i]}
+              </Text>
+            </View>
+          ))}
+        </View>
+        {nextMilestone ? (
+          <Text style={styles.streakNext}>
+            {isArabic
+              ? `${nextMilestone.daysAway} ${
+                  nextMilestone.daysAway === 1 ? "يوم" : "أيام"
+                } إلى ${nextMilestone.labelAr}`
+              : `${nextMilestone.daysAway} ${
+                  nextMilestone.daysAway === 1 ? "day" : "days"
+                } to ${nextMilestone.labelEn}`}
+          </Text>
+        ) : streak.current_days >= 365 ? (
+          <Text style={styles.streakNext}>
+            {isArabic ? "🌟 هواء نادر" : "🌟 Rare air"}
+          </Text>
+        ) : null}
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.dim} />
     </Pressable>
   );
+}
+
+// Streak milestone ladder — must match lib/badges.ts (streak_7d /
+// _30d / _100d / _365d). Returned label is displayed on the compact
+// card so users see "X days to Silver" without opening the sheet.
+function nextStreakMilestone(
+  current: number
+): { daysAway: number; labelEn: string; labelAr: string } | null {
+  const ladder: { threshold: number; en: string; ar: string }[] = [
+    { threshold: 7, en: "Bronze badge", ar: "شارة برونزية" },
+    { threshold: 30, en: "Silver badge", ar: "شارة فضية" },
+    { threshold: 100, en: "Gold badge", ar: "شارة ذهبية" },
+    { threshold: 365, en: "Platinum badge", ar: "شارة بلاتينية" },
+  ];
+  for (const m of ladder) {
+    if (current < m.threshold) {
+      return { daysAway: m.threshold - current, labelEn: m.en, labelAr: m.ar };
+    }
+  }
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -1747,11 +1902,23 @@ function StreakSheet({
               </Text>
             </View>
             <View style={styles.sheetStat}>
-              <Text style={styles.sheetStatValue}>
-                {streak.freezes_available_this_month}/{streak.freezes_monthly_budget}
-              </Text>
+              <View style={styles.sheetFreezeRow}>
+                {Array.from({ length: streak.freezes_monthly_budget }).map(
+                  (_, i) => {
+                    const filled = i < streak.freezes_available_this_month;
+                    return (
+                      <Ionicons
+                        key={i}
+                        name="snow"
+                        size={18}
+                        color={filled ? colors.gold : colors.line}
+                      />
+                    );
+                  }
+                )}
+              </View>
               <Text style={styles.sheetStatLabel}>
-                {isArabic ? "تجميدات" : "Freezes"}
+                {isArabic ? "تجميدات هذا الشهر" : "Freezes this month"}
               </Text>
             </View>
           </View>
@@ -2107,6 +2274,31 @@ const styles = StyleSheet.create({
     fontFamily: font.bodyBold,
     fontSize: 10,
     letterSpacing: 1,
+  },
+  // Trial-ending banner (mirrors Ramadan banner visuals for consistency)
+  trialBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.gold + "12",
+    borderWidth: 1,
+    borderColor: colors.gold + "44",
+  },
+  trialKicker: {
+    color: colors.gold,
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  trialBody: {
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 13,
+    marginTop: 2,
   },
   ramadanBody: {
     color: colors.ink,
@@ -2505,6 +2697,58 @@ const styles = StyleSheet.create({
     fontFamily: font.bodyBold,
     fontSize: 14,
     marginTop: 2,
+  },
+  // Streak card — dot row + at-risk state
+  streakCardAtRisk: {
+    borderColor: colors.coral + "66",
+  },
+  streakDotRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 8,
+  },
+  streakDotCol: {
+    alignItems: "center",
+    gap: 4,
+    minWidth: 16,
+  },
+  streakDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.line,
+  },
+  streakDotCovered: {
+    backgroundColor: colors.gold,
+  },
+  streakDotToday: {
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  streakDotFuture: {
+    backgroundColor: colors.panel2,
+  },
+  streakDotLabel: {
+    fontFamily: font.mono,
+    fontSize: 8,
+    color: colors.dim,
+    letterSpacing: 0.5,
+  },
+  streakNext: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1,
+    marginTop: 6,
+  },
+  sheetFreezeRow: {
+    flexDirection: "row",
+    gap: 4,
+    marginBottom: 2,
   },
   // Streak sheet
   sheetBg: {

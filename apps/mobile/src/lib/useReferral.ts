@@ -6,6 +6,8 @@ export interface ReferralStats {
   link: string;
   display_name: string | null;
   referred_count: number;
+  rewards_earned_days: number;
+  rewards_pending: number;
 }
 
 /**
