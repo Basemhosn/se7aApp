@@ -15,7 +15,12 @@ import { ramadanDaysInWeek, type RamadanPrefs } from "@/lib/ramadan";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MODEL_ID = "claude-sonnet-4-6";
+// Haiku 4.5 (~2-3x faster than Sonnet on schema-constrained output).
+// Meal plans don't need Sonnet's reasoning depth — the schema does the
+// heavy lifting. Speed matters more because the Vercel Hobby function
+// budget is 60s; Sonnet 4.6 at 16k output tokens routinely exceeded it
+// and returned 504 to the client.
+const MODEL_ID = "claude-haiku-4-5";
 
 export async function POST(request: Request) {
   const supabase = getRouteClient(request);
@@ -107,7 +112,9 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
         },
         { role: "user", content: userMsg },
       ],
-      maxOutputTokens: 16000,
+      // 8k covers 7 days × 4 meals + shopping list comfortably; 16k
+      // was over-provisioned for the actual schema footprint.
+      maxOutputTokens: 8000,
     });
     planObject = result.object;
   } catch (e) {
