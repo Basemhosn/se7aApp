@@ -95,7 +95,10 @@ interface StreakResponse {
   freezes_available_this_month: number;
   freezes_monthly_budget: number;
   freezable_days: string[];
-  week_days: {
+  // Optional: server added this in build 62 (2026-09-15). Client
+  // must tolerate absence so a rollback or slow deploy doesn't crash
+  // the Home tab on cold open.
+  week_days?: {
     day_key: string;
     covered: boolean;
     is_today: boolean;
@@ -1789,28 +1792,30 @@ function StreakCardCompact({
             ? `${streak.current_days} ${streak.current_days === 1 ? "يوم" : "أيام"}`
             : `${streak.current_days} ${streak.current_days === 1 ? "day" : "days"}`}
         </Text>
-        <View style={styles.streakDotRow}>
-          {streak.week_days.map((d, i) => (
-            <View key={d.day_key} style={styles.streakDotCol}>
-              <View
-                style={[
-                  styles.streakDot,
-                  d.covered && styles.streakDotCovered,
-                  d.is_today && !d.covered && styles.streakDotToday,
-                  d.is_future && styles.streakDotFuture,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.streakDotLabel,
-                  d.is_today && { color: colors.ink },
-                ]}
-              >
-                {dayLetters[i]}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {streak.week_days && streak.week_days.length > 0 ? (
+          <View style={styles.streakDotRow}>
+            {streak.week_days.map((d, i) => (
+              <View key={d.day_key} style={styles.streakDotCol}>
+                <View
+                  style={[
+                    styles.streakDot,
+                    d.covered && styles.streakDotCovered,
+                    d.is_today && !d.covered && styles.streakDotToday,
+                    d.is_future && styles.streakDotFuture,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.streakDotLabel,
+                    d.is_today && { color: colors.ink },
+                  ]}
+                >
+                  {dayLetters[i]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
         {nextMilestone ? (
           <Text style={styles.streakNext}>
             {isArabic
