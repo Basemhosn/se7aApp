@@ -2753,7 +2753,12 @@ const styles = StyleSheet.create({
   sheetFreezeRow: {
     flexDirection: "row",
     gap: 4,
-    marginBottom: 2,
+    // Match the visible height of sheetStatValue (fontSize 18) so the
+    // snowflake pips baseline-align with the numeric stats to their
+    // left — otherwise the icons float above and their label sits
+    // higher than "This week" and "Best".
+    height: 22,
+    alignItems: "center",
   },
   // Streak sheet
   sheetBg: {
