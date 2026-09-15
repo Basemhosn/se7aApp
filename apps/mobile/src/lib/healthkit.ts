@@ -26,18 +26,61 @@ const PERMISSIONS: HealthKitPermissions = {
   },
 };
 
+export interface HealthKitAuthResult {
+  ok: boolean;
+  // Populated when ok=false so the UI can show WHY the init failed
+  // (missing entitlement, unavailable device, user denied, etc).
+  error?: string;
+}
+
 /**
- * Request HealthKit read/write auth. iOS-only; no-op on Android. Resolves
- * true if the user granted (or already granted) — HealthKit deliberately
- * doesn't tell us if they denied, so `true` means "asked; proceed".
+ * Request HealthKit read/write auth. iOS-only; no-op on Android.
+ *
+ * HealthKit deliberately doesn't tell us if the user denied a specific
+ * permission — a successful `initHealthKit` just means the sheet was
+ * shown (or already dismissed). Errors here typically mean:
+ *   • Missing entitlement in the .ipa (EAS/Expo config broken)
+ *   • Native module didn't link
+ *   • Device isn't iOS (simulator, iPad without HealthKit)
+ * We surface the raw error string so Settings can display it — much
+ * more actionable than a generic "Not granted".
  */
-export function requestHealthKitAuth(): Promise<boolean> {
-  if (Platform.OS !== "ios") return Promise.resolve(false);
+export async function requestHealthKitAuth(): Promise<HealthKitAuthResult> {
+  if (Platform.OS !== "ios") {
+    return { ok: false, error: "not_ios" };
+  }
+  // isAvailable is the fastest signal that the native module + device
+  // are both good. If this returns false the initHealthKit call would
+  // fail with a less helpful message.
+  const available = await new Promise<boolean>((resolve) => {
+    try {
+      AppleHealthKit.isAvailable((err, result) => {
+        if (err) resolve(false);
+        else resolve(!!result);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+  if (!available) {
+    return { ok: false, error: "healthkit_unavailable_on_device" };
+  }
   return new Promise((resolve) => {
-    AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
-      if (err) resolve(false);
-      else resolve(true);
-    });
+    try {
+      AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
+        if (err) {
+          const msg =
+            typeof err === "string"
+              ? err
+              : ((err as { message?: string })?.message ?? String(err));
+          resolve({ ok: false, error: msg || "init_failed" });
+        } else {
+          resolve({ ok: true });
+        }
+      });
+    } catch (e) {
+      resolve({ ok: false, error: (e as Error).message || "init_threw" });
+    }
   });
 }
 

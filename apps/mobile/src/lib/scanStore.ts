@@ -1,19 +1,21 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PlateItem } from "@/types";
+import { api } from "./api";
 
 /**
- * Async plate-scan store (2026-09-10).
+ * Async plate-scan store (v2 2026-09-16).
  *
- * Backs the Cal.ai-style "kick off scan, come back later" pattern.
- * The scan screen registers a pending entry here, navigates to Home,
- * and the AI call runs in background. Home renders a card for each
- * pending scan; tapping a `ready` one hops back into the scan review
- * screen with the pre-fetched items.
+ * The scan flow is fully server-owned: client uploads, gets a scan_id,
+ * server processes AI in the background (waitUntil, up to 300s) and
+ * pushes a notification when done. This store is the client-side
+ * projection of the server state.
  *
- * Module-level array + AsyncStorage mirror so the state survives:
- *   • navigation between screens (Home reads the same array)
+ * State survives:
+ *   • navigation between screens (Home + review read the same array)
  *   • app backgrounding + relaunch (rehydrates on module import)
- *   • the scan happening while the user is elsewhere
+ *   • app KILL — on rehydrate we reconcile against the server using
+ *     the persisted scan_id, so a previously in-flight scan becomes
+ *     "ready" if the server finished while the app was gone.
  *
  * NOT persisting the raw image bytes — only the local URI. If the OS
  * clears the temp image before the scan finishes, we lose the preview
@@ -27,8 +29,11 @@ export interface PendingScan {
   createdAt: number;
   previewUri: string | null;
   status: PendingScanStatus;
-  // Populated when status becomes "ready".
+  // scanId is the server-side UUID. Set as soon as POST /api/scan/plate
+  // returns (typically < 3s). Reconciliation relies on this — a
+  // PendingScan without scanId is orphaned and can't be recovered.
   scanId?: string | null;
+  // Populated when status becomes "ready".
   items?: PlateItem[];
   confidence?: "low" | "medium" | "high";
   invisibleCosts?: string[];
@@ -59,17 +64,16 @@ async function hydrate(): Promise<void> {
     if (raw) {
       const parsed = JSON.parse(raw) as PendingScan[];
       if (Array.isArray(parsed)) {
-        // Discard entries older than 6 hours — anything that hasn't
-        // resolved by then is stale (AI call failed silently, network
-        // dropped, etc.) and would confuse the user.
+        // Discard entries older than 6 hours.
         const cutoff = Date.now() - 6 * 60 * 60 * 1000;
         scans = parsed.filter((s) => s.createdAt > cutoff);
-        // Anything left in "uploading" or "analyzing" after a relaunch
-        // is orphaned — the scan promise is gone. Mark them failed so
-        // the user can retry rather than staring at a stuck spinner.
+        // An entry stuck in "uploading" without a scanId means the
+        // POST /start never returned — the initial upload was killed
+        // mid-flight. There's nothing to reconcile against, so fail
+        // it and let the user retry.
         scans = scans.map((s) =>
-          s.status === "uploading" || s.status === "analyzing"
-            ? { ...s, status: "failed", errorMessage: "app_restarted" }
+          (s.status === "uploading" && !s.scanId)
+            ? { ...s, status: "failed", errorMessage: "upload_interrupted" }
             : s
         );
         emit();
@@ -78,6 +82,59 @@ async function hydrate(): Promise<void> {
   } catch {
     /* corrupt cache — reset silently */
   }
+  // After hydrate: pull server truth for anything still in flight.
+  void reconcileFromServer();
+}
+
+/**
+ * For every locally-pending scan that has a scanId, ask the server
+ * what state it's in and merge. Called on hydrate + on app-focus +
+ * after a push notification arrives.
+ *
+ * We never mutate a scan the user has already dismissed (removed from
+ * the store), and we never revert a "ready" back to earlier states.
+ */
+export async function reconcileFromServer(): Promise<void> {
+  const pending = scans.filter(
+    (s) =>
+      (s.status === "uploading" || s.status === "analyzing") && !!s.scanId
+  );
+  if (pending.length === 0) return;
+  await Promise.all(
+    pending.map(async (s) => {
+      try {
+        const remote = await api<{
+          id: string;
+          status: PendingScanStatus | "queued" | "processing";
+          parsed?: {
+            items?: PlateItem[];
+            confidence?: "low" | "medium" | "high";
+            invisible_costs?: string[];
+          } | null;
+          error_message?: string | null;
+        }>(`/api/scan/plate/${encodeURIComponent(s.scanId!)}`);
+        if (remote.status === "ready" && remote.parsed) {
+          markReady(s.localId, {
+            scanId: remote.id,
+            items: remote.parsed.items ?? [],
+            confidence: remote.parsed.confidence ?? "medium",
+            invisibleCosts: remote.parsed.invisible_costs ?? [],
+          });
+        } else if (remote.status === "failed") {
+          markFailed(s.localId, remote.error_message ?? "ai_failed");
+        } else if (
+          remote.status === "queued" ||
+          remote.status === "processing"
+        ) {
+          // Still working server-side; ensure our local status reflects
+          // the "analyzing" phase so the UI doesn't say "uploading" forever.
+          if (s.status === "uploading") markAnalyzing(s.localId);
+        }
+      } catch {
+        /* transient — reconcile will retry on next focus/hydrate */
+      }
+    })
+  );
 }
 
 function emit(): void {
@@ -106,6 +163,19 @@ export function registerScan(previewUri: string | null): string {
 export function markAnalyzing(localId: string): void {
   scans = scans.map((s) =>
     s.localId === localId ? { ...s, status: "analyzing" } : s
+  );
+  emit();
+  void persist();
+}
+
+/**
+ * Called immediately after the server accepts an upload and returns
+ * a scan_id. Storing it here is what makes app-kill survivable — the
+ * next launch can reconcile against the server by this id.
+ */
+export function attachScanId(localId: string, scanId: string): void {
+  scans = scans.map((s) =>
+    s.localId === localId ? { ...s, scanId, status: "analyzing" } : s
   );
   emit();
   void persist();

@@ -68,10 +68,15 @@ function handleResponse(
   response: Notifications.NotificationResponse | null | undefined
 ) {
   const raw = response?.notification.request.content.data as
-    | { kind?: string; deeplink?: string }
+    | {
+        kind?: string;
+        deeplink?: string;
+        scan_id?: string;
+        scan_kind?: string;
+      }
     | undefined;
-  // Prefer an explicit deeplink field (used by async scan notifications
-  // and any future ad-hoc route) over the kind-based lookup.
+  // Prefer an explicit deeplink field (used for any future ad-hoc route)
+  // over the kind-based lookup.
   const deeplink = raw?.deeplink;
   if (deeplink && typeof deeplink === "string" && deeplink.startsWith("/")) {
     router.push(deeplink as never);
@@ -79,11 +84,18 @@ function handleResponse(
   }
   const kind = raw?.kind;
   if (!kind || typeof kind !== "string") return;
+  // scan_ready/scan_failed carry a scan_id in data — deep-link into the
+  // review screen so the user lands right where the result is shown.
+  if ((kind === "scan_ready" || kind === "scan_failed") && raw?.scan_id) {
+    // Currently plate is the only async scan; scan_kind exists for
+    // when menu/body get the same treatment.
+    router.push(
+      `/scan/plate?scan_id=${encodeURIComponent(raw.scan_id)}` as never
+    );
+    return;
+  }
   const path = routeForKind(kind);
   if (!path) return;
-  // expo-router accepts any string path at runtime; the typed-routes
-  // assertion is scoped to author-time. Small `as any` here rather
-  // than plumbing every route through the type union.
   router.push(path as never);
 }
 

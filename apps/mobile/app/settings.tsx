@@ -1205,12 +1205,15 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
   const authorize = async () => {
     setBusy(true);
     try {
-      const ok =
-        Platform.OS === "ios"
-          ? await requestHealthKitAuth()
-          : Platform.OS === "android"
-            ? await requestHealthConnectAuth()
-            : false;
+      let ok = false;
+      let errorDetail = "";
+      if (Platform.OS === "ios") {
+        const res = await requestHealthKitAuth();
+        ok = res.ok;
+        errorDetail = res.error ?? "";
+      } else if (Platform.OS === "android") {
+        ok = await requestHealthConnectAuth();
+      }
       if (ok) {
         await AsyncStorage.setItem(HEALTH_CONNECTED_KEY, "1");
         setConnected(true);
@@ -1221,19 +1224,27 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
             : "Weight, steps, workouts, and sleep will sync automatically."
         );
       } else {
-        Alert.alert(
-          isArabic ? "لم يتم المنح" : "Not granted",
+        // Surface the raw error string alongside the guidance so
+        // TestFlight users can copy/paste it if the settings-app trick
+        // doesn't work.
+        const settingsHint =
           isArabic
             ? Platform.OS === "ios"
               ? "افتح إعدادات > الخصوصية والأمان > الصحة > SE7A لتفعيل الأذونات."
               : "افتح Health Connect لتفعيل الأذونات."
             : Platform.OS === "ios"
               ? "Open Settings > Privacy & Security > Health > SE7A to grant permissions."
-              : "Open the Health Connect app to grant permissions."
-        );
+              : "Open the Health Connect app to grant permissions.";
+        const body = errorDetail
+          ? `${settingsHint}\n\nDetail: ${errorDetail}`
+          : settingsHint;
+        Alert.alert(isArabic ? "لم يتم المنح" : "Not granted", body);
       }
-    } catch {
-      /* silent */
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "خطأ" : "Health error",
+        (e as Error).message
+      );
     }
     setBusy(false);
   };

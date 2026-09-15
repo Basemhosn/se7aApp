@@ -41,6 +41,7 @@ import type { LedgerDayResponse, MealSlot, Profile } from "@/types";
 import { SLOTS, SLOT_META } from "@/lib/slot";
 import {
   type PendingScan,
+  reconcileFromServer as reconcileScansFromServer,
   removeScan as removeScanFromStore,
   subscribeScans,
 } from "@/lib/scanStore";
@@ -361,6 +362,11 @@ export default function Home() {
         );
       }
       load();
+      // Pull server state for any plate scans that were in flight when
+      // the app was closed. Push notifications also handle this path,
+      // but a user who denied push permission (or opened the app before
+      // the push arrived) still gets their result.
+      void reconcileScansFromServer();
     }, [load])
   );
 

@@ -4,7 +4,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
-import * as Notifications from "expo-notifications";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
@@ -12,26 +11,23 @@ import { ConfidencePill } from "@/components/Pill";
 import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import {
+  attachScanId,
   getScan,
-  markAnalyzing,
+  getScans,
   markFailed,
-  markReady,
+  reconcileFromServer,
   registerScan,
   removeScan,
 } from "@/lib/scanStore";
 import { colors, font, radius, spacing } from "@/lib/theme";
-import type {
-  MealSlot,
-  PlateItem,
-  PlateScanResponse,
-} from "@/types";
+import type { MealSlot, PlateItem } from "@/types";
 import { slotForNow } from "@/lib/slot";
 
 type Phase = "idle" | "analyzing" | "review" | "saving";
 
 export default function PlateScan() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ resume?: string }>();
+  const params = useLocalSearchParams<{ resume?: string; scan_id?: string }>();
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -45,24 +41,47 @@ export default function PlateScan() {
   // Home tab's pending-scan card. Null on a fresh scan.
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
 
-  // If we arrived via ?resume=<localId>, hydrate the review UI from
-  // the store instead of forcing the user through the picker again.
+  // Arrival paths that hydrate the review UI without forcing a re-pick:
+  //   • ?resume=<localId>   — user tapped a pending-scan card on Home
+  //   • ?scan_id=<uuid>     — user tapped the "scan ready" push
+  //
+  // scan_id lookup goes: local store first (fast + has previewUri) →
+  // reconcile from server if the local entry is still analyzing → if
+  // it's still not resolvable, hand the user back to camera.
   useEffect(() => {
+    if (phase !== "idle") return;
     const resumeId = params.resume;
-    if (!resumeId || phase !== "idle") return;
-    const stored = getScan(resumeId);
-    if (!stored || stored.status !== "ready" || !stored.items || !stored.scanId) {
+    const scanIdParam = params.scan_id;
+    if (!resumeId && !scanIdParam) return;
+
+    let stored = resumeId ? getScan(resumeId) : undefined;
+    if (!stored && scanIdParam) {
+      stored = getScans().find((s) => s.scanId === scanIdParam);
+    }
+    const hydrate = () => {
+      const s = stored;
+      if (!s || s.status !== "ready" || !s.items || !s.scanId) return;
+      setResumeLocalId(s.localId);
+      setPreviewUri(s.previewUri);
+      setScanId(s.scanId);
+      setItems(s.items);
+      setConfidence(s.confidence ?? "medium");
+      setInvisible(s.invisibleCosts ?? []);
+      setSelected(new Set(s.items.map((_, i) => i)));
+      setPhase("review");
+    };
+    if (stored && stored.status === "ready") {
+      hydrate();
       return;
     }
-    setResumeLocalId(resumeId);
-    setPreviewUri(stored.previewUri);
-    setScanId(stored.scanId);
-    setItems(stored.items);
-    setConfidence(stored.confidence ?? "medium");
-    setInvisible(stored.invisibleCosts ?? []);
-    setSelected(new Set(stored.items.map((_, i) => i)));
-    setPhase("review");
-  }, [params.resume, phase]);
+    // Local entry not ready yet — reconcile against server, then retry.
+    if (stored && scanIdParam) {
+      void reconcileFromServer().then(() => {
+        stored = getScans().find((s) => s.scanId === scanIdParam);
+        hydrate();
+      });
+    }
+  }, [params.resume, params.scan_id, phase]);
   // Per-item portion overrides. Scale of 1 = as-scanned. Label overrides
   // the portion_estimate string in both the UI and the ledger row so
   // the user's edit is what gets persisted.
@@ -102,42 +121,36 @@ export default function PlateScan() {
   };
 
   /**
-   * Kick off the AI upload and mark the store entry ready/failed when
-   * the call settles. Runs detached from any screen — the user has
-   * already navigated to Home by the time this awaits.
+   * Upload the image and hand off to the server. Async plate scan v2
+   * (2026-09-16): server runs the AI in a background task (waitUntil,
+   * up to 300s) and pushes a notification when ready. This function
+   * only needs to wait for the initial upload + scan_id acknowledge
+   * — usually a few seconds regardless of AI complexity.
+   *
+   * When the user kills the app right after this call, the server keeps
+   * working; on next launch scanStore.reconcileFromServer() pulls the
+   * finished state by scanId.
    */
   const runScanInBackground = async (
     localId: string,
     uri: string
   ): Promise<void> => {
-    markAnalyzing(localId);
     try {
-      const body = await apiUpload<PlateScanResponse>(
-        "/api/scan/plate",
-        "image",
-        { uri, mimeType: "image/jpeg", fileName: "plate.jpg" }
-      );
-      markReady(localId, {
-        scanId: body.scan_id,
-        items: body.result.items,
-        confidence: body.result.confidence,
-        invisibleCosts: body.result.invisible_costs ?? [],
+      const body = await apiUpload<{
+        ok: boolean;
+        scan_id: string;
+        status: "queued";
+        image_stored: boolean;
+      }>("/api/scan/plate", "image", {
+        uri,
+        mimeType: "image/jpeg",
+        fileName: "plate.jpg",
       });
-      // Fire a local notification so the user knows results are
-      // ready even if the app is backgrounded. Silent failure —
-      // notification permission is opportunistic.
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: t("scan.plate.ready_notification_title"),
-            body: t("scan.plate.ready_notification_body"),
-            data: { deeplink: `/scan/plate?resume=${localId}` },
-          },
-          trigger: null,
-        });
-      } catch {
-        /* silent */
-      }
+      // Persist scan_id — this is what makes app-kill survivable.
+      attachScanId(localId, body.scan_id);
+      // No local scheduleNotification here: the server sends the
+      // "your scan is ready" push via Expo Push API when the AI
+      // completes. Local notif would race + duplicate.
     } catch (e) {
       if (e instanceof RateLimitedError) {
         const { body: msg } = rateLimitMessage(e);
