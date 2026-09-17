@@ -34,7 +34,7 @@ export const MODELS = {
  * so historical scans stay comparable.
  */
 export const PROMPT_VERSION = {
-  plate: "plate.v2_micros",
+  plate: "plate.v3_scale",
   menu: "menu.v2_micros",
   body: "body.v1",
 } as const;
