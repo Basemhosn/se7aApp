@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
@@ -408,12 +409,50 @@ export default function PlateScan() {
 
       {(phase === "review" || phase === "saving") && (
         <>
-          <View style={styles.reviewHead}>
-            {previewUri && (
-              <Image source={{ uri: previewUri }} style={styles.thumb} />
-            )}
-            <ConfidencePill level={confidence} />
-          </View>
+          {previewUri && (
+            <View style={styles.hero}>
+              <Image source={{ uri: previewUri }} style={styles.heroImage} />
+              <View style={styles.heroConfidence}>
+                <ConfidencePill level={confidence} />
+              </View>
+            </View>
+          )}
+
+          {selected.size > 0 && (
+            <View style={styles.macroCard}>
+              <Text style={styles.macroKicker}>
+                {selected.size < items.length
+                  ? `${t("scan.plate.plate_total").toUpperCase()} · ${selected.size}/${items.length}`
+                  : t("scan.plate.plate_total").toUpperCase()}
+              </Text>
+              <View style={styles.macroStrip}>
+                <MacroCol
+                  icon="flame"
+                  value={`${totals.kcal_low}–${totals.kcal_high}`}
+                  label={t("common.kcal")}
+                />
+                <View style={styles.macroDivider} />
+                <MacroCol
+                  letter="P"
+                  value={`${fmt(totals.protein_g_low)}–${fmt(totals.protein_g_high)}`}
+                  label="g"
+                />
+                <View style={styles.macroDivider} />
+                <MacroCol
+                  letter="C"
+                  value={`${fmt(totals.carb_g_low)}–${fmt(totals.carb_g_high)}`}
+                  label="g"
+                />
+                <View style={styles.macroDivider} />
+                <MacroCol
+                  letter="F"
+                  value={`${fmt(totals.fat_g_low)}–${fmt(totals.fat_g_high)}`}
+                  label="g"
+                />
+              </View>
+            </View>
+          )}
+
           <Text style={styles.sectionTitle}>{t("scan.plate.what_we_see")}</Text>
           <Text style={styles.sub}>
             {t("scan.plate.what_we_see_hint")}
@@ -466,25 +505,6 @@ export default function PlateScan() {
             );
           })}
 
-          {selected.size > 0 && (
-            <View style={styles.total}>
-              <Text style={styles.totalKicker}>
-                {t("scan.plate.plate_total")}
-                {selected.size < items.length
-                  ? t("scan.plate.n_of_m", { n: selected.size, m: items.length })
-                  : ""}
-              </Text>
-              <Text style={styles.totalKcal}>
-                {totals.kcal_low}–{totals.kcal_high}
-                <Text style={styles.totalKcalUnit}> {t("common.kcal")}</Text>
-              </Text>
-              <Text style={styles.totalMacros}>
-                P {fmt(totals.protein_g_low)}–{fmt(totals.protein_g_high)} · C{" "}
-                {fmt(totals.carb_g_low)}–{fmt(totals.carb_g_high)} · F{" "}
-                {fmt(totals.fat_g_low)}–{fmt(totals.fat_g_high)}
-              </Text>
-            </View>
-          )}
 
           {invisible.length > 0 && (
             <View style={styles.invisible}>
@@ -510,6 +530,37 @@ export default function PlateScan() {
  * those go through the multiplier prompt instead. kg is normalized
  * to g so the user always edits in grams.
  */
+/**
+ * Single column in the top macro strip. Either an Ionicon (calories)
+ * or a colored capital letter (P / C / F) heads the column so it's
+ * scannable in a glance without reading labels.
+ */
+function MacroCol({
+  icon,
+  letter,
+  value,
+  label,
+}: {
+  icon?: keyof typeof Ionicons.glyphMap;
+  letter?: string;
+  value: string;
+  label: string;
+}) {
+  return (
+    <View style={styles.macroCol}>
+      <View style={styles.macroBadge}>
+        {icon ? (
+          <Ionicons name={icon} size={14} color={colors.gold} />
+        ) : (
+          <Text style={styles.macroBadgeLetter}>{letter}</Text>
+        )}
+      </View>
+      <Text style={styles.macroValue}>{value}</Text>
+      <Text style={styles.macroLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function parsePortionGrams(portion: string): number | null {
   const trimmed = portion.trim();
   const m = /^(\d+(?:\.\d+)?)\s*(kg|g|grams?)\b/i.exec(trimmed);
@@ -556,6 +607,87 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  // Full-width hero photo at the top of the review — replaces the
+  // small thumbnail. Aspect 16:10 crops most food shots nicely and
+  // keeps the whole card usable above the fold.
+  hero: {
+    width: "100%",
+    aspectRatio: 16 / 10,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.line,
+    position: "relative",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroConfidence: {
+    position: "absolute",
+    top: spacing.sm,
+    right: spacing.sm,
+  },
+  // 4-column macro strip below the hero. Range values sit big; icon /
+  // letter badge above; unit micro-label below. Scannable in a glance
+  // without reading a legend.
+  macroCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  macroKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
+  macroStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  macroCol: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  macroBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.gold + "18",
+    borderWidth: 1,
+    borderColor: colors.gold + "55",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  macroBadgeLetter: {
+    fontFamily: font.displayBold,
+    fontSize: 13,
+    color: colors.gold,
+    lineHeight: 15,
+  },
+  macroValue: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.ink,
+    marginTop: 2,
+  },
+  macroLabel: {
+    fontFamily: font.mono,
+    fontSize: 9,
+    color: colors.dim,
+    letterSpacing: 0.8,
+  },
+  macroDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: colors.line,
   },
   busy: { fontFamily: font.displayBold, fontSize: 16, color: colors.ink, marginTop: spacing.md },
   sectionTitle: { fontFamily: font.displayBold, fontSize: 18, color: colors.ink },
@@ -619,28 +751,6 @@ const styles = StyleSheet.create({
   },
   itemKcalUnit: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
   itemMacros: { fontFamily: font.mono, fontSize: 11, color: colors.dim },
-  total: {
-    backgroundColor: "rgba(246,183,60,0.06)",
-    borderWidth: 1,
-    borderColor: colors.goldDim,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 2,
-  },
-  totalKicker: {
-    fontFamily: font.mono,
-    fontSize: 10,
-    color: colors.gold,
-    letterSpacing: 1.4,
-  },
-  totalKcal: {
-    fontFamily: font.displayBold,
-    fontSize: 26,
-    color: colors.ink,
-    marginTop: 2,
-  },
-  totalKcalUnit: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
-  totalMacros: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
   invisible: {
     backgroundColor: colors.panel2,
     borderWidth: 1,
