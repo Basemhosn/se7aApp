@@ -20,8 +20,10 @@ import {
   registerScan,
   removeScan,
 } from "@/lib/scanStore";
+import { computeFitScore, type FitBudget } from "@/lib/fitScore";
+import { supabase } from "@/lib/supabase";
 import { colors, font, radius, spacing } from "@/lib/theme";
-import type { MealSlot, PlateItem } from "@/types";
+import type { LedgerDayResponse, MealSlot, PlateItem } from "@/types";
 import { slotForNow } from "@/lib/slot";
 
 type Phase = "idle" | "analyzing" | "review" | "saving";
@@ -41,6 +43,10 @@ export default function PlateScan() {
   // Local ID from the scan store when this screen was reached via the
   // Home tab's pending-scan card. Null on a fresh scan.
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
+  // Fit-score budget: user's daily targets and what's been logged so
+  // far today. Fetched once when the review phase opens; null while
+  // loading or when the profile isn't complete enough to compute.
+  const [fitBudget, setFitBudget] = useState<FitBudget | null>(null);
 
   // Arrival paths that hydrate the review UI without forcing a re-pick:
   //   • ?resume=<localId>   — user tapped a pending-scan card on Home
@@ -83,6 +89,66 @@ export default function PlateScan() {
       });
     }
   }, [params.resume, params.scan_id, phase]);
+
+  // Load fit-score budget (daily targets + today's consumed) once we
+  // enter review. Profile targets come straight from Supabase via RLS;
+  // the ledger endpoint returns today's totals. Both silently fall
+  // back to null on failure — the fit-score card just hides itself.
+  useEffect(() => {
+    if (phase !== "review" || fitBudget) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ data: profile }, ledger] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select(
+              "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g"
+            )
+            .single(),
+          api<LedgerDayResponse>(
+            `/api/ledger/today?tz_offset_min=${-new Date().getTimezoneOffset()}`
+          ).catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (
+          !profile?.daily_kcal_target ||
+          !profile.daily_protein_g ||
+          !profile.daily_carb_g ||
+          !profile.daily_fat_g
+        ) {
+          return;
+        }
+        const kcalMid = ledger
+          ? (ledger.totals.kcal.low + ledger.totals.kcal.high) / 2
+          : 0;
+        const pMid = ledger
+          ? (ledger.totals.protein_g.low + ledger.totals.protein_g.high) / 2
+          : 0;
+        const cMid = ledger
+          ? (ledger.totals.carb_g.low + ledger.totals.carb_g.high) / 2
+          : 0;
+        const fMid = ledger
+          ? (ledger.totals.fat_g.low + ledger.totals.fat_g.high) / 2
+          : 0;
+        setFitBudget({
+          kcal_target: profile.daily_kcal_target,
+          protein_target: profile.daily_protein_g,
+          carb_target: profile.daily_carb_g,
+          fat_target: profile.daily_fat_g,
+          kcal_consumed: kcalMid,
+          protein_consumed: pMid,
+          carb_consumed: cMid,
+          fat_consumed: fMid,
+        });
+      } catch {
+        /* silent — hide the fit card */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, fitBudget]);
   // Per-item portion overrides. Scale of 1 = as-scanned. Label overrides
   // the portion_estimate string in both the UI and the ledger row so
   // the user's edit is what gets persisted.
@@ -453,6 +519,19 @@ export default function PlateScan() {
             </View>
           )}
 
+          {selected.size > 0 && fitBudget && (
+            <FitScoreCard
+              meal={{
+                kcal: (totals.kcal_low + totals.kcal_high) / 2,
+                protein:
+                  (totals.protein_g_low + totals.protein_g_high) / 2,
+                carbs: (totals.carb_g_low + totals.carb_g_high) / 2,
+                fat: (totals.fat_g_low + totals.fat_g_high) / 2,
+              }}
+              budget={fitBudget}
+            />
+          )}
+
           <Text style={styles.sectionTitle}>{t("scan.plate.what_we_see")}</Text>
           <Text style={styles.sub}>
             {t("scan.plate.what_we_see_hint")}
@@ -530,6 +609,55 @@ export default function PlateScan() {
  * those go through the multiplier prompt instead. kg is normalized
  * to g so the user always edits in grams.
  */
+/**
+ * Fit score card — 0-10 verdict on how this meal fits the user's
+ * remaining day. Explicit non-goal: this is NOT a "healthiness"
+ * score. Focused on YOUR budget so we avoid orthorexia framing.
+ * Reasons list explains the number, so it never feels opaque.
+ */
+function FitScoreCard({
+  meal,
+  budget,
+}: {
+  meal: { kcal: number; protein: number; carbs: number; fat: number };
+  budget: FitBudget;
+}) {
+  const result = computeFitScore(meal, budget);
+  if (result.unavailable) return null;
+  const tone =
+    result.score >= 7
+      ? colors.mint
+      : result.score >= 5
+        ? colors.gold
+        : colors.coral;
+  const barWidth = `${Math.max(4, result.score * 10)}%` as const;
+  return (
+    <View style={styles.fitCard}>
+      <View style={styles.fitHead}>
+        <Text style={styles.fitKicker}>FIT SCORE · YOUR DAY</Text>
+        <Text style={[styles.fitScore, { color: tone }]}>
+          {result.score}
+          <Text style={styles.fitScoreDenom}>/10</Text>
+        </Text>
+      </View>
+      <View style={styles.fitBarTrack}>
+        <View
+          style={[
+            styles.fitBarFill,
+            { width: barWidth, backgroundColor: tone },
+          ]}
+        />
+      </View>
+      <Text style={styles.fitVerdict}>{result.verdict}</Text>
+      {result.reasons.slice(0, 2).map((r, i) => (
+        <Text key={i} style={styles.fitReason}>
+          · {r}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 /**
  * Single column in the top macro strip. Either an Ionicon (calories)
  * or a colored capital letter (P / C / F) heads the column so it's
@@ -688,6 +816,61 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: colors.line,
+  },
+  // Fit score — verdict on how the meal fits YOUR day. Tone shifts
+  // by score band; the reasons list prevents the number from feeling
+  // opaque.
+  fitCard: {
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  fitHead: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
+  fitKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.dim,
+    letterSpacing: 1.2,
+  },
+  fitScore: {
+    fontFamily: font.displayBold,
+    fontSize: 26,
+    lineHeight: 30,
+  },
+  fitScoreDenom: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+  },
+  fitBarTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.line,
+    overflow: "hidden",
+    marginTop: 2,
+  },
+  fitBarFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  fitVerdict: {
+    fontFamily: font.bodyBold,
+    fontSize: 14,
+    color: colors.ink,
+    marginTop: 4,
+  },
+  fitReason: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    lineHeight: 17,
   },
   busy: { fontFamily: font.displayBold, fontSize: 16, color: colors.ink, marginTop: spacing.md },
   sectionTitle: { fontFamily: font.displayBold, fontSize: 18, color: colors.ink },
