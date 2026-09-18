@@ -16,7 +16,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const [{ data: me }, { count }, { data: rewards }] = await Promise.all([
+  // Beneficiary lookup covers both roles (symmetric rewards):
+  //   role='referrer' → beneficiary = referrer_user_id
+  //   role='referred' → beneficiary = referred_user_id
+  const [
+    { data: me },
+    { count },
+    { data: referrerRewards },
+    { data: referredRewards },
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("referral_code, display_name")
@@ -29,7 +37,13 @@ export async function GET(request: Request) {
     supabase
       .from("referral_rewards")
       .select("days_granted, applied_at")
-      .eq("referrer_user_id", user.id),
+      .eq("referrer_user_id", user.id)
+      .eq("role", "referrer"),
+    supabase
+      .from("referral_rewards")
+      .select("days_granted, applied_at")
+      .eq("referred_user_id", user.id)
+      .eq("role", "referred"),
   ]);
 
   if (!me?.referral_code) {
@@ -39,7 +53,10 @@ export async function GET(request: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://se7a.vercel.app";
 
-  const rewardRows = rewards ?? [];
+  const rewardRows = [
+    ...(referrerRewards ?? []),
+    ...(referredRewards ?? []),
+  ];
   const rewardsEarnedDays = rewardRows
     .filter((r) => r.applied_at != null)
     .reduce((sum, r) => sum + (r.days_granted ?? 0), 0);

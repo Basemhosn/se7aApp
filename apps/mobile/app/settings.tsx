@@ -222,8 +222,8 @@ export default function Settings() {
     try {
       await Share.share({
         message: isArabic
-          ? `جربت SE7A — مدرب غذاء ولياقة بالذكاء الاصطناعي بناسب الخليج. ${referral.link}`
-          : `I'm using SE7A — AI food + fitness coach built for the Gulf. Give it a look: ${referral.link}`,
+          ? `جربت SE7A — مدرب غذاء ولياقة بالذكاء الاصطناعي بناسب الخليج. سجّل من رابطي وكل واحد فينا ياخد شهر Pro مجاناً لما تشترك. ${referral.link}`
+          : `I'm using SE7A — AI food + fitness coach built for the Gulf. Sign up with my link and we both get a free month of Pro when you upgrade. ${referral.link}`,
         url: referral.link,
       });
     } catch {
@@ -574,8 +574,8 @@ export default function Settings() {
             </Text>
             <Text style={styles.inviteSubcopy}>
               {isArabic
-                ? "يُطبَّق تلقائياً على حسابك بعد اشتراكهم. لا حدّ للأشهر التي تكسبها."
-                : "Auto-applied to your account after they subscribe. No cap on how many months you can stack."}
+                ? "شهر مجاني لك وشهر مجاني لهم. يُطبَّق تلقائياً بعد اشتراكهم. لا حدّ للأشهر التي تكسبها."
+                : "A free month for you and a free month for them. Auto-applied after they subscribe. No cap on how many months you can stack."}
             </Text>
 
             <View style={styles.inviteStats}>

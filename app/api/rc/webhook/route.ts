@@ -234,18 +234,23 @@ export async function POST(request: Request) {
 }
 
 /**
- * If the purchasing user has a referrer, grant that referrer 30 free
- * days via RC promotional entitlement. Returns a short status object
- * for observability in the webhook response. Never throws — a referral
- * failure must not fail the purchase-processing path.
+ * When a REFERRED user first purchases Pro, grant BOTH parties 30 free
+ * days via RC promotional entitlement:
+ *   • The REFERRER (thanks-for-inviting bonus, existing behavior)
+ *   • The REFERRED USER themselves (welcome bonus, new 2026-09-19)
+ *
+ * Migration 0038 added a `role` column to referral_rewards so we can
+ * insert one row per party with unique(pair, role). Idempotent via that
+ * unique — duplicate webhook deliveries can't double-grant.
+ *
+ * Never throws — a referral failure must not fail the purchase path.
  */
 async function maybeGrantReferralReward(
   admin: ReturnType<typeof getAdminClient>,
   purchaserUserId: string
 ): Promise<{
-  granted: boolean;
-  reason?: string;
-  referrer_user_id?: string;
+  referrer: { granted: boolean; reason?: string; user_id?: string };
+  referred: { granted: boolean; reason?: string; user_id?: string };
 } | null> {
   const { data: profile } = await admin
     .from("profiles")
@@ -254,32 +259,69 @@ async function maybeGrantReferralReward(
     .maybeSingle();
   const referrerId = profile?.referred_by;
   if (!referrerId || referrerId === purchaserUserId) {
-    return { granted: false, reason: "no_referrer" };
+    return {
+      referrer: { granted: false, reason: "no_referrer" },
+      referred: { granted: false, reason: "no_referrer" },
+    };
   }
 
-  // Reserve the reward row first — unique(referrer, referred) means a
-  // duplicate INITIAL_PURCHASE webhook (RC retries) collapses to a
-  // single row. Pending rows have applied_at=null.
+  const [referrerResult, referredResult] = await Promise.all([
+    grantRoleReward(admin, {
+      referrerUserId: referrerId,
+      referredUserId: purchaserUserId,
+      role: "referrer",
+      beneficiaryUserId: referrerId,
+    }),
+    grantRoleReward(admin, {
+      referrerUserId: referrerId,
+      referredUserId: purchaserUserId,
+      role: "referred",
+      beneficiaryUserId: purchaserUserId,
+    }),
+  ]);
+
+  return { referrer: referrerResult, referred: referredResult };
+}
+
+async function grantRoleReward(
+  admin: ReturnType<typeof getAdminClient>,
+  args: {
+    referrerUserId: string;
+    referredUserId: string;
+    role: "referrer" | "referred";
+    beneficiaryUserId: string;
+  }
+): Promise<{ granted: boolean; reason?: string; user_id: string }> {
+  const { referrerUserId, referredUserId, role, beneficiaryUserId } = args;
+
   const { data: rewardRow, error: insertErr } = await admin
     .from("referral_rewards")
     .insert({
-      referrer_user_id: referrerId,
-      referred_user_id: purchaserUserId,
+      referrer_user_id: referrerUserId,
+      referred_user_id: referredUserId,
+      role,
       days_granted: 30,
     })
     .select("id")
     .single();
 
   if (insertErr) {
-    // Unique violation = already granted, treat as success (idempotent).
     if (insertErr.code === "23505") {
-      return { granted: false, reason: "already_granted", referrer_user_id: referrerId };
+      return {
+        granted: false,
+        reason: "already_granted",
+        user_id: beneficiaryUserId,
+      };
     }
-    return { granted: false, reason: `insert_failed:${insertErr.message}` };
+    return {
+      granted: false,
+      reason: `insert_failed:${insertErr.message}`,
+      user_id: beneficiaryUserId,
+    };
   }
 
   const grantRes = await grantPromotionalEntitlement({
-    appUserId: referrerId,
+    appUserId: beneficiaryUserId,
     duration: "monthly",
   });
 
@@ -291,7 +333,7 @@ async function maybeGrantReferralReward(
     return {
       granted: false,
       reason: `rc_grant_failed:${grantRes.error ?? grantRes.status}`,
-      referrer_user_id: referrerId,
+      user_id: beneficiaryUserId,
     };
   }
 
@@ -304,5 +346,5 @@ async function maybeGrantReferralReward(
     })
     .eq("id", rewardRow.id);
 
-  return { granted: true, referrer_user_id: referrerId };
+  return { granted: true, user_id: beneficiaryUserId };
 }
