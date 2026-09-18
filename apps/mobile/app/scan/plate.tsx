@@ -39,6 +39,7 @@ export default function PlateScan() {
   const [items, setItems] = useState<PlateItem[]>([]);
   const [confidence, setConfidence] = useState<"low" | "medium" | "high">("medium");
   const [invisible, setInvisible] = useState<string[]>([]);
+  const [notes, setNotes] = useState<string>("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [slot, setSlot] = useState<MealSlot>(slotForNow());
   // Local ID from the scan store when this screen was reached via the
@@ -75,6 +76,7 @@ export default function PlateScan() {
       setItems(s.items);
       setConfidence(s.confidence ?? "medium");
       setInvisible(s.invisibleCosts ?? []);
+      setNotes(s.notes ?? "");
       setSelected(new Set(s.items.map((_, i) => i)));
       setPhase("review");
     };
@@ -485,6 +487,13 @@ export default function PlateScan() {
             </View>
           )}
 
+          {!!notes.trim() && (
+            <View style={styles.notesChip}>
+              <Ionicons name="information-circle-outline" size={14} color={colors.gold} />
+              <Text style={styles.notesText}>{notes.trim()}</Text>
+            </View>
+          )}
+
           {selected.size > 0 && (
             <View style={styles.macroCard}>
               <Text style={styles.macroKicker}>
@@ -708,6 +717,27 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: spacing.sm,
     right: spacing.sm,
+  },
+  // Model's freeform reasoning (v3 prompt: container guess, missing-
+  // scale-reference note). Small subtle chip, not visually competing
+  // with the hero image but present so ranges feel grounded.
+  notesChip: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.gold + "33",
+    backgroundColor: colors.gold + "08",
+  },
+  notesText: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.dim,
+    lineHeight: 15,
+    flex: 1,
   },
   // 4-column macro strip below the hero. Range values sit big; icon /
   // letter badge above; unit micro-label below. Scannable in a glance

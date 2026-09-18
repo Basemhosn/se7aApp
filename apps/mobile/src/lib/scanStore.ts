@@ -37,6 +37,10 @@ export interface PendingScan {
   items?: PlateItem[];
   confidence?: "low" | "medium" | "high";
   invisibleCosts?: string[];
+  // Freeform reasoning the model wrote about its estimate — added
+  // with plate.v3 prompt (2026-09-18) so users can sanity-check the
+  // container-size assumption behind the ranges.
+  notes?: string;
   // Populated when status becomes "failed".
   errorMessage?: string;
 }
@@ -110,6 +114,7 @@ export async function reconcileFromServer(): Promise<void> {
             items?: PlateItem[];
             confidence?: "low" | "medium" | "high";
             invisible_costs?: string[];
+            notes?: string;
           } | null;
           error_message?: string | null;
         }>(`/api/scan/plate/${encodeURIComponent(s.scanId!)}`);
@@ -119,6 +124,7 @@ export async function reconcileFromServer(): Promise<void> {
             items: remote.parsed.items ?? [],
             confidence: remote.parsed.confidence ?? "medium",
             invisibleCosts: remote.parsed.invisible_costs ?? [],
+            notes: remote.parsed.notes,
           });
         } else if (remote.status === "failed") {
           markFailed(s.localId, remote.error_message ?? "ai_failed");
@@ -188,6 +194,7 @@ export function markReady(
     items: PlateItem[];
     confidence: "low" | "medium" | "high";
     invisibleCosts: string[];
+    notes?: string;
   }
 ): void {
   scans = scans.map((s) =>
@@ -199,6 +206,7 @@ export function markReady(
           items: payload.items,
           confidence: payload.confidence,
           invisibleCosts: payload.invisibleCosts,
+          notes: payload.notes,
         }
       : s
   );
