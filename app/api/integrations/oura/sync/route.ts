@@ -3,7 +3,7 @@ import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
 import { syncOuraForUser } from "@/lib/ouraSync";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   const supabase = getRouteClient(request);

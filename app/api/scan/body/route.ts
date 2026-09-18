@@ -14,7 +14,7 @@ import { getEntitlement } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const VALID_POSES = new Set(["front", "side", "back"]);

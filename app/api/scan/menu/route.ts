@@ -14,7 +14,7 @@ import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 import { localDateIso, tzOffsetFromRequest } from "@/lib/tz";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const MAX_BYTES = 8 * 1024 * 1024;
 

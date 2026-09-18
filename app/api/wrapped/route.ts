@@ -6,7 +6,7 @@ import { getRouteClient } from "@/lib/supabase/server";
 import { addDaysIso as addDays, isoDay } from "@/lib/dateKeys";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 120;
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,

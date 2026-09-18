@@ -10,7 +10,7 @@ import { requirePro } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 300;
 
 const MODEL_ID = "claude-sonnet-4-6";
 const HISTORY_TURNS = 12; // last 12 messages, ~6 user + 6 assistant

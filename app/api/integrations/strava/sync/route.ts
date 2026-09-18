@@ -3,7 +3,7 @@ import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
 import { syncStravaForUser } from "@/lib/stravaSync";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * Manually trigger a Strava sync for the current user. Used by the
