@@ -3,11 +3,16 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/auth/AuthContext";
+import { useAutoAttachInvite } from "@/lib/useAutoAttachInvite";
 import { colors, font } from "@/lib/theme";
 
 export default function TabsLayout() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  // Silent attach for referral codes that arrived via universal link
+  // while the user was signed out. Runs at most once per session and
+  // is a no-op if no code is stashed or the user isn't eligible.
+  useAutoAttachInvite();
 
   if (loading) {
     return (
