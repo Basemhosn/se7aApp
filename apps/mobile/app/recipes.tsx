@@ -10,6 +10,7 @@ import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
+import { EmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/api";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -101,11 +102,19 @@ export default function Recipes() {
           <ActivityIndicator color={colors.gold} />
         </View>
       ) : recipes.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyBody}>
-            {isArabic ? "لا توجد وصفات في هذه الفئة بعد." : "No recipes in this category yet."}
-          </Text>
-        </View>
+        <EmptyState
+          icon="restaurant-outline"
+          title={
+            isArabic ? "لا وصفات هنا" : "Nothing in this category"
+          }
+          body={
+            isArabic
+              ? "جرّب فئة أخرى أو تصفّح الكل."
+              : "Try another category or browse All."
+          }
+          ctaLabel={cat === "all" ? undefined : isArabic ? "تصفّح الكل" : "Browse All"}
+          onCta={cat === "all" ? undefined : () => setCat("all")}
+        />
       ) : (
         recipes.map((r) => (
           <Pressable

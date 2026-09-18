@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
+import { EmptyState } from "@/components/EmptyState";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
@@ -170,6 +171,16 @@ export default function MealsSuggest() {
       )}
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
+
+      {!loading && data && data.suggestions.length === 0 && (
+        <EmptyState
+          icon="bulb-outline"
+          title={t("meals_suggest.empty_title")}
+          body={t("meals_suggest.empty_body")}
+          ctaLabel={t("meals_suggest.empty_cta")}
+          onCta={() => router.push("/edit-profile" as never)}
+        />
+      )}
 
       {data?.suggestions.map((s, i) => (
         <View key={`${s.name}-${i}`} style={styles.card}>

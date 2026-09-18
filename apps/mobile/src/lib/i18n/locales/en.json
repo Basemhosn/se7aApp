@@ -245,7 +245,10 @@
     "log_cta": "Log to {{slot}}",
     "logging": "Logging…",
     "give_different": "Give me different options",
-    "couldnt_log": "Couldn't log — try again."
+    "couldnt_log": "Couldn't log — try again.",
+    "empty_title": "No suggestions to show",
+    "empty_body": "Your targets don't leave much room for a full option here. Adjust your goals or come back after logging more.",
+    "empty_cta": "Adjust my goals"
   },
   "recipe": {
     "not_found": "Recipe not found.",
