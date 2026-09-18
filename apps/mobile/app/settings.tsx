@@ -8,6 +8,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -26,6 +27,7 @@ import type { RamadanStatus } from "@/lib/useRamadan";
 import { rescheduleRamadanReminders } from "@/lib/ramadanScheduler";
 import { useAuth } from "@/auth/AuthContext";
 import { useReferral } from "@/lib/useReferral";
+import { supabase } from "@/lib/supabase";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { restorePurchases, hasProEntitlement } from "@/lib/rc";
 import { track } from "@/lib/analytics";
@@ -66,7 +68,15 @@ export default function Settings() {
   const [deleting, setDeleting] = useState<Deleting>("idle");
   const [restoring, setRestoring] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const { stats: referral } = useReferral(user?.id);
+  const { stats: referral, refresh: refreshReferral } = useReferral(user?.id);
+  // "Have a code from a friend?" attach flow. Only surfaces when the
+  // user has no referred_by set AND is within the 7-day attribution
+  // window (mirrors /api/referrals/attach's server-side rules).
+  const [attachEligible, setAttachEligible] = useState(false);
+  const [attachCode, setAttachCode] = useState("");
+  const [attaching, setAttaching] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachSuccess, setAttachSuccess] = useState(false);
   const { ent, refresh: refreshEnt } = useEntitlement();
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -81,7 +91,24 @@ export default function Settings() {
     api<{ integrations: Integration[] }>("/api/integrations")
       .then((r) => setIntegrations(r.integrations))
       .catch(() => setIntegrations([]));
-  }, []);
+    if (user?.id) {
+      supabase
+        .from("profiles")
+        .select("referred_by, created_at")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!data) return;
+          if (data.referred_by) return;
+          const createdMs = data.created_at
+            ? new Date(data.created_at).getTime()
+            : 0;
+          const withinWindow =
+            Date.now() - createdMs <= 7 * 24 * 60 * 60 * 1000;
+          setAttachEligible(withinWindow);
+        });
+    }
+  }, [user?.id]);
 
   const strava = integrations.find((i) => i.provider === "strava");
   const whoop = integrations.find((i) => i.provider === "whoop");
@@ -308,6 +335,56 @@ export default function Settings() {
         },
       ]
     );
+  };
+
+  const doAttach = async () => {
+    const trimmed = attachCode.trim().toLowerCase();
+    if (!/^[a-f0-9]{6,12}$/.test(trimmed)) {
+      setAttachError(
+        isArabic ? "الرمز يبدو غير صحيح." : "That code doesn't look right."
+      );
+      return;
+    }
+    setAttaching(true);
+    setAttachError(null);
+    try {
+      await api<{ ok: true }>("/api/referrals/attach", {
+        method: "POST",
+        body: JSON.stringify({ referral_code: trimmed }),
+      });
+      setAttachSuccess(true);
+      setAttachEligible(false);
+      setAttachCode("");
+      // Refresh the referral card so the earned-months view is
+      // accurate on the next Pro upgrade.
+      refreshReferral();
+    } catch (e) {
+      const msg = (e as Error).message ?? "";
+      if (msg.includes("code_not_found")) {
+        setAttachError(
+          isArabic ? "الرمز غير موجود." : "Code not found."
+        );
+      } else if (msg.includes("self_referral")) {
+        setAttachError(
+          isArabic
+            ? "لا يمكنك استخدام رمزك الخاص."
+            : "That's your own code."
+        );
+      } else if (msg.includes("already_attributed")) {
+        setAttachError(
+          isArabic ? "لديك مُحيل بالفعل." : "You already have a referrer."
+        );
+      } else if (msg.includes("outside_attribution_window")) {
+        setAttachError(
+          isArabic
+            ? "نافذة الرموز 7 أيام فقط من الاشتراك."
+            : "Codes can only be attached within 7 days of signup."
+        );
+      } else {
+        setAttachError(msg || (isArabic ? "خطأ" : "Something went wrong."));
+      }
+    }
+    setAttaching(false);
   };
 
   const doDelete = async () => {
@@ -563,6 +640,66 @@ export default function Settings() {
       <Section title={isArabic ? "الدورة الشهرية" : "Cycle"}>
         <CycleSettings isArabic={isArabic} />
       </Section>
+
+      {(attachEligible || attachSuccess) && (
+        <Section
+          title={isArabic ? "لديك رمز صديق؟" : "Have a friend's code?"}
+        >
+          <View style={styles.attachBody}>
+            {attachSuccess ? (
+              <Text style={styles.attachSuccess}>
+                {isArabic
+                  ? "تم! ستحصل على شهر مجاني عند اشتراكك في Pro."
+                  : "Done — you'll get a free month when you upgrade to Pro."}
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.attachHint}>
+                  {isArabic
+                    ? "أدخل رمز صديقك خلال 7 أيام من التسجيل وستحصل على شهر Pro مجاني."
+                    : "Enter a friend's code within 7 days of signing up and you'll get a free month of Pro."}
+                </Text>
+                <TextInput
+                  value={attachCode}
+                  onChangeText={(v) => {
+                    setAttachCode(v);
+                    setAttachError(null);
+                  }}
+                  placeholder={isArabic ? "الرمز" : "Code"}
+                  placeholderTextColor={colors.dim}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  maxLength={12}
+                  style={styles.attachInput}
+                />
+                {attachError && (
+                  <Text style={styles.attachError}>{attachError}</Text>
+                )}
+                <Pressable
+                  onPress={doAttach}
+                  disabled={attaching || attachCode.trim().length < 6}
+                  style={[
+                    styles.attachBtn,
+                    (attaching || attachCode.trim().length < 6) &&
+                      styles.attachBtnDisabled,
+                  ]}
+                >
+                  <Text style={styles.attachBtnLabel}>
+                    {attaching
+                      ? isArabic
+                        ? "جارٍ التطبيق…"
+                        : "Attaching…"
+                      : isArabic
+                        ? "طبّق الرمز"
+                        : "Attach code"}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </Section>
+      )}
 
       {referral && (
         <Section title={isArabic ? "ادعُ صديقًا · اكسب أشهر" : "Invite friends · earn months"}>
@@ -1555,6 +1692,56 @@ const styles = StyleSheet.create({
     color: colors.dim,
     textAlign: "center",
     marginTop: spacing.xl,
+  },
+  // "Have a friend's code?" attach block. Surfaces only within the
+  // 7-day attribution window when the user has no referred_by.
+  attachBody: {
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  attachHint: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.dim,
+    lineHeight: 18,
+  },
+  attachInput: {
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    color: colors.ink,
+    fontFamily: font.mono,
+    fontSize: 16,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    letterSpacing: 2,
+  },
+  attachError: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.coral,
+  },
+  attachBtn: {
+    marginTop: 4,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.gold,
+    alignItems: "center",
+  },
+  attachBtnDisabled: {
+    opacity: 0.4,
+  },
+  attachBtnLabel: {
+    fontFamily: font.displayBold,
+    fontSize: 15,
+    color: colors.bg,
+  },
+  attachSuccess: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.gold,
+    lineHeight: 20,
   },
   inviteBody: {
     padding: spacing.md,
