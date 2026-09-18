@@ -28,6 +28,7 @@ import { rescheduleRamadanReminders } from "@/lib/ramadanScheduler";
 import { useAuth } from "@/auth/AuthContext";
 import { useReferral } from "@/lib/useReferral";
 import { supabase } from "@/lib/supabase";
+import { clearInviteCode, readInviteCode } from "@/lib/referralInvite";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { restorePurchases, hasProEntitlement } from "@/lib/rc";
 import { track } from "@/lib/analytics";
@@ -106,6 +107,14 @@ export default function Settings() {
           const withinWindow =
             Date.now() - createdMs <= 7 * 24 * 60 * 60 * 1000;
           setAttachEligible(withinWindow);
+          // Auto-fill from a code stashed via universal link / custom
+          // scheme (user tapped a friend's link). Only prefill if the
+          // user hasn't started typing something themselves.
+          if (withinWindow) {
+            void readInviteCode().then((code) => {
+              if (code) setAttachCode((prev) => prev || code);
+            });
+          }
         });
     }
   }, [user?.id]);
@@ -355,6 +364,8 @@ export default function Settings() {
       setAttachSuccess(true);
       setAttachEligible(false);
       setAttachCode("");
+      // A stashed universal-link code has served its purpose.
+      void clearInviteCode();
       // Refresh the referral card so the earned-months view is
       // accurate on the next Pro upgrade.
       refreshReferral();

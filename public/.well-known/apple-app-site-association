@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["WFPM8238WC.app.se7a.mobile"],
+        "components": [
+          {
+            "/": "/join/*",
+            "comment": "SE7A referral join links"
+          }
+        ]
+      }
+    ]
+  }
+}

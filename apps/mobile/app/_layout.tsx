@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
@@ -26,6 +27,7 @@ import { EntitlementProvider } from "@/lib/EntitlementContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { hydrateLocaleFromStorage } from "@/lib/i18n";
 import { initAnalytics, track } from "@/lib/analytics";
+import { handleInviteUrl } from "@/lib/referralInvite";
 
 // Sentry.init runs at module-load time. Any throw here (invalid DSN,
 // missing native side, transient linker issue) crashes the whole bundle
@@ -59,6 +61,16 @@ function RootLayout() {
     hydrateLocaleFromStorage();
     initAnalytics();
     track("app_opened");
+    // Referral invite intake — both paths route to the same handler:
+    //   • cold-start via universal link / custom scheme
+    //   • warm URL event when the user taps a link with the app open
+    Linking.getInitialURL()
+      .then((url) => handleInviteUrl(url))
+      .catch(() => {});
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      void handleInviteUrl(url);
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

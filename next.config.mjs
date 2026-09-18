@@ -21,6 +21,17 @@ const nextConfig = {
           },
         ],
       },
+      // Apple App Site Association (universal links). iOS fetches this
+      // on install and every ~24h and is strict: must return
+      // application/json Content-Type, and the file must be under
+      // /.well-known/ — the raw file has no extension.
+      {
+        source: "/.well-known/apple-app-site-association",
+        headers: [
+          { key: "Content-Type", value: "application/json" },
+          { key: "Cache-Control", value: "public, max-age=3600" },
+        ],
+      },
     ];
   },
 };
