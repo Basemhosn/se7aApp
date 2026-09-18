@@ -184,18 +184,55 @@ async function processScanInBackground(args: {
       /* push failure must not fail the scan */
     });
   } catch (e) {
-    const message = (e as Error).message || "ai_failed";
+    const raw = (e as Error).message || "ai_failed";
+    // Translate the AI SDK / Zod error into something the mobile card
+    // can render without terrifying the user. Full raw error still
+    // logged in scans.error_message for server-side debugging via the
+    // Sentry integration.
+    const friendly = friendlyScanFailure(raw);
     await admin
       .from("scans")
       .update({
         status: "failed",
-        error_message: message,
+        error_message: friendly,
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);
+    console.error("plate scan failed", { scanId, raw });
     // Best-effort failure push so the user isn't stuck on a spinner.
-    await notifyScanFailed(admin, userId, scanId, message).catch(() => {});
+    await notifyScanFailed(admin, userId, scanId, friendly).catch(() => {});
   }
+}
+
+/**
+ * Map raw AI SDK / Zod errors to a message the mobile client can show
+ * on a failed scan card. Keeps the raw string in server logs so we
+ * can still tell schema issues apart from provider outages.
+ */
+function friendlyScanFailure(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("did not match schema") ||
+    lower.includes("typevalidationerror") ||
+    lower.includes("too_big") ||
+    lower.includes("too_small")
+  ) {
+    return "The scan didn't fit our data shape. Try again with a clearer photo, or include a hand/fork for scale.";
+  }
+  if (lower.includes("rate limit") || lower.includes("429")) {
+    return "Too many scans in a row — wait a minute and try again.";
+  }
+  if (
+    lower.includes("timeout") ||
+    lower.includes("aborted") ||
+    lower.includes("etimedout")
+  ) {
+    return "The scan took too long. Try a smaller / clearer photo.";
+  }
+  if (lower.includes("safety") || lower.includes("content policy")) {
+    return "Couldn't analyze that photo. Try a clearer plate shot.";
+  }
+  return "Scan failed. Try again — if it keeps happening, tell support.";
 }
 
 async function notifyScanReady(

@@ -7,36 +7,45 @@ import { z } from "zod";
  * prompt to keep high >= low; we additionally normalize server-side to
  * guarantee that invariant before persisting.
  */
+// Numeric caps are intentionally generous. The plate.v3 prompt asks
+// the model to widen ranges to a 3× spread when no scale reference is
+// visible, which can push high-end values well past a "realistic
+// meal" ceiling. Tight caps here silently fail generateObject with
+// "response did not match schema" (see memory feedback on schema
+// tightness). Rule of thumb: cap ~= (worst realistic item) × 3.
 export const plateItemSchema = z.object({
-  name: z.string().min(1).max(120),
-  portion_estimate: z.string().max(300),
-  kcal_low: z.number().int().min(0).max(5000),
-  kcal_high: z.number().int().min(0).max(6000),
-  protein_g_low: z.number().min(0).max(300),
-  protein_g_high: z.number().min(0).max(400),
-  carb_g_low: z.number().min(0).max(500),
-  carb_g_high: z.number().min(0).max(600),
-  fat_g_low: z.number().min(0).max(300),
-  fat_g_high: z.number().min(0).max(400),
+  name: z.string().min(1).max(200),
+  portion_estimate: z.string().max(500),
+  kcal_low: z.number().int().min(0).max(8000),
+  kcal_high: z.number().int().min(0).max(10000),
+  protein_g_low: z.number().min(0).max(500),
+  protein_g_high: z.number().min(0).max(700),
+  carb_g_low: z.number().min(0).max(800),
+  carb_g_high: z.number().min(0).max(1000),
+  fat_g_low: z.number().min(0).max(500),
+  fat_g_high: z.number().min(0).max(700),
   // Micronutrients — optional because legacy scans + manual entries
-  // don't have them, but the plate scan prompt (v2) is expected to
+  // don't have them, but the plate scan prompt (v2+) is expected to
   // emit these for every item.
-  sodium_mg_low: z.number().min(0).max(20000).optional(),
-  sodium_mg_high: z.number().min(0).max(20000).optional(),
-  fiber_g_low: z.number().min(0).max(100).optional(),
-  fiber_g_high: z.number().min(0).max(100).optional(),
-  sugar_g_low: z.number().min(0).max(500).optional(),
-  sugar_g_high: z.number().min(0).max(500).optional(),
-  saturated_fat_g_low: z.number().min(0).max(300).optional(),
-  saturated_fat_g_high: z.number().min(0).max(300).optional(),
+  sodium_mg_low: z.number().min(0).max(30000).optional(),
+  sodium_mg_high: z.number().min(0).max(30000).optional(),
+  fiber_g_low: z.number().min(0).max(200).optional(),
+  fiber_g_high: z.number().min(0).max(200).optional(),
+  sugar_g_low: z.number().min(0).max(800).optional(),
+  sugar_g_high: z.number().min(0).max(800).optional(),
+  saturated_fat_g_low: z.number().min(0).max(500).optional(),
+  saturated_fat_g_high: z.number().min(0).max(500).optional(),
 });
 
 export const plateScanResultSchema = z.object({
   identifiable: z.boolean(),
-  items: z.array(plateItemSchema).max(15),
+  items: z.array(plateItemSchema).max(20),
   confidence: z.enum(["low", "medium", "high"]),
-  invisible_costs: z.array(z.string().max(300)).max(10),
-  notes: z.string().max(500).optional(),
+  invisible_costs: z.array(z.string().max(500)).max(15),
+  // v3 prompt asks the model to write container guess AND scale
+  // reference status AND range-widening reasoning here. 500 was too
+  // tight for the multi-sentence output we now ask for.
+  notes: z.string().max(2000).optional(),
 });
 
 export type PlateItem = z.infer<typeof plateItemSchema>;
