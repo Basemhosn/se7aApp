@@ -20,6 +20,8 @@ export function BackButton({ label }: { label?: string }) {
       }}
       hitSlop={12}
       style={styles.btn}
+      accessibilityRole="button"
+      accessibilityLabel={displayLabel}
     >
       <Ionicons name="chevron-back" size={22} color={colors.ink} />
       <Text style={styles.label}>{displayLabel}</Text>

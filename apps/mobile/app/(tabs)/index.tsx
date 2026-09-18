@@ -679,6 +679,12 @@ function Header({
           <Pressable
             style={styles.fastingPill}
             onPress={() => router.push("/fasting")}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isArabic
+                ? `صيام نشط ${formatFastElapsed(fastingActive.started_at)}`
+                : `Active fast, ${formatFastElapsed(fastingActive.started_at)}`
+            }
           >
             <Ionicons name="hourglass" size={12} color={colors.gold} />
             <Text style={styles.fastingPillText}>
@@ -690,6 +696,10 @@ function Header({
           <Pressable
             style={styles.planPill}
             onPress={() => router.push("/paywall")}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isArabic ? "افتح Pro" : "Free plan — upgrade to Pro"
+            }
           >
             <Text style={styles.planPillText}>
               {isArabic ? "مجاني" : "Free"}
@@ -697,13 +707,24 @@ function Header({
             <Text style={styles.planPillArrow}>→</Text>
           </Pressable>
         ) : null}
-        <Pressable style={styles.streakChip} onPress={onStreakTap}>
+        <Pressable
+          style={styles.streakChip}
+          onPress={onStreakTap}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isArabic
+              ? `سلسلة ${streakDays} أيام. اضغط للتفاصيل`
+              : `Streak ${streakDays} ${streakDays === 1 ? "day" : "days"}. Tap for details`
+          }
+        >
           <Ionicons name="flame" size={14} color={colors.gold} />
           <Text style={styles.streakChipText}>{streakDays}</Text>
         </Pressable>
         <Pressable
           style={styles.avatarBtn}
           onPress={() => router.push("/settings")}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? "الإعدادات" : "Settings"}
         >
           <Ionicons name="person-outline" size={18} color={colors.ink} />
         </Pressable>
@@ -810,6 +831,12 @@ function TrialBanner({
     <Pressable
       onPress={() => router.push("/paywall")}
       style={styles.trialBanner}
+      accessibilityRole="button"
+      accessibilityLabel={
+        isArabic
+          ? `تجربة، ${timeLabel}. ${body}`
+          : `Trial, ${timeLabel}. ${body}`
+      }
     >
       <Ionicons name="sparkles" size={14} color={colors.gold} />
       <View style={{ flex: 1 }}>
@@ -1771,6 +1798,12 @@ function StreakCardCompact({
     <Pressable
       style={[styles.footerCard, atRisk && styles.streakCardAtRisk]}
       onPress={onTap}
+      accessibilityRole="button"
+      accessibilityLabel={
+        isArabic
+          ? `سلسلة ${streak.current_days} ${streak.current_days === 1 ? "يوم" : "أيام"}${atRisk ? "، في خطر" : ""}. اضغط للتفاصيل`
+          : `Streak ${streak.current_days} ${streak.current_days === 1 ? "day" : "days"}${atRisk ? ", at risk" : ""}. Tap for details`
+      }
     >
       <View
         style={[

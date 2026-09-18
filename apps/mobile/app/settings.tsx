@@ -833,6 +833,15 @@ export default function Settings() {
           onPress={confirmDelete}
           disabled={deleting === "deleting"}
           style={[styles.dangerBtn, deleting === "deleting" && { opacity: 0.5 }]}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isArabic ? "احذف حسابي" : "Delete my account"
+          }
+          accessibilityHint={
+            isArabic
+              ? "يمسح حسابك وكل بياناتك نهائياً"
+              : "Permanently erases your account and all data"
+          }
         >
           <Text style={styles.dangerLabel}>
             {deleting === "deleting"
@@ -1624,7 +1633,17 @@ function RowLink({
   external?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.row}>
+    <Pressable
+      onPress={onPress}
+      style={styles.row}
+      accessibilityRole={external ? "link" : "button"}
+      accessibilityLabel={
+        value ? `${label}, ${value}` : label
+      }
+      accessibilityHint={
+        external ? "Opens in your browser" : undefined
+      }
+    >
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
         {value && <Text style={styles.rowValue}>{value}</Text>}

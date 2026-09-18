@@ -44,7 +44,13 @@ export function QuickLogFab({ actions }: { actions: Action[] }) {
   return (
     <>
       {open && (
-        <Pressable style={styles.scrim} onPress={toggle} pointerEvents="auto" />
+        <Pressable
+          style={styles.scrim}
+          onPress={toggle}
+          pointerEvents="auto"
+          accessibilityLabel="Close quick-log menu"
+          accessibilityRole="button"
+        />
       )}
       <View style={styles.stack} pointerEvents="box-none">
         {actions.map((a, i) => {
@@ -69,6 +75,8 @@ export function QuickLogFab({ actions }: { actions: Action[] }) {
                   requestAnimationFrame(a.onPress);
                 }}
                 style={styles.actionRow}
+                accessibilityRole="button"
+                accessibilityLabel={a.label}
               >
                 <Text style={styles.actionLabel}>{a.label}</Text>
                 <View
@@ -84,7 +92,12 @@ export function QuickLogFab({ actions }: { actions: Action[] }) {
           );
         })}
 
-        <Pressable onPress={toggle} style={styles.fab}>
+        <Pressable
+          onPress={toggle}
+          style={styles.fab}
+          accessibilityRole="button"
+          accessibilityLabel={open ? "Close quick-log menu" : "Open quick-log menu"}
+        >
           <Animated.View
             style={{
               transform: [

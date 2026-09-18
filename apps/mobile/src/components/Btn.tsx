@@ -19,6 +19,12 @@ export function Btn({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{
+        disabled: !!isDisabled,
+        busy: !!loading,
+      }}
       style={({ pressed }) => [
         styles.btn,
         variant === "ghost" ? styles.ghost : styles.primary,
