@@ -370,6 +370,22 @@ export default function Home() {
     }, [load])
   );
 
+  // Date-strip changes must re-fetch. useFocusEffect only fires on
+  // focus events, so tapping "tomorrow" (or any other day) used to
+  // leave the ring showing the previously-loaded day's data.
+  // Ref guards the initial mount — useFocusEffect handles that case.
+  const initialDateMountRef = useRef(true);
+  useEffect(() => {
+    if (initialDateMountRef.current) {
+      initialDateMountRef.current = false;
+      return;
+    }
+    // Clear stale ledger before the new fetch resolves so the ring
+    // doesn't flash yesterday's totals under tomorrow's date.
+    setLedger(null);
+    load();
+  }, [viewDateIso, load]);
+
   const addWater = async (ml: number) => {
     if (!water) return;
     const prev = water;
@@ -1562,23 +1578,63 @@ function MealsList({
                       </Text>
                     </View>
                   ) : !usePlanned ? (
-                    slotItems.map((it, idx) => (
-                      <View
-                        key={it.id}
-                        style={[
-                          styles.mealItemRow,
-                          idx < slotItems.length - 1 &&
-                            styles.mealRowDivider,
-                        ]}
-                      >
-                        <Text style={styles.mealItemName} numberOfLines={1}>
-                          {it.name}
-                        </Text>
-                        <Text style={styles.mealItemMeta}>
-                          {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
-                        </Text>
-                      </View>
-                    ))
+                    slotItems.map((it, idx) => {
+                      // Plate-scanned items link back to the scan
+                      // review screen (already resolves via ?scan_id).
+                      // Menu/manual/voice items just render — no
+                      // dedicated detail screen yet.
+                      const canOpen =
+                        !!it.scan_id && it.source === "plate_scan";
+                      const RowWrap = canOpen ? Pressable : View;
+                      return (
+                        <RowWrap
+                          key={it.id}
+                          onPress={
+                            canOpen
+                              ? () =>
+                                  router.push(
+                                    `/scan/plate?scan_id=${encodeURIComponent(it.scan_id!)}` as never
+                                  )
+                              : undefined
+                          }
+                          style={[
+                            styles.mealItemRow,
+                            idx < slotItems.length - 1 &&
+                              styles.mealRowDivider,
+                          ]}
+                          accessibilityRole={canOpen ? "button" : undefined}
+                          accessibilityLabel={
+                            canOpen
+                              ? `${it.name}, ${Math.round((it.kcal_low + it.kcal_high) / 2)} kcal. Tap to review scan`
+                              : undefined
+                          }
+                        >
+                          {it.photo_url ? (
+                            <Image
+                              source={{ uri: it.photo_url }}
+                              style={styles.mealItemThumb}
+                            />
+                          ) : null}
+                          <Text
+                            style={styles.mealItemName}
+                            numberOfLines={1}
+                          >
+                            {it.name}
+                          </Text>
+                          <Text style={styles.mealItemMeta}>
+                            {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+                          </Text>
+                          {canOpen ? (
+                            <Ionicons
+                              name="chevron-forward"
+                              size={14}
+                              color={colors.dim}
+                              style={{ marginLeft: 2 }}
+                            />
+                          ) : null}
+                        </RowWrap>
+                      );
+                    })
                   ) : (
                     slotPlanned.map((p, idx) => (
                       <View
@@ -2659,9 +2715,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     paddingLeft: spacing.md + 32 + spacing.sm,
+  },
+  mealItemThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    marginLeft: -(32 + 4),
+    marginRight: spacing.xs,
+    backgroundColor: colors.panel2,
   },
   mealItemName: {
     flex: 1,
