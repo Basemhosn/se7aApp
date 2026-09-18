@@ -9,6 +9,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
+import { MacroStrip } from "@/components/MacroStrip";
 import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import {
@@ -491,31 +492,13 @@ export default function PlateScan() {
                   ? `${t("scan.plate.plate_total").toUpperCase()} · ${selected.size}/${items.length}`
                   : t("scan.plate.plate_total").toUpperCase()}
               </Text>
-              <View style={styles.macroStrip}>
-                <MacroCol
-                  icon="flame"
-                  value={`${totals.kcal_low}–${totals.kcal_high}`}
-                  label={t("common.kcal")}
-                />
-                <View style={styles.macroDivider} />
-                <MacroCol
-                  letter="P"
-                  value={`${fmt(totals.protein_g_low)}–${fmt(totals.protein_g_high)}`}
-                  label="g"
-                />
-                <View style={styles.macroDivider} />
-                <MacroCol
-                  letter="C"
-                  value={`${fmt(totals.carb_g_low)}–${fmt(totals.carb_g_high)}`}
-                  label="g"
-                />
-                <View style={styles.macroDivider} />
-                <MacroCol
-                  letter="F"
-                  value={`${fmt(totals.fat_g_low)}–${fmt(totals.fat_g_high)}`}
-                  label="g"
-                />
-              </View>
+              <MacroStrip
+                kcal={`${totals.kcal_low}–${totals.kcal_high}`}
+                protein={`${fmt(totals.protein_g_low)}–${fmt(totals.protein_g_high)}`}
+                carbs={`${fmt(totals.carb_g_low)}–${fmt(totals.carb_g_high)}`}
+                fat={`${fmt(totals.fat_g_low)}–${fmt(totals.fat_g_high)}`}
+                kcalLabel={t("common.kcal")}
+              />
             </View>
           )}
 
@@ -658,37 +641,6 @@ function FitScoreCard({
   );
 }
 
-/**
- * Single column in the top macro strip. Either an Ionicon (calories)
- * or a colored capital letter (P / C / F) heads the column so it's
- * scannable in a glance without reading labels.
- */
-function MacroCol({
-  icon,
-  letter,
-  value,
-  label,
-}: {
-  icon?: keyof typeof Ionicons.glyphMap;
-  letter?: string;
-  value: string;
-  label: string;
-}) {
-  return (
-    <View style={styles.macroCol}>
-      <View style={styles.macroBadge}>
-        {icon ? (
-          <Ionicons name={icon} size={14} color={colors.gold} />
-        ) : (
-          <Text style={styles.macroBadgeLetter}>{letter}</Text>
-        )}
-      </View>
-      <Text style={styles.macroValue}>{value}</Text>
-      <Text style={styles.macroLabel}>{label}</Text>
-    </View>
-  );
-}
-
 function parsePortionGrams(portion: string): number | null {
   const trimmed = portion.trim();
   const m = /^(\d+(?:\.\d+)?)\s*(kg|g|grams?)\b/i.exec(trimmed);
@@ -773,49 +725,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.gold,
     letterSpacing: 1.4,
-  },
-  macroStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  macroCol: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  macroBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.gold + "18",
-    borderWidth: 1,
-    borderColor: colors.gold + "55",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  macroBadgeLetter: {
-    fontFamily: font.displayBold,
-    fontSize: 13,
-    color: colors.gold,
-    lineHeight: 15,
-  },
-  macroValue: {
-    fontFamily: font.displayBold,
-    fontSize: 15,
-    color: colors.ink,
-    marginTop: 2,
-  },
-  macroLabel: {
-    fontFamily: font.mono,
-    fontSize: 9,
-    color: colors.dim,
-    letterSpacing: 0.8,
-  },
-  macroDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: colors.line,
   },
   // Fit score — verdict on how the meal fits YOUR day. Tone shifts
   // by score band; the reasons list prevents the number from feeling

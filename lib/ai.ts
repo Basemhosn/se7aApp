@@ -35,7 +35,7 @@ export const MODELS = {
  */
 export const PROMPT_VERSION = {
   plate: "plate.v3_scale",
-  menu: "menu.v2_micros",
+  menu: "menu.v3_portion",
   body: "body.v1",
 } as const;
 

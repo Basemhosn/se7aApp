@@ -9,6 +9,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
+import { MacroStrip } from "@/components/MacroStrip";
 import {
   api,
   apiUpload,
@@ -363,25 +364,26 @@ export default function MenuScan() {
 
       {(phase === "result" || phase === "saving") && budget && (
         <>
-          <View style={styles.reviewHead}>
-            {previewUri && (
-              <Image source={{ uri: previewUri }} style={styles.thumb} />
-            )}
-            <View style={{ flex: 1 }}>
-              <ConfidencePill level={confidence} />
-              <Pressable
-                onPress={editRestaurantName}
-                hitSlop={6}
-                style={styles.restaurantRow}
-              >
-                <Ionicons name="storefront" size={12} color={colors.dim} />
-                <Text style={styles.dim} numberOfLines={1}>
-                  {restaurantName ?? t("scan.menu.tap_to_name")}
-                </Text>
-                <Text style={styles.restaurantEditHint}>✎</Text>
-              </Pressable>
+          {previewUri && (
+            <View style={styles.hero}>
+              <Image source={{ uri: previewUri }} style={styles.heroImage} />
+              <View style={styles.heroConfidence}>
+                <ConfidencePill level={confidence} />
+              </View>
             </View>
-          </View>
+          )}
+
+          <Pressable
+            onPress={editRestaurantName}
+            hitSlop={6}
+            style={styles.restaurantChip}
+          >
+            <Ionicons name="storefront" size={14} color={colors.gold} />
+            <Text style={styles.restaurantChipText} numberOfLines={1}>
+              {restaurantName ?? t("scan.menu.tap_to_name")}
+            </Text>
+            <Text style={styles.restaurantEditHint}>✎</Text>
+          </Pressable>
 
           {pastDishes.length > 0 && (
             <View style={styles.pastCard}>
@@ -427,16 +429,20 @@ export default function MenuScan() {
             </View>
           )}
 
-          <View style={styles.budget}>
-            <Text style={styles.kicker}>
-              {targetsKnown ? t("scan.menu.your_budget") : t("scan.menu.default_budget")}
+          <View style={styles.budgetCard}>
+            <Text style={styles.budgetKicker}>
+              {(targetsKnown
+                ? t("scan.menu.your_budget")
+                : t("scan.menu.default_budget")
+              ).toUpperCase()}
             </Text>
-            <Text style={styles.budgetMain}>
-              {Math.round(budget.kcal_low)}–{Math.round(budget.kcal_high)} {t("common.kcal")}
-            </Text>
-            <Text style={styles.budgetMacros}>
-              P {Math.round(budget.protein_g_low)}–{Math.round(budget.protein_g_high)} · C {Math.round(budget.carb_g_low)}–{Math.round(budget.carb_g_high)} · F {Math.round(budget.fat_g_low)}–{Math.round(budget.fat_g_high)}
-            </Text>
+            <MacroStrip
+              kcal={`${Math.round(budget.kcal_low)}–${Math.round(budget.kcal_high)}`}
+              protein={`${Math.round(budget.protein_g_low)}–${Math.round(budget.protein_g_high)}`}
+              carbs={`${Math.round(budget.carb_g_low)}–${Math.round(budget.carb_g_high)}`}
+              fat={`${Math.round(budget.fat_g_low)}–${Math.round(budget.fat_g_high)}`}
+              kcalLabel={t("common.kcal")}
+            />
           </View>
 
           <DishSection
@@ -567,29 +573,63 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     resizeMode: "cover",
   },
-  reviewHead: {
-    flexDirection: "row",
-    gap: spacing.md,
-    alignItems: "center",
-  },
-  thumb: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.md,
+  // Full-width hero photo of the menu — replaces the small thumbnail
+  // that used to sit next to the confidence pill. 4:3 crops menu
+  // photos more naturally than 16:10.
+  hero: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    borderRadius: radius.lg,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.line,
+    position: "relative",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroConfidence: {
+    position: "absolute",
+    top: spacing.sm,
+    right: spacing.sm,
+  },
+  // Restaurant name as a pill directly under the hero. Tappable for
+  // rename; drives the "past dishes at this place" memory feature.
+  restaurantChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold + "44",
+    backgroundColor: colors.gold + "10",
+  },
+  restaurantChipText: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.ink,
+    maxWidth: 220,
   },
   busy: { fontFamily: font.displayBold, fontSize: 16, color: colors.ink, marginTop: spacing.md },
-  budget: {
-    backgroundColor: colors.panel2,
+  // Budget card wraps the shared MacroStrip and adds a small kicker.
+  budgetCard: {
+    backgroundColor: colors.panel,
     borderWidth: 1,
-    borderColor: colors.line,
+    borderColor: colors.goldDim,
     borderRadius: radius.md,
     padding: spacing.md,
-    gap: 4,
+    gap: spacing.sm,
   },
-  budgetMain: { fontFamily: font.displayBold, fontSize: 22, color: colors.gold, marginTop: 4 },
-  budgetMacros: { fontFamily: font.mono, fontSize: 12, color: colors.dim },
+  budgetKicker: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.4,
+  },
   restaurantRow: {
     flexDirection: "row",
     alignItems: "center",
