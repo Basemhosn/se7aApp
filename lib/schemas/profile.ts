@@ -40,6 +40,13 @@ export const onboardingSchema = z
     injuries: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
     // Kcal delta applied on rest days (negative subtracts, positive adds).
     rest_day_kcal_delta: z.number().int().min(-1000).max(1000).optional(),
+    // Allergies + excluded ingredients. Both are string arrays; allergies
+    // are hard NOs (safety), excluded_ingredients are preferences.
+    allergies: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+    excluded_ingredients: z
+      .array(z.string().trim().min(1).max(60))
+      .max(30)
+      .optional(),
     // Onboarding v2 metadata. Stored in profiles.onboarding_meta jsonb.
     // All optional so returning users who redo onboarding don't have to
     // resupply preferences they set once.

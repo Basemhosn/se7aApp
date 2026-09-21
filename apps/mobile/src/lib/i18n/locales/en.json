@@ -661,6 +661,15 @@
       "ramadan_title": "Enable Ramadan mode",
       "ramadan_sub": "Iftar / suhoor timers + adjusted daily target windows."
     },
+    "allergies": {
+      "title": "Anything you can't eat?",
+      "sub": "Meal plans and suggestions will steer clear. You can update this later in Settings.",
+      "allergy_label": "ALLERGIES (never)",
+      "allergy_placeholder": "e.g. peanuts, shellfish",
+      "excluded_label": "EXCLUDED (prefer not)",
+      "excluded_placeholder": "e.g. cilantro, lamb",
+      "skip": "Skip"
+    },
     "attribution": {
       "title": "How did you hear about SE7A?",
       "sub": "Helps us focus where it's working. One-tap, no follow-ups.",

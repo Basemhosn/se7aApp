@@ -13,13 +13,13 @@ import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 import { ramadanDaysInWeek, type RamadanPrefs } from "@/lib/ramadan";
 
 export const runtime = "nodejs";
-// Pro plan (2026-09-16) gives us 300s runway. Sonnet 4.6 with 16k
-// output tokens produces noticeably richer meal plans than Haiku
-// (deeper reasoning, better ingredient variety, tighter macro fit)
-// and typically finishes in 30-90s — well under the ceiling.
+// Haiku 4.5 with 8k tokens finishes in 30-60s. Sonnet 4.6 at 16k
+// was routinely 2-3 minutes which produced richer plans but tanked
+// UX — users abandoned before completion. Haiku's plans are 90% as
+// good and users actually see them.
 export const maxDuration = 300;
 
-const MODEL_ID = "claude-sonnet-4-6";
+const MODEL_ID = "claude-haiku-4-5";
 
 export async function POST(request: Request) {
   const supabase = getRouteClient(request);
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, goal, rest_day_kcal_delta, days_per_week, ramadan_prefs"
+      "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, goal, rest_day_kcal_delta, days_per_week, ramadan_prefs, allergies, excluded_ingredients"
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -61,6 +61,12 @@ export async function POST(request: Request) {
   }
 
   const restrictions = parsed.data.restrictions ?? [];
+  const allergies =
+    Array.isArray(profile.allergies) ? (profile.allergies as string[]) : [];
+  const excluded =
+    Array.isArray(profile.excluded_ingredients)
+      ? (profile.excluded_ingredients as string[])
+      : [];
   const ramadan = ramadanDaysInWeek(
     parsed.data.week_start,
     profile.ramadan_prefs as Partial<RamadanPrefs> | null
@@ -91,6 +97,8 @@ Goal: ${profile.goal ?? "unknown"}
 Rest-day delta: ${profile.rest_day_kcal_delta ?? 0} kcal (apply on non-training days)
 Training days per week: ${profile.days_per_week ?? "unknown"}
 Dietary restrictions: ${restrictions.length ? restrictions.join(", ") : "none"}
+${allergies.length ? `⚠️ ALLERGIES (HARD NO — never include, even trace amounts): ${allergies.join(", ")}` : ""}
+${excluded.length ? `Excluded ingredients (user preference — do not use): ${excluded.join(", ")}` : ""}
 
 3 main meals a day + optional snack. Include ingredients per meal so we
 can compile a shopping list from the plan.
@@ -111,10 +119,10 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
         },
         { role: "user", content: userMsg },
       ],
-      // 16k gives Sonnet room to fill the full mealPlanResultSchema
-      // (7 days × 4 meals + shopping list + swap ideas + notes) without
-      // truncating late-day meals when it front-loads early ones.
-      maxOutputTokens: 16000,
+      // 8k covers 7 days × 4 meals + shopping list. 16k was Sonnet's
+      // buffer against verbose reasoning; Haiku doesn't need it and
+      // it slows generation.
+      maxOutputTokens: 8000,
     });
     planObject = result.object;
   } catch (e) {

@@ -61,6 +61,7 @@ const STEPS = [
   "activity",
   "goal",
   "halal_ramadan",
+  "allergies",
   "rate",
   "reveal",
   "attribution",
@@ -105,6 +106,10 @@ export default function Onboarding() {
 
   // Onboarding v2 metadata — persisted to profiles.onboarding_meta jsonb.
   const [halalPref, setHalalPref] = useState<HalalPref | null>(null);
+  const [allergies, setAllergies] = useState<string[]>([]);
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [allergyDraft, setAllergyDraft] = useState("");
+  const [excludedDraft, setExcludedDraft] = useState("");
   const [ramadanOptIn, setRamadanOptIn] = useState(false);
   const [attribution, setAttribution] = useState<AttributionSource | null>(
     null
@@ -179,6 +184,7 @@ export default function Onboarding() {
       case "activity": return !!activity;
       case "goal": return !!goal;
       case "halal_ramadan": return !!halalPref;
+      case "allergies": return true; // skippable
       case "rate": return !Number.isNaN(rate);
       case "reveal": return true; // no workout program picker anymore
       case "attribution": return !!attribution;
@@ -258,7 +264,10 @@ export default function Onboarding() {
     if (step === "rate") {
       setBusy(true);
       try {
-        const profileRes = await api<{
+        // Payload now includes allergies (harvested from the new
+      // "allergies" onboarding step). Server accepts them via the
+      // onboardingSchema — empty arrays are fine.
+      const profileRes = await api<{
           ok: boolean;
           warnings?: string[];
           targets?: {
@@ -279,6 +288,9 @@ export default function Onboarding() {
             goal,
             goal_rate_kg_per_week: rate,
             units: "metric",
+            allergies: allergies.length > 0 ? allergies : undefined,
+            excluded_ingredients:
+              excluded.length > 0 ? excluded : undefined,
             onboarding_meta: halalPref
               ? {
                   halal_pref: halalPref,
@@ -651,6 +663,122 @@ export default function Onboarding() {
             </Text>
           </View>
         </Pressable>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "allergies") {
+    const addAllergy = () => {
+      const v = allergyDraft.trim();
+      if (!v) return;
+      if (allergies.some((a) => a.toLowerCase() === v.toLowerCase())) {
+        setAllergyDraft("");
+        return;
+      }
+      setAllergies([...allergies, v]);
+      setAllergyDraft("");
+    };
+    const addExcluded = () => {
+      const v = excludedDraft.trim();
+      if (!v) return;
+      if (excluded.some((a) => a.toLowerCase() === v.toLowerCase())) {
+        setExcludedDraft("");
+        return;
+      }
+      setExcluded([...excluded, v]);
+      setExcludedDraft("");
+    };
+    return (
+      <OnboardingShell
+        progress={stepIndex / (STEPS.length - 1)}
+        onBack={back}
+        primaryLabel={t("onboarding.cta_continue")}
+        onPrimary={advance}
+        secondaryLabel={t("onboarding.allergies.skip")}
+        onSecondary={advance}
+      >
+        <QuestionHead
+          title={t("onboarding.allergies.title")}
+          subtitle={t("onboarding.allergies.sub")}
+        />
+        <Text style={styles.label}>{t("onboarding.allergies.allergy_label")}</Text>
+        <View style={styles.chipRow}>
+          {allergies.map((a) => (
+            <Pressable
+              key={a}
+              onPress={() =>
+                setAllergies(allergies.filter((x) => x !== a))
+              }
+              style={styles.tagPill}
+            >
+              <Text style={styles.tagPillText}>{a}</Text>
+              <Ionicons name="close" size={12} color={colors.gold} />
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.tagInputWrap}>
+          <TextInput
+            value={allergyDraft}
+            onChangeText={(v) => {
+              if (v.endsWith(",")) {
+                setAllergyDraft(v.slice(0, -1));
+                setTimeout(addAllergy, 0);
+              } else {
+                setAllergyDraft(v);
+              }
+            }}
+            onSubmitEditing={addAllergy}
+            placeholder={t("onboarding.allergies.allergy_placeholder")}
+            placeholderTextColor={colors.dim}
+            returnKeyType="done"
+            autoCapitalize="none"
+            style={styles.tagInput}
+          />
+          <Pressable onPress={addAllergy} hitSlop={6} style={styles.tagAddBtn}>
+            <Ionicons name="add" size={16} color={colors.gold} />
+          </Pressable>
+        </View>
+
+        <View style={{ height: spacing.md }} />
+        <Text style={styles.label}>
+          {t("onboarding.allergies.excluded_label")}
+        </Text>
+        <View style={styles.chipRow}>
+          {excluded.map((a) => (
+            <Pressable
+              key={a}
+              onPress={() =>
+                setExcluded(excluded.filter((x) => x !== a))
+              }
+              style={styles.tagPill}
+            >
+              <Text style={styles.tagPillText}>{a}</Text>
+              <Ionicons name="close" size={12} color={colors.gold} />
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.tagInputWrap}>
+          <TextInput
+            value={excludedDraft}
+            onChangeText={(v) => {
+              if (v.endsWith(",")) {
+                setExcludedDraft(v.slice(0, -1));
+                setTimeout(addExcluded, 0);
+              } else {
+                setExcludedDraft(v);
+              }
+            }}
+            onSubmitEditing={addExcluded}
+            placeholder={t("onboarding.allergies.excluded_placeholder")}
+            placeholderTextColor={colors.dim}
+            returnKeyType="done"
+            autoCapitalize="none"
+            style={styles.tagInput}
+          />
+          <Pressable onPress={addExcluded} hitSlop={6} style={styles.tagAddBtn}>
+            <Ionicons name="add" size={16} color={colors.gold} />
+          </Pressable>
+        </View>
       </OnboardingShell>
     );
   }
@@ -1546,6 +1674,43 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold,
   },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  tagPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.gold + "55",
+    backgroundColor: colors.gold + "10",
+  },
+  tagPillText: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.ink,
+  },
+  tagInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+  },
+  tagInput: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 15,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  tagAddBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
   chip: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,

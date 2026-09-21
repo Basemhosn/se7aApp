@@ -48,6 +48,11 @@ const editSchema = z.object({
   goal_weight_kg: z.number().positive().max(499).nullable().optional(),
   units: z.enum(["metric", "imperial"]).optional(),
   halal_pref: z.enum(["halal", "no_preference"]).nullable().optional(),
+  allergies: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+  excluded_ingredients: z
+    .array(z.string().trim().min(1).max(60))
+    .max(30)
+    .optional(),
 });
 
 const MACRO_KEYS = [
@@ -105,6 +110,8 @@ export async function POST(request: Request) {
     "goal_rate_kg_per_week",
     "goal_weight_kg",
     "units",
+    "allergies",
+    "excluded_ingredients",
   ] as const) {
     if (input[key] !== undefined) patch[key] = input[key];
   }

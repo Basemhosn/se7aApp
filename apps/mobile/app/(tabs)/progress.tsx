@@ -15,6 +15,7 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Btn } from "@/components/Btn";
+import { WORKOUTS_ENABLED } from "@/lib/featureFlags";
 import { TrendChart } from "@/components/TrendChart";
 import {
   ProjectionChart,
@@ -268,11 +269,13 @@ export default function Progress() {
             active={subTab === "nutrition"}
             onPress={() => setSubTab("nutrition")}
           />
-          <SegBtn
-            label={t("progress.tab_training")}
-            active={subTab === "training"}
-            onPress={() => setSubTab("training")}
-          />
+          {WORKOUTS_ENABLED ? (
+            <SegBtn
+              label={t("progress.tab_training")}
+              active={subTab === "training"}
+              onPress={() => setSubTab("training")}
+            />
+          ) : null}
         </View>
 
         {/* Range chips — persist across sub-tabs */}

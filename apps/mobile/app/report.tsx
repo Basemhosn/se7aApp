@@ -17,6 +17,7 @@ import { BackButton } from "@/components/BackButton";
 import { Btn } from "@/components/Btn";
 import { api } from "@/lib/api";
 import { useEntitlement } from "@/lib/EntitlementContext";
+import { WORKOUTS_ENABLED } from "@/lib/featureFlags";
 import { fetchReportPriceString, purchaseReport } from "@/lib/rc";
 import { exportReportAsPdf } from "@/lib/reportPdf";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -558,7 +559,15 @@ export default function ReportScreen() {
 const TABS: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "general", label: "report.tabs.general", icon: "sparkles-outline" },
   { key: "nutrition", label: "report.tabs.nutrition", icon: "restaurant-outline" },
-  { key: "training", label: "report.tabs.training", icon: "barbell-outline" },
+  ...(WORKOUTS_ENABLED
+    ? [
+        {
+          key: "training" as TabKey,
+          label: "report.tabs.training",
+          icon: "barbell-outline" as keyof typeof Ionicons.glyphMap,
+        },
+      ]
+    : []),
   { key: "habits", label: "report.tabs.habits", icon: "leaf-outline" },
   { key: "roadmap", label: "report.tabs.roadmap", icon: "map-outline" },
 ];

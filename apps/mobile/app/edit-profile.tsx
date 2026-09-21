@@ -34,6 +34,8 @@ interface ProfileRow {
   goal_weight_kg: number | null;
   units: "metric" | "imperial" | null;
   onboarding_meta: Record<string, unknown> | null;
+  allergies: string[] | null;
+  excluded_ingredients: string[] | null;
 }
 
 interface EditPayload {
@@ -44,6 +46,8 @@ interface EditPayload {
   goal_rate_kg_per_week?: number;
   goal_weight_kg?: number | null;
   halal_pref?: HalalPref | null;
+  allergies?: string[];
+  excluded_ingredients?: string[];
 }
 
 export default function EditProfile() {
@@ -63,6 +67,8 @@ export default function EditProfile() {
   const [rate, setRate] = useState<number | null>(null);
   const [goalWeight, setGoalWeight] = useState<number | null>(null);
   const [halal, setHalal] = useState<HalalPref | null>(null);
+  const [allergies, setAllergies] = useState<string[]>([]);
+  const [excluded, setExcluded] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -71,7 +77,7 @@ export default function EditProfile() {
       const { data, error } = await supabase
         .from("profiles")
         .select(
-          "display_name, height_cm, weight_kg, activity_level, goal, goal_rate_kg_per_week, goal_weight_kg, units, onboarding_meta"
+          "display_name, height_cm, weight_kg, activity_level, goal, goal_rate_kg_per_week, goal_weight_kg, units, onboarding_meta, allergies, excluded_ingredients"
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -97,6 +103,10 @@ export default function EditProfile() {
       const meta = row.onboarding_meta ?? {};
       const h = meta.halal_pref;
       setHalal(h === "halal" || h === "no_preference" ? h : null);
+      setAllergies(Array.isArray(row.allergies) ? row.allergies : []);
+      setExcluded(
+        Array.isArray(row.excluded_ingredients) ? row.excluded_ingredients : []
+      );
       setLoading(false);
     })();
   }, [user]);
@@ -134,6 +144,14 @@ export default function EditProfile() {
     if (halal !== origHalal) {
       patch.halal_pref = halal;
     }
+    const origAllergies = original.allergies ?? [];
+    if (!arraysEqual(allergies, origAllergies)) {
+      patch.allergies = allergies;
+    }
+    const origExcluded = original.excluded_ingredients ?? [];
+    if (!arraysEqual(excluded, origExcluded)) {
+      patch.excluded_ingredients = excluded;
+    }
     return patch;
   }, [
     original,
@@ -144,6 +162,8 @@ export default function EditProfile() {
     rate,
     goalWeight,
     halal,
+    allergies,
+    excluded,
   ]);
 
   const dirty = Object.keys(payload).length > 0;
@@ -516,6 +536,29 @@ export default function EditProfile() {
         </View>
       </Section>
 
+      <Section
+        title={isArabic ? "الحساسية والاستثناءات" : "Allergies & exclusions"}
+      >
+        <TagInputRow
+          label={isArabic ? "الحساسية (لا نأكلها أبداً)" : "Allergies (never)"}
+          placeholder={
+            isArabic ? "مثال: مكسرات، ألبان" : "e.g. nuts, dairy"
+          }
+          values={allergies}
+          onChange={setAllergies}
+        />
+        <TagInputRow
+          label={
+            isArabic ? "استثناءات (لا نفضلها)" : "Excluded (prefer not)"
+          }
+          placeholder={
+            isArabic ? "مثال: لحم غنم، كزبرة" : "e.g. lamb, cilantro"
+          }
+          values={excluded}
+          onChange={setExcluded}
+        />
+      </Section>
+
       <Pressable
         onPress={() => router.push("/onboarding")}
         hitSlop={8}
@@ -529,6 +572,87 @@ export default function EditProfile() {
       </Pressable>
     </Screen>
   );
+}
+
+/**
+ * Compact chip-list input: shows current tags as removable pills and
+ * a text field for adding more. Enter or comma commits. Used for
+ * allergies + excluded ingredients — both are string arrays where the
+ * exact wording matters (so the AI prompt sees "shellfish" verbatim,
+ * not a fuzzy enum).
+ */
+function TagInputRow({
+  label,
+  placeholder,
+  values,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  values: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const commit = () => {
+    const v = draft.trim();
+    if (!v) return;
+    const set = new Set(values.map((s) => s.toLowerCase()));
+    if (set.has(v.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    onChange([...values, v]);
+    setDraft("");
+  };
+  return (
+    <View style={styles.tagRow}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.tagPills}>
+        {values.map((v) => (
+          <Pressable
+            key={v}
+            onPress={() => onChange(values.filter((x) => x !== v))}
+            style={styles.tagPill}
+          >
+            <Text style={styles.tagPillText}>{v}</Text>
+            <Ionicons name="close" size={12} color={colors.gold} />
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.tagInputWrap}>
+        <TextInput
+          value={draft}
+          onChangeText={(v) => {
+            if (v.endsWith(",")) {
+              setDraft(v.slice(0, -1));
+              // Defer to next tick so `values` reads the fresh state.
+              setTimeout(commit, 0);
+            } else {
+              setDraft(v);
+            }
+          }}
+          onSubmitEditing={commit}
+          placeholder={placeholder}
+          placeholderTextColor={colors.dim}
+          returnKeyType="done"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.tagInput}
+        />
+        <Pressable onPress={commit} hitSlop={6} style={styles.tagAddBtn}>
+          <Ionicons name="add" size={16} color={colors.gold} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+  return true;
 }
 
 function Section({
@@ -593,6 +717,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  tagRow: { gap: spacing.xs },
+  tagPills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  tagPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.gold + "55",
+    backgroundColor: colors.gold + "10",
+  },
+  tagPillText: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.ink,
+  },
+  tagInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+  },
+  tagInput: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 15,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  tagAddBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   row: {
     flexDirection: "row",
