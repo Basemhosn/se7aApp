@@ -38,8 +38,15 @@ export function useHealthSync(userId: string | undefined) {
 
     (async () => {
       if (Platform.OS === "ios") {
-        const authed = await HK.requestHealthKitAuth();
-        if (!authed) return;
+        // requestHealthKitAuth returns { ok, error? } (build 65
+        // diagnostic refactor). The old code did `if (!authed)`
+        // against an object which was always truthy, so we silently
+        // ran the sync paths even when auth failed. Real check now.
+        const res = await HK.requestHealthKitAuth();
+        if (!res.ok) {
+          console.warn("[healthkit] auth failed", res.error);
+          return;
+        }
         await Promise.all([
           syncWeightAndBf(userId, "healthkit"),
           syncTodayActivity("healthkit"),

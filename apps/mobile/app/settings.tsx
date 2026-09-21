@@ -15,7 +15,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { openHealthConnectSettings } from "react-native-health-connect";
-import { requestHealthKitAuth } from "@/lib/healthkit";
+import {
+  readLatestBodyFatPct,
+  readLatestWeightKg,
+  readTodayActiveEnergy,
+  readTodaySteps,
+  readWorkoutsSince,
+  requestHealthKitAuth,
+} from "@/lib/healthkit";
 import { requestHealthConnectAuth } from "@/lib/healthConnect";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -1444,15 +1451,26 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
         </Text>
       </View>
       {connected ? (
-        <Pressable
-          onPress={openSystemSettings}
-          disabled={busy}
-          hitSlop={6}
-        >
-          <Text style={styles.healthGhostBtn}>
-            {isArabic ? "الأذونات" : "Permissions"}
-          </Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <Pressable
+            onPress={() => diagnoseHealthKit(isArabic)}
+            disabled={busy}
+            hitSlop={6}
+          >
+            <Text style={styles.healthGhostBtn}>
+              {isArabic ? "افحص" : "Diagnose"}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={openSystemSettings}
+            disabled={busy}
+            hitSlop={6}
+          >
+            <Text style={styles.healthGhostBtn}>
+              {isArabic ? "الأذونات" : "Permissions"}
+            </Text>
+          </Pressable>
+        </View>
       ) : (
         <Pressable onPress={authorize} disabled={busy} hitSlop={6}>
           <Text style={styles.integConnect}>
@@ -1462,6 +1480,60 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
       )}
     </View>
   );
+}
+
+async function diagnoseHealthKit(isArabic: boolean) {
+  if (Platform.OS !== "ios") {
+    Alert.alert("Diagnose", "iOS only.");
+    return;
+  }
+  const lines: string[] = [];
+  try {
+    const authRes = await requestHealthKitAuth();
+    lines.push(
+      `Auth init: ${authRes.ok ? "OK" : `FAIL — ${authRes.error ?? "unknown"}`}`
+    );
+    if (!authRes.ok) {
+      Alert.alert(isArabic ? "الفحص" : "Diagnose", lines.join("\n"));
+      return;
+    }
+    const [weight, bf, steps, activeKcal, workouts] = await Promise.all([
+      readLatestWeightKg(),
+      readLatestBodyFatPct(),
+      readTodaySteps(),
+      readTodayActiveEnergy(),
+      readWorkoutsSince(
+        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      ),
+    ]);
+    lines.push(
+      `Latest weight: ${weight ? `${weight.weight_kg} kg (${new Date(weight.measured_at).toLocaleDateString()})` : "none"}`
+    );
+    lines.push(
+      `Latest body-fat: ${bf ? `${bf.body_fat_pct}% (${new Date(bf.measured_at).toLocaleDateString()})` : "none"}`
+    );
+    lines.push(`Today steps: ${steps}`);
+    lines.push(`Today active kcal: ${activeKcal}`);
+    lines.push(`Workouts (last 7d): ${workouts.length}`);
+    if (
+      steps === 0 &&
+      activeKcal === 0 &&
+      workouts.length === 0 &&
+      !weight &&
+      !bf
+    ) {
+      lines.push("");
+      lines.push(
+        "No data anywhere. Most likely: you granted permission but not all data types. Open Settings > Privacy & Security > Health > SE7A and enable each category."
+      );
+    }
+    Alert.alert(isArabic ? "الفحص" : "Diagnose", lines.join("\n"));
+  } catch (e) {
+    Alert.alert(
+      isArabic ? "الفحص" : "Diagnose",
+      `Threw: ${(e as Error).message}`
+    );
+  }
 }
 
 function IntegrationRow({
