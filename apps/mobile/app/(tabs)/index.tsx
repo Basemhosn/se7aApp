@@ -37,7 +37,7 @@ import { rescheduleWeeklyRituals } from "@/lib/weeklyRitualScheduler";
 import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
 import { useHealthSync } from "@/lib/useHealthSync";
 import { useWidgetToken } from "@/lib/useWidgetToken";
-import type { LedgerDayResponse, MealSlot, Profile } from "@/types";
+import type { LedgerDayResponse, MealItemRow, MealSlot, Profile } from "@/types";
 import { SLOTS, SLOT_META } from "@/lib/slot";
 import {
   type PendingScan,
@@ -293,12 +293,11 @@ export default function Home() {
     setProfile(profileData as Profile);
     // Merge any still-pending optimistic items into the fresh server
     // response so a just-logged meal doesn't vanish if the server
-    // ledger hasn't propagated yet. Dedup by lowercased name — good
-    // enough since names are user-supplied strings that rarely collide
-    // twice on the same day. Clear the buffer only when every item in
-    // it appears in the server response; otherwise keep them alive so
-    // the next focus re-tries the merge.
-    const pending = peekOptimisticLogItems();
+    // ledger hasn't propagated yet. IMPORTANT: only merge when we're
+    // viewing today. The optimistic buffer holds items eaten NOW —
+    // spraying them into a future-date fetch made every tomorrow
+    // duplicate today's ring. Dedup by lowercased name.
+    const pending = isToday ? peekOptimisticLogItems() : [];
     if (pending.length > 0) {
       const serverNames = new Set(
         ledgerRes.totals.items.map((it) => it.name.toLowerCase())
@@ -354,8 +353,9 @@ export default function Home() {
       // Optimistic pre-merge so a returning user sees their just-logged
       // meal within a frame — before load() completes. load() then does
       // its own merge against the fresh server response and clears the
-      // buffer only when server has caught up.
-      const pending = peekOptimisticLogItems();
+      // buffer only when server has caught up. Only merge on today —
+      // pending items shouldn't leak into past/future day views.
+      const pending = isToday ? peekOptimisticLogItems() : [];
       if (pending.length > 0) {
         setLedger((prev) =>
           prev ? mergePendingIntoLedger(prev, pending) : prev
@@ -495,6 +495,21 @@ export default function Home() {
           onSelect={setViewOffset}
           isArabic={isArabic}
         />
+        {!isToday ? (
+          <Pressable
+            onPress={() => setViewOffset(0)}
+            style={styles.todayPill}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isArabic ? "ارجع إلى اليوم" : "Jump back to today"
+            }
+          >
+            <Ionicons name="return-up-back" size={14} color={colors.gold} />
+            <Text style={styles.todayPillText}>
+              {isArabic ? "اليوم" : "Today"}
+            </Text>
+          </Pressable>
+        ) : null}
         {isToday && dayStatus?.kind && dayStatus.kind !== "none" ? (
           <DayStatusChip status={dayStatus} isArabic={isArabic} />
         ) : null}
@@ -1578,40 +1593,51 @@ function MealsList({
                       </Text>
                     </View>
                   ) : !usePlanned ? (
-                    slotItems.map((it, idx) => {
-                      // Plate-scanned items link back to the scan
-                      // review screen (already resolves via ?scan_id).
-                      // Menu/manual/voice items just render — no
-                      // dedicated detail screen yet.
+                    // Roll up plate-scan items sharing a scan_id into a
+                    // single meal card. A user thinks of "chicken and
+                    // rice with a side salad" as one meal, not three
+                    // rows. Non-plate items (manual, voice, barcode)
+                    // stay as individual rows.
+                    groupMealItems(slotItems).map((group, idx, arr) => {
                       const canOpen =
-                        !!it.scan_id && it.source === "plate_scan";
+                        !!group.scanId && group.source === "plate_scan";
                       const RowWrap = canOpen ? Pressable : View;
+                      const total = group.items.reduce(
+                        (acc, it) =>
+                          acc + Math.round((it.kcal_low + it.kcal_high) / 2),
+                        0
+                      );
+                      const primary = group.items[0]!;
+                      const extraCount = group.items.length - 1;
+                      const displayName =
+                        extraCount > 0
+                          ? `${primary.name} + ${extraCount} more`
+                          : primary.name;
                       return (
                         <RowWrap
-                          key={it.id}
+                          key={group.key}
                           onPress={
                             canOpen
                               ? () =>
                                   router.push(
-                                    `/scan/plate?scan_id=${encodeURIComponent(it.scan_id!)}` as never
+                                    `/scan/plate?scan_id=${encodeURIComponent(group.scanId!)}` as never
                                   )
                               : undefined
                           }
                           style={[
                             styles.mealItemRow,
-                            idx < slotItems.length - 1 &&
-                              styles.mealRowDivider,
+                            idx < arr.length - 1 && styles.mealRowDivider,
                           ]}
                           accessibilityRole={canOpen ? "button" : undefined}
                           accessibilityLabel={
                             canOpen
-                              ? `${it.name}, ${Math.round((it.kcal_low + it.kcal_high) / 2)} kcal. Tap to review scan`
+                              ? `${displayName}, ${total} kcal. Tap to review scan`
                               : undefined
                           }
                         >
-                          {it.photo_url ? (
+                          {group.photoUrl ? (
                             <Image
-                              source={{ uri: it.photo_url }}
+                              source={{ uri: group.photoUrl }}
                               style={styles.mealItemThumb}
                             />
                           ) : null}
@@ -1619,11 +1645,9 @@ function MealsList({
                             style={styles.mealItemName}
                             numberOfLines={1}
                           >
-                            {it.name}
+                            {displayName}
                           </Text>
-                          <Text style={styles.mealItemMeta}>
-                            {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
-                          </Text>
+                          <Text style={styles.mealItemMeta}>{total} kcal</Text>
                           {canOpen ? (
                             <Ionicons
                               name="chevron-forward"
@@ -2128,6 +2152,55 @@ function midOf(range?: { low: number; high: number } | null): number {
   return (range.low + range.high) / 2;
 }
 
+/**
+ * Roll up meal_items sharing a scan_id into a single group so a plate
+ * scan that produced (chicken, rice, salad) renders as one card
+ * instead of three. Non-scan items (manual, voice, barcode) each
+ * become their own group so nothing gets lost.
+ */
+interface MealGroup {
+  key: string;
+  scanId: string | null;
+  source: string;
+  photoUrl: string | null;
+  items: MealItemRow[];
+}
+
+function groupMealItems(items: MealItemRow[]): MealGroup[] {
+  const groups: MealGroup[] = [];
+  const byScan = new Map<string, MealGroup>();
+  for (const it of items) {
+    // Only fold together items from the SAME plate scan. Menu-scan
+    // items technically share a scan_id too but represent separate
+    // dishes the user chose to log — keep those distinct.
+    if (it.scan_id && it.source === "plate_scan") {
+      const existing = byScan.get(it.scan_id);
+      if (existing) {
+        existing.items.push(it);
+      } else {
+        const group: MealGroup = {
+          key: `scan-${it.scan_id}`,
+          scanId: it.scan_id,
+          source: it.source,
+          photoUrl: it.photo_url ?? null,
+          items: [it],
+        };
+        byScan.set(it.scan_id, group);
+        groups.push(group);
+      }
+    } else {
+      groups.push({
+        key: `item-${it.id}`,
+        scanId: it.scan_id ?? null,
+        source: it.source,
+        photoUrl: it.photo_url ?? null,
+        items: [it],
+      });
+    }
+  }
+  return groups;
+}
+
 function isoOffset(offsetDays: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -2355,6 +2428,29 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // "Jump back to today" pill — shows only when viewing a non-today
+  // date so users can bail out of past/future browsing in one tap.
+  todayPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.gold + "55",
+    backgroundColor: colors.gold + "10",
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  todayPillText: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
   },
   // Ramadan banner
   ramadanBanner: {

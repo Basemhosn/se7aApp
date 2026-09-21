@@ -49,22 +49,13 @@ export async function requestHealthKitAuth(): Promise<HealthKitAuthResult> {
   if (Platform.OS !== "ios") {
     return { ok: false, error: "not_ios" };
   }
-  // isAvailable is the fastest signal that the native module + device
-  // are both good. If this returns false the initHealthKit call would
-  // fail with a less helpful message.
-  const available = await new Promise<boolean>((resolve) => {
-    try {
-      AppleHealthKit.isAvailable((err, result) => {
-        if (err) resolve(false);
-        else resolve(!!result);
-      });
-    } catch {
-      resolve(false);
-    }
-  });
-  if (!available) {
-    return { ok: false, error: "healthkit_unavailable_on_device" };
-  }
+  // Skip AppleHealthKit.isAvailable — on iOS 18 the callback often
+  // fires with err=null / result=false even when HealthKit is fine
+  // (real devices with the Health app open, other apps like
+  // MyFitnessPal reading data at the same time). Trusting it locked
+  // users out of a working HealthKit. initHealthKit surfaces the
+  // real error if the module isn't linked or the entitlement is
+  // missing — let that be the source of truth.
   return new Promise((resolve) => {
     try {
       AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
