@@ -18,6 +18,7 @@ import {
   rateLimitMessage,
 } from "@/lib/api";
 import { markDayDirty } from "@/lib/calendarCache";
+import { pollScan } from "@/lib/pollScan";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type {
   MealSlot,
@@ -116,17 +117,41 @@ export default function MenuScan() {
     setPreviewUri(resized.uri);
     setPhase("analyzing");
     try {
-      const body = await apiUpload<MenuScanResponse>(
-        "/api/scan/menu",
-        "image",
-        { uri: resized.uri, mimeType: "image/jpeg", fileName: "menu.jpg" }
-      );
-      setScanId(body.scan_id);
-      setDishes(body.result.dishes);
-      setConfidence(body.result.confidence);
-      setBudget(body.budget);
-      setTargetsKnown(body.targets_known);
-      const guess = body.result.restaurant_guess ?? null;
+      // Async menu scan (2026-09-21): POST returns fast with scan_id.
+      // Server processes AI in background via waitUntil. Client polls
+      // GET /api/scan/menu/[id] every 2s until status='ready'.
+      const start = await apiUpload<{
+        ok: boolean;
+        scan_id: string;
+        status: "queued";
+        budget: MenuScanBudget;
+        targets_known: boolean;
+        image_stored: boolean;
+      }>("/api/scan/menu", "image", {
+        uri: resized.uri,
+        mimeType: "image/jpeg",
+        fileName: "menu.jpg",
+      });
+      setScanId(start.scan_id);
+      setBudget(start.budget);
+      setTargetsKnown(start.targets_known);
+
+      // Poll for completion. Cap the wait at 4 minutes (well below the
+      // server's 300s ceiling). Server sends a push on ready too, so
+      // even if the user backgrounds mid-poll, the push wakes them.
+      const readyOrFailed = await pollScan(start.scan_id, "menu", 4 * 60);
+      if (readyOrFailed.status === "failed") {
+        setErr(readyOrFailed.error_message || t("scan.menu.couldnt_read"));
+        setPhase("idle");
+        return;
+      }
+      const parsed = readyOrFailed.parsed as MenuScanResponse["result"] & {
+        budget_used?: MenuScanBudget;
+        targets_known?: boolean;
+      };
+      setDishes(parsed.dishes);
+      setConfidence(parsed.confidence);
+      const guess = parsed.restaurant_guess ?? null;
       setRestaurantGuess(guess);
       setRestaurantName(guess);
       setSelected(new Set());

@@ -13,8 +13,9 @@ import {
   RateLimitedError,
   rateLimitMessage,
 } from "@/lib/api";
+import { pollScan } from "@/lib/pollScan";
 import { colors, font, radius, spacing } from "@/lib/theme";
-import type { BodyProjection, BodyScanResponse, BodyScanResult } from "@/types";
+import type { BodyProjection, BodyScanResult } from "@/types";
 
 type Phase = "idle" | "analyzing" | "result";
 type Pose = "front" | "side" | "back";
@@ -52,14 +53,31 @@ export default function BodyScan() {
     );
     setPhase("analyzing");
     try {
-      const body = await apiUpload<BodyScanResponse>(
+      // Async body scan (2026-09-21): POST returns fast with scan_id.
+      // Server does the vision analysis in background via waitUntil
+      // — buffer stays in memory only, image is never stored (privacy
+      // commitment). Client polls GET /api/scan/body/[id].
+      const start = await apiUpload<{
+        ok: boolean;
+        scan_id: string;
+        status: "queued";
+      }>(
         "/api/scan/body",
         "image",
         { uri: resized.uri, mimeType: "image/jpeg", fileName: "body.jpg" },
         { pose }
       );
-      setResult(body.result);
-      setProjection(body.projection);
+      const readyOrFailed = await pollScan(start.scan_id, "body", 4 * 60);
+      if (readyOrFailed.status === "failed") {
+        setErr(readyOrFailed.error_message || t("scan.body.couldnt_analyze"));
+        setPhase("idle");
+        return;
+      }
+      const parsed = readyOrFailed.parsed as BodyScanResult & {
+        projection?: BodyProjection | null;
+      };
+      setResult(parsed);
+      setProjection(parsed.projection ?? null);
       setPhase("result");
     } catch (e) {
       if (e instanceof ProRequiredError) {

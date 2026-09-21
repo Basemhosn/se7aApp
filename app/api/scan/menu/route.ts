@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { generateObject } from "ai";
-import { getRouteClient } from "@/lib/supabase/server";
+import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
 import { computeRemaining, getDayTotals } from "@/lib/ledger";
 import {
   menuScanResultSchema,
@@ -10,14 +11,33 @@ import { MENU_SYSTEM_PROMPT, menuUserPrompt } from "@/lib/prompts/menu.v1";
 import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { requirePro } from "@/lib/entitlement";
-import { languageInstruction, localeFromRequest } from "@/lib/i18n";
+import {
+  languageInstruction,
+  localeFromRequest,
+  type ServerLocale,
+} from "@/lib/i18n";
 import { localDateIso, tzOffsetFromRequest } from "@/lib/tz";
+import { loadTokensByUser, sendExpoPush } from "@/lib/notifications";
 
 export const runtime = "nodejs";
+// waitUntil keeps the function warm after the response, up to 300s
+// on Pro. Vision + schema-constrained menu ranking on Sonnet 4.6
+// runs 15-45s typically.
 export const maxDuration = 300;
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
+/**
+ * Async menu scan (2026-09-21). Same architecture as plate:
+ *   1. POST returns { scan_id } in <3s (image upload + row insert)
+ *   2. waitUntil runs the AI ranking in background
+ *   3. Row is updated with status='ready' + parsed OR status='failed'
+ *   4. Push notification fires with scan_id in data
+ *   5. Client polls GET /api/scan/menu/[id] or taps the push
+ *
+ * Kill-the-app resilience: the AI keeps running server-side; the row
+ * lives in the `scans` table with status column from migration 0037.
+ */
 export async function POST(request: Request) {
   const supabase = getRouteClient(request);
   const {
@@ -54,7 +74,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Read what the user has left for today (in their local timezone).
+  // Compute the remaining budget synchronously so the model sees the
+  // right numbers when we hand it off — this only takes 100-200ms.
   const tzOffsetMin = tzOffsetFromRequest(request);
   const dateIso =
     typeof tzOffsetMin === "number"
@@ -98,50 +119,17 @@ export async function POST(request: Request) {
     : MENU_FALLBACK_BUDGET;
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const ext = mimeToExt(file.type);
+  const contentType = file.type;
+  const ext = mimeToExt(contentType);
   const scanId = crypto.randomUUID();
   const objectPath = `${user.id}/${scanId}.${ext}`;
 
-  const started = Date.now();
-  const [uploadRes, scanRes] = await Promise.allSettled([
-    supabase.storage
-      .from("menu-scans")
-      .upload(objectPath, buffer, { contentType: file.type, upsert: false }),
-    generateObject({
-      model: MODELS.menu_default,
-      schema: menuScanResultSchema,
-      messages: [
-        {
-          role: "system",
-          content: `${MENU_SYSTEM_PROMPT}\n\n${languageInstruction(localeFromRequest(request))}`,
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: menuUserPrompt(budget) },
-            { type: "image", image: buffer, mediaType: file.type },
-          ],
-        },
-      ],
-    }),
-  ]);
-  const latency = Date.now() - started;
-
-  if (scanRes.status === "rejected") {
-    return NextResponse.json(
-      {
-        error: "ai_failed",
-        details: String((scanRes.reason as Error)?.message ?? scanRes.reason),
-      },
-      { status: 502 }
-    );
-  }
-
-  const parsed = normalizeMenuScan(scanRes.value.object);
-  const storedPath =
-    uploadRes.status === "fulfilled" && !uploadRes.value.error
-      ? objectPath
-      : null;
+  // Upload synchronously so the row's image_path is valid when the
+  // background function reads it (or the client displays a thumbnail).
+  const { error: uploadErr } = await supabase.storage
+    .from("menu-scans")
+    .upload(objectPath, buffer, { contentType, upsert: false });
+  const storedPath = uploadErr ? null : objectPath;
 
   const { error: insertErr } = await supabase.from("scans").insert({
     id: scanId,
@@ -150,9 +138,7 @@ export async function POST(request: Request) {
     image_path: storedPath,
     model: MODEL_IDS.menu_default,
     prompt_version: PROMPT_VERSION.menu,
-    raw_response: scanRes.value.object,
-    parsed: { ...parsed, budget_used: budget },
-    latency_ms: latency,
+    status: "queued",
   });
   if (insertErr) {
     return NextResponse.json(
@@ -161,14 +147,177 @@ export async function POST(request: Request) {
     );
   }
 
+  const locale = localeFromRequest(request);
+  waitUntil(
+    processMenuScanInBackground({
+      scanId,
+      userId: user.id,
+      buffer,
+      contentType,
+      locale,
+      budget,
+      targetsKnown,
+    })
+  );
+
   return NextResponse.json({
     ok: true,
     scan_id: scanId,
-    result: parsed,
+    status: "queued",
     budget,
     targets_known: targetsKnown,
     image_stored: storedPath !== null,
   });
+}
+
+interface MenuBudget {
+  kcal_low: number;
+  kcal_high: number;
+  protein_g_low: number;
+  protein_g_high: number;
+  carb_g_low: number;
+  carb_g_high: number;
+  fat_g_low: number;
+  fat_g_high: number;
+}
+
+async function processMenuScanInBackground(args: {
+  scanId: string;
+  userId: string;
+  buffer: Buffer;
+  contentType: string;
+  locale: ServerLocale;
+  budget: MenuBudget;
+  targetsKnown: boolean;
+}): Promise<void> {
+  const {
+    scanId,
+    userId,
+    buffer,
+    contentType,
+    locale,
+    budget,
+    targetsKnown,
+  } = args;
+  const admin = getAdminClient();
+  const started = Date.now();
+
+  await admin
+    .from("scans")
+    .update({ status: "processing" })
+    .eq("id", scanId);
+
+  try {
+    const result = await generateObject({
+      model: MODELS.menu_default,
+      schema: menuScanResultSchema,
+      messages: [
+        {
+          role: "system",
+          content: `${MENU_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: menuUserPrompt(budget) },
+            { type: "image", image: buffer, mediaType: contentType },
+          ],
+        },
+      ],
+    });
+    const parsed = normalizeMenuScan(result.object);
+    const latency = Date.now() - started;
+
+    const { error: updateErr } = await admin
+      .from("scans")
+      .update({
+        raw_response: result.object,
+        parsed: { ...parsed, budget_used: budget, targets_known: targetsKnown },
+        latency_ms: latency,
+        status: "ready",
+        error_message: null,
+      })
+      .eq("id", scanId);
+    if (updateErr) throw new Error(`persist_failed: ${updateErr.message}`);
+
+    await notifyScanReady(admin, userId, scanId).catch(() => {});
+  } catch (e) {
+    const raw = (e as Error).message || "ai_failed";
+    const friendly = friendlyMenuFailure(raw);
+    await admin
+      .from("scans")
+      .update({
+        status: "failed",
+        error_message: friendly,
+        latency_ms: Date.now() - started,
+      })
+      .eq("id", scanId);
+    console.error("menu scan failed", { scanId, raw });
+    await notifyScanFailed(admin, userId, scanId, friendly).catch(() => {});
+  }
+}
+
+async function notifyScanReady(
+  admin: ReturnType<typeof getAdminClient>,
+  userId: string,
+  scanId: string
+): Promise<void> {
+  const tokensByUser = await loadTokensByUser(admin);
+  const tokens = tokensByUser.get(userId) ?? [];
+  if (tokens.length === 0) return;
+  await sendExpoPush(
+    tokens.map((tok) => ({
+      to: tok.expo_token,
+      title: "Menu scan ready.",
+      body: "Tap to see what to order.",
+      data: { kind: "scan_ready", scan_id: scanId, scan_kind: "menu" },
+    }))
+  );
+}
+
+async function notifyScanFailed(
+  admin: ReturnType<typeof getAdminClient>,
+  userId: string,
+  scanId: string,
+  reason: string
+): Promise<void> {
+  const tokensByUser = await loadTokensByUser(admin);
+  const tokens = tokensByUser.get(userId) ?? [];
+  if (tokens.length === 0) return;
+  await sendExpoPush(
+    tokens.map((tok) => ({
+      to: tok.expo_token,
+      title: "Menu scan failed.",
+      body: reason.length > 80 ? `${reason.slice(0, 80)}…` : reason,
+      data: { kind: "scan_failed", scan_id: scanId, scan_kind: "menu" },
+    }))
+  );
+}
+
+function friendlyMenuFailure(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("did not match schema") ||
+    lower.includes("typevalidationerror") ||
+    lower.includes("too_big") ||
+    lower.includes("too_small")
+  ) {
+    return "The menu didn't fit our data shape. Try a clearer photo of the whole menu page.";
+  }
+  if (lower.includes("rate limit") || lower.includes("429")) {
+    return "Too many scans in a row — wait a minute and try again.";
+  }
+  if (
+    lower.includes("timeout") ||
+    lower.includes("aborted") ||
+    lower.includes("etimedout")
+  ) {
+    return "The scan took too long. Try a smaller / clearer photo.";
+  }
+  if (lower.includes("safety") || lower.includes("content policy")) {
+    return "Couldn't read that photo. Try a clearer menu shot.";
+  }
+  return "Scan failed. Try again — if it keeps happening, tell support.";
 }
 
 function mimeToExt(m: string): string {

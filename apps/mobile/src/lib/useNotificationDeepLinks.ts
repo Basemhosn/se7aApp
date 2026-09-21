@@ -84,14 +84,26 @@ function handleResponse(
   }
   const kind = raw?.kind;
   if (!kind || typeof kind !== "string") return;
-  // scan_ready/scan_failed carry a scan_id in data — deep-link into the
-  // review screen so the user lands right where the result is shown.
+  // scan_ready/scan_failed carry a scan_id + scan_kind in data.
+  // Route by kind: plate/menu/body have their own review screens.
+  // Menu + body currently open the picker on cold-start (they don't
+  // have a scan_id-hydrated review path yet); plate hydrates fully.
   if ((kind === "scan_ready" || kind === "scan_failed") && raw?.scan_id) {
-    // Currently plate is the only async scan; scan_kind exists for
-    // when menu/body get the same treatment.
-    router.push(
-      `/scan/plate?scan_id=${encodeURIComponent(raw.scan_id)}` as never
-    );
+    const scanKind = raw.scan_kind === "menu"
+      ? "menu"
+      : raw.scan_kind === "body"
+        ? "body"
+        : "plate";
+    if (scanKind === "plate") {
+      router.push(
+        `/scan/plate?scan_id=${encodeURIComponent(raw.scan_id)}` as never
+      );
+    } else {
+      // Menu/body: open the scanner. Follow-up work: hydrate from
+      // scan_id like plate does — needs each screen to load the
+      // completed row and populate state before showing the picker.
+      router.push(`/scan/${scanKind}` as never);
+    }
     return;
   }
   const path = routeForKind(kind);
