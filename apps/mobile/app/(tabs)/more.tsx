@@ -287,8 +287,13 @@ export default function More() {
         />
         <MoreRow
           icon="restaurant-outline"
-          label={isArabic ? "خطة الوجبات" : "Meal plan"}
-          onPress={() => router.push("/meal-plan")}
+          label={isArabic ? "الوجبات" : "Meals"}
+          hint={
+            isArabic
+              ? "توصيات، الأسبوع، وصفات"
+              : "Recommendations, week, recipes"
+          }
+          onPress={() => router.push("/meals" as never)}
         />
         <MoreRow
           icon="hourglass-outline"
@@ -334,30 +339,20 @@ export default function More() {
           onPress={() => router.push("/calendar")}
         />
         <MoreRow
-          icon="images-outline"
-          label={isArabic ? "صور التقدم" : "Progress photos"}
-          onPress={() => router.push("/progress-photos")}
-        />
-        <MoreRow
           icon="body-outline"
-          label={isArabic ? "القياسات" : "Body measurements"}
-          onPress={() => router.push("/measurements")}
+          label={isArabic ? "الجسم" : "Body"}
+          hint={
+            isArabic
+              ? "مسح، صور، مقاسات"
+              : "Scan, photos, measurements"
+          }
+          onPress={() => router.push("/body" as never)}
         />
 
         {/* ── Food ─────────────────────────────────────────────────── */}
         <SectionHeader
           label={isArabic ? "الطعام" : "Food"}
           isArabic={isArabic}
-        />
-        <MoreRow
-          icon="reader-outline"
-          label={isArabic ? "الوصفات" : "Recipes"}
-          onPress={() => router.push("/recipes")}
-        />
-        <MoreRow
-          icon="cart-outline"
-          label={isArabic ? "قائمة التسوق" : "Shopping list"}
-          onPress={() => router.push("/shopping-list")}
         />
         <MoreRow
           icon="add-circle-outline"
