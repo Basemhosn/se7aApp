@@ -64,7 +64,13 @@ const CATEGORY_TINT: Record<string, string> = {
 export default function ShoppingList() {
   const { i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
-  const { week_start } = useLocalSearchParams<{ week_start?: string }>();
+  const { week_start: weekStartParam } = useLocalSearchParams<{
+    week_start?: string;
+  }>();
+  // Default to the current week's Monday when the caller didn't pass
+  // one. Groceries tab was hitting "No week specified" whenever the
+  // route was opened from anything other than meal-plan.tsx.
+  const week_start = weekStartParam || mondayOfCurrentWeek();
   const [data, setData] = useState<Response | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -401,3 +407,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
 });
+
+function mondayOfCurrentWeek(): string {
+  const d = new Date();
+  const dow = (d.getDay() + 6) % 7; // 0 = Monday
+  d.setDate(d.getDate() - dow);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

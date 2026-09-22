@@ -2,12 +2,18 @@ import { Platform } from "react-native";
 import AppleHealthKit, {
   type HealthInputOptions,
   type HealthKitPermissions,
+  type HealthPermission,
   type HealthUnit,
   type HealthValue,
   type HealthValueOptions,
 } from "react-native-health";
 
-const P = AppleHealthKit.Constants.Permissions;
+// The react-native-health module's Constants object can come back
+// undefined if the native side didn't link (which is exactly what a
+// "Detail: undefined is not a function" error surface points at).
+// Guard access so a broken module produces an actionable message
+// instead of a cryptic JS runtime throw.
+const P = AppleHealthKit?.Constants?.Permissions ?? ({} as Record<string, string>);
 
 const PERMISSIONS: HealthKitPermissions = {
   permissions: {
@@ -21,8 +27,8 @@ const PERMISSIONS: HealthKitPermissions = {
       P.DistanceWalkingRunning,
       P.DistanceCycling,
       P.SleepAnalysis,
-    ],
-    write: [P.Weight, P.BodyFatPercentage],
+    ].filter(Boolean) as HealthPermission[],
+    write: [P.Weight, P.BodyFatPercentage].filter(Boolean) as HealthPermission[],
   },
 };
 
@@ -49,13 +55,26 @@ export async function requestHealthKitAuth(): Promise<HealthKitAuthResult> {
   if (Platform.OS !== "ios") {
     return { ok: false, error: "not_ios" };
   }
-  // Skip AppleHealthKit.isAvailable — on iOS 18 the callback often
-  // fires with err=null / result=false even when HealthKit is fine
-  // (real devices with the Health app open, other apps like
-  // MyFitnessPal reading data at the same time). Trusting it locked
-  // users out of a working HealthKit. initHealthKit surfaces the
-  // real error if the module isn't linked or the entitlement is
-  // missing — let that be the source of truth.
+  // Defensive: react-native-health can leave AppleHealthKit as a
+  // partially-loaded proxy if the native side didn't link, in which
+  // case calling initHealthKit throws "undefined is not a function".
+  // Detect that specific failure mode and surface an actionable
+  // message so we know the fix is the native build, not permissions.
+  if (
+    !AppleHealthKit ||
+    typeof AppleHealthKit.initHealthKit !== "function"
+  ) {
+    return {
+      ok: false,
+      error: "native_module_not_linked (rebuild with react-native-health)",
+    };
+  }
+  if (!AppleHealthKit.Constants?.Permissions) {
+    return {
+      ok: false,
+      error: "healthkit_constants_missing (native side incomplete)",
+    };
+  }
   return new Promise((resolve) => {
     try {
       AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
