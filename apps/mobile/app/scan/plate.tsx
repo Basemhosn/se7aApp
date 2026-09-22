@@ -90,8 +90,56 @@ export default function PlateScan() {
         stored = getScans().find((s) => s.scanId === scanIdParam);
         hydrate();
       });
+      return;
     }
-  }, [params.resume, params.scan_id, phase]);
+    // No local entry at all but the caller has a scan_id — meal
+    // logged in a prior session, scanStore expired, or opened on a
+    // different device. Fetch the scan directly from the server and
+    // hydrate the review UI without a local PendingScan.
+    if (scanIdParam) {
+      setPhase("analyzing"); // show spinner instead of the picker
+      void api<{
+        id: string;
+        status: string;
+        parsed?: {
+          items?: PlateItem[];
+          confidence?: "low" | "medium" | "high";
+          invisible_costs?: string[];
+          notes?: string;
+        } | null;
+        image_path?: string | null;
+        error_message?: string | null;
+      }>(`/api/scan/plate/${encodeURIComponent(scanIdParam)}`)
+        .then((remote) => {
+          if (remote.status !== "ready" || !remote.parsed) {
+            setErr(
+              remote.error_message ||
+                t("scan.plate.couldnt_analyze") ||
+                "This scan is no longer available."
+            );
+            setPhase("idle");
+            return;
+          }
+          setResumeLocalId(null);
+          // Server-side scan doesn't come with a local previewUri;
+          // that's OK — the review renders without one.
+          setPreviewUri(null);
+          setScanId(remote.id);
+          setItems(remote.parsed.items ?? []);
+          setConfidence(remote.parsed.confidence ?? "medium");
+          setInvisible(remote.parsed.invisible_costs ?? []);
+          setNotes(remote.parsed.notes ?? "");
+          setSelected(
+            new Set((remote.parsed.items ?? []).map((_, i) => i))
+          );
+          setPhase("review");
+        })
+        .catch((e: Error) => {
+          setErr(e.message || "This scan is no longer available.");
+          setPhase("idle");
+        });
+    }
+  }, [params.resume, params.scan_id, phase, t]);
 
   // Load fit-score budget (daily targets + today's consumed) once we
   // enter review. Profile targets come straight from Supabase via RLS;

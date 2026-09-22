@@ -1665,14 +1665,25 @@ function MealsList({
                         key={`p-${slot}-${idx}`}
                         style={[
                           styles.mealItemRow,
+                          styles.plannedRow,
                           idx < slotPlanned.length - 1 &&
                             styles.mealRowDivider,
                         ]}
                       >
-                        <Text style={styles.mealItemName} numberOfLines={1}>
+                        <View style={styles.plannedBadge}>
+                          <Text style={styles.plannedBadgeText}>
+                            {isArabic ? "مخططة" : "PLANNED"}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[styles.mealItemName, styles.plannedText]}
+                          numberOfLines={1}
+                        >
                           {p.name}
                         </Text>
-                        <Text style={styles.mealItemMeta}>
+                        <Text
+                          style={[styles.mealItemMeta, styles.plannedText]}
+                        >
                           {Math.round((p.kcal_low + p.kcal_high) / 2)} kcal
                         </Text>
                       </View>
@@ -2834,6 +2845,34 @@ const styles = StyleSheet.create({
     color: colors.dim,
     fontFamily: font.mono,
     fontSize: 12,
+  },
+  // Planned meal rows — visually distinct from logged rows so users
+  // don't confuse "meal plan says you should eat X" with "you ate X".
+  plannedRow: {
+    borderStyle: "dashed",
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    marginHorizontal: spacing.sm,
+    marginVertical: 4,
+    backgroundColor: "transparent",
+    gap: spacing.sm,
+  },
+  plannedBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.dim + "55",
+  },
+  plannedBadgeText: {
+    fontFamily: font.mono,
+    fontSize: 8,
+    color: colors.dim,
+    letterSpacing: 1,
+  },
+  plannedText: {
+    color: colors.dim,
   },
   // Slot drawer (always-expandable meal slots)
   mealDrawer: {
