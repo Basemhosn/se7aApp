@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "se7a",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",

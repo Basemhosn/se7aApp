@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -15,72 +14,34 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import type { LedgerDayResponse } from "@/types";
-import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
- * Log tab (2026-09-07 revamp).
+ * Log tab.
  *
- * Redesigned to match the Home tab visual language:
- *   • One dominant scan CTA (thumb-reachable, 60% of viewport)
+ * Layout matches Home visual language:
+ *   • One dominant scan CTA (thumb-reachable)
  *   • Compact 3-tile row for the remaining primary log methods
  *   • Ask-coach pair (suggestions + meal plan)
- *   • Recent items horizontal scroller (tap to relog)
  *   • Today's meals flat list (mirrors Home meals card)
- *
- * Every prior entry point survived: plate, menu, barcode, manual,
- * meal suggest, meal plan, recipes, and relog. Pro badges kept on
- * menu + meal plan.
  */
 
-interface RecentItem {
-  id: number;
-  name: string;
-  portion_estimate: string | null;
-  scan_id: string | null;
-  photo_url: string | null;
-  kcal_low: number;
-  kcal_high: number;
-  protein_g_low: number;
-  protein_g_high: number;
-  carb_g_low: number;
-  carb_g_high: number;
-  fat_g_low: number;
-  fat_g_high: number;
-  confidence: "low" | "medium" | "high" | null;
-  times_logged: number;
-}
-
-interface RecentResponse {
-  items: RecentItem[];
-}
-
 export default function Log() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { ent } = useEntitlement();
-  const isArabic = i18n.language === "ar";
   const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
-  const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [relogBusy, setRelogBusy] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const tzOffsetMin = -new Date().getTimezoneOffset();
-      const [today, rec] = await Promise.all([
-        api<LedgerDayResponse>(
-          `/api/ledger/today?tz_offset_min=${tzOffsetMin}`
-        ),
-        api<RecentResponse>("/api/ledger/recent?limit=12").catch(() => ({
-          items: [] as RecentItem[],
-        })),
-      ]);
+      const today = await api<LedgerDayResponse>(
+        `/api/ledger/today?tz_offset_min=${tzOffsetMin}`
+      );
       setLedger(today);
-      setRecent(rec.items);
     } catch {
       /* empty */
     }
@@ -92,39 +53,6 @@ export default function Log() {
       load();
     }, [load])
   );
-
-  const relog = async (item: RecentItem) => {
-    setRelogBusy(item.id);
-    try {
-      await api("/api/ledger/add", {
-        method: "POST",
-        body: JSON.stringify({
-          source: "manual",
-          meal_slot: slotForNow(),
-          items: [
-            {
-              name: item.name,
-              portion_estimate: item.portion_estimate ?? undefined,
-              kcal_low: item.kcal_low,
-              kcal_high: item.kcal_high,
-              protein_g_low: item.protein_g_low,
-              protein_g_high: item.protein_g_high,
-              carb_g_low: item.carb_g_low,
-              carb_g_high: item.carb_g_high,
-              fat_g_low: item.fat_g_low,
-              fat_g_high: item.fat_g_high,
-              confidence: item.confidence ?? "medium",
-            },
-          ],
-        }),
-      });
-      markDayDirty();
-      await load();
-    } catch (e) {
-      Alert.alert(t("log.couldnt_log"), (e as Error).message);
-    }
-    setRelogBusy(null);
-  };
 
   return (
     <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
@@ -206,56 +134,6 @@ export default function Log() {
             onPress={() => router.push("/meal-plan")}
           />
         </View>
-
-        {/* Recent items — horizontal scroller */}
-        {recent.length > 0 && (
-          <>
-            <SectionKicker>{t("log.section_recent")}</SectionKicker>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recentScroll}
-            >
-              {recent.map((it) => (
-                <Pressable
-                  key={it.id}
-                  onPress={() => relog(it)}
-                  disabled={relogBusy === it.id}
-                  style={styles.recentChip}
-                >
-                  {relogBusy === it.id ? (
-                    <View style={styles.recentBusy}>
-                      <ActivityIndicator color={colors.gold} />
-                    </View>
-                  ) : (
-                    <>
-                      {it.photo_url ? (
-                        <Image
-                          source={{ uri: it.photo_url }}
-                          style={styles.recentImg}
-                        />
-                      ) : (
-                        <View style={[styles.recentImg, styles.recentImgPh]}>
-                          <Ionicons
-                            name="restaurant-outline"
-                            size={20}
-                            color={colors.dim}
-                          />
-                        </View>
-                      )}
-                      <Text style={styles.recentName} numberOfLines={1}>
-                        {it.name}
-                      </Text>
-                      <Text style={styles.recentKcal}>
-                        {it.kcal_low}–{it.kcal_high} kcal
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </>
-        )}
 
         {/* Today's log — flat list, mirrors Home meals card */}
         <SectionKicker>
@@ -632,48 +510,6 @@ const styles = StyleSheet.create({
     fontFamily: font.body,
     fontSize: 11,
     lineHeight: 16,
-  },
-  // Recent scroller
-  recentScroll: {
-    gap: spacing.sm,
-    paddingVertical: 4,
-  },
-  recentChip: {
-    width: 140,
-    padding: spacing.sm,
-    backgroundColor: colors.panel,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    gap: 4,
-  },
-  recentImg: {
-    width: "100%",
-    aspectRatio: 4 / 3,
-    borderRadius: radius.sm,
-    backgroundColor: colors.panel2,
-    marginBottom: 2,
-  },
-  recentImgPh: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  recentName: {
-    color: colors.ink,
-    fontFamily: font.body,
-    fontSize: 13,
-  },
-  recentKcal: {
-    color: colors.gold,
-    fontFamily: font.mono,
-    fontSize: 11,
-  },
-  recentBusy: {
-    height: 100,
-    alignItems: "center",
-    justifyContent: "center",
   },
   // Today's log
   loadingRow: {
