@@ -24,6 +24,7 @@ import {
   requestHealthKitAuth,
 } from "@/lib/healthkit";
 import { requestHealthConnectAuth } from "@/lib/healthConnect";
+import { syncHealthNow } from "@/lib/useHealthSync";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -547,6 +548,7 @@ export default function Settings() {
 
       <Section title={isArabic ? "التكاملات" : "Integrations"}>
         <HealthRow isArabic={isArabic} />
+        <CardioToTargetRow isArabic={isArabic} />
         {STRAVA_ENABLED && (
           <IntegrationRow
             provider="strava"
@@ -1343,6 +1345,7 @@ function TimeField({
  * "Manage in system settings" link makes that path obvious.
  */
 function HealthRow({ isArabic }: { isArabic: boolean }) {
+  const { user } = useAuth();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const supported = Platform.OS === "ios" || Platform.OS === "android";
@@ -1381,6 +1384,12 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
       if (ok) {
         await AsyncStorage.setItem(HEALTH_CONNECTED_KEY, "1");
         setConnected(true);
+        // Fire a sync right now so the freshly-granted data lands
+        // without waiting for the next Home mount / cold launch.
+        // Silent — the useHealthSync helper swallows errors.
+        if (user?.id) {
+          syncHealthNow(user.id).catch(() => {});
+        }
         Alert.alert(
           isArabic ? "تم" : "Connected",
           isArabic
@@ -1534,6 +1543,60 @@ async function diagnoseHealthKit(isArabic: boolean) {
       `Threw: ${(e as Error).message}`
     );
   }
+}
+
+/**
+ * User preference: when on, the Home daily-kcal ring expands by the
+ * day's active energy + cardio kcal_burned. Off = ring stays at the
+ * onboarding target (conservative default). Sits under the Health
+ * row because it only meaningfully affects users with Health data.
+ */
+function CardioToTargetRow({ isArabic }: { isArabic: boolean }) {
+  const [value, setValue] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api<{ add_cardio_to_target?: boolean }>("/api/profile/prefs")
+      .then((r) => setValue(!!r.add_cardio_to_target))
+      .catch(() => setValue(false));
+  }, []);
+
+  const toggle = async (v: boolean) => {
+    setValue(v);
+    try {
+      await api("/api/profile/prefs", {
+        method: "POST",
+        body: JSON.stringify({ add_cardio_to_target: v }),
+      });
+    } catch {
+      // Revert on failure — the user's expectation is that the ring
+      // reflects the toggle they see. Silent alert would be noise.
+      setValue(!v);
+    }
+  };
+
+  return (
+    <View style={[styles.row, { borderBottomWidth: 0 }]}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>
+          {isArabic
+            ? "أضف حرق النشاط لهدف السعرات"
+            : "Add activity burn to daily target"}
+        </Text>
+        <Text style={styles.rowValue}>
+          {isArabic
+            ? "يوسع حلقة اليوم بالخطوات والكارديو. مغلق افتراضياً."
+            : "Expands today's ring by steps + cardio kcal. Off by default."}
+        </Text>
+      </View>
+      <Switch
+        value={!!value}
+        disabled={value === null}
+        onValueChange={toggle}
+        trackColor={{ true: colors.gold, false: colors.line }}
+        thumbColor={colors.ink}
+      />
+    </View>
+  );
 }
 
 function IntegrationRow({

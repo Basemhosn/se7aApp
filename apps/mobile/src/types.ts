@@ -32,6 +32,7 @@ export interface Profile {
   daily_fiber_g: number | null;
   daily_sugar_g: number | null;
   daily_saturated_fat_g: number | null;
+  add_cardio_to_target: boolean | null;
   onboarded_at: string | null;
 }
 

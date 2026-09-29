@@ -30,6 +30,9 @@ const prefsSchema = z.object({
   // Aladhan resolves the city; we don't validate against a list.
   city: z.string().trim().max(80).nullable().optional(),
   country: z.string().trim().max(80).nullable().optional(),
+  // When true, Home's daily kcal ring adds today's active energy +
+  // cardio session kcal_burned on top of the onboarding target.
+  add_cardio_to_target: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -66,6 +69,9 @@ export async function POST(request: Request) {
   }
   if (parsed.data.country !== undefined) {
     patch.country = parsed.data.country === "" ? null : parsed.data.country;
+  }
+  if (parsed.data.add_cardio_to_target !== undefined) {
+    patch.add_cardio_to_target = parsed.data.add_cardio_to_target;
   }
   if (parsed.data.notification_prefs) {
     const { data: current } = await supabase
@@ -108,7 +114,9 @@ export async function GET(request: Request) {
 
   const { data } = await supabase
     .from("profiles")
-    .select("notification_prefs, tz_offset_min, goal_weight_kg, city, country")
+    .select(
+      "notification_prefs, tz_offset_min, goal_weight_kg, city, country, add_cardio_to_target"
+    )
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -118,5 +126,6 @@ export async function GET(request: Request) {
     goal_weight_kg: data?.goal_weight_kg ?? null,
     city: data?.city ?? null,
     country: data?.country ?? null,
+    add_cardio_to_target: data?.add_cardio_to_target ?? false,
   });
 }

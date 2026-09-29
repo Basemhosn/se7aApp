@@ -34,7 +34,6 @@ export function useHealthSync(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId || ranThisSession.current) return;
-    ranThisSession.current = true;
 
     (async () => {
       if (Platform.OS === "ios") {
@@ -44,9 +43,15 @@ export function useHealthSync(userId: string | undefined) {
         // ran the sync paths even when auth failed. Real check now.
         const res = await HK.requestHealthKitAuth();
         if (!res.ok) {
+          // Do NOT mark the session ran — if auth failed here (e.g.
+          // Home mounted before the user tapped Enable in Settings)
+          // we want the next Home focus in the same session to retry
+          // once permission is granted. Otherwise the user would
+          // have to force-quit the app to see data flow.
           console.warn("[healthkit] auth failed", res.error);
           return;
         }
+        ranThisSession.current = true;
         await Promise.all([
           syncWeightAndBf(userId, "healthkit"),
           syncTodayActivity("healthkit"),
@@ -56,6 +61,7 @@ export function useHealthSync(userId: string | undefined) {
       } else if (Platform.OS === "android") {
         const authed = await HC.requestHealthConnectAuth();
         if (!authed) return;
+        ranThisSession.current = true;
         await Promise.all([
           syncWeightAndBf(userId, "health_connect"),
           syncTodayActivity("health_connect"),
@@ -68,6 +74,34 @@ export function useHealthSync(userId: string | undefined) {
 }
 
 type Source = "healthkit" | "health_connect";
+
+/**
+ * Trigger all four sync paths for the current platform. Called from
+ * Settings' Enable button after auth succeeds, so newly-granted data
+ * lands without waiting for the next Home mount / cold launch.
+ * Silent on failure — same policy as the auto-sync on Home.
+ */
+export async function syncHealthNow(userId: string): Promise<void> {
+  try {
+    if (Platform.OS === "ios") {
+      await Promise.all([
+        syncWeightAndBf(userId, "healthkit"),
+        syncTodayActivity("healthkit"),
+        syncRecentWorkouts("healthkit"),
+        syncRecentSleep("healthkit"),
+      ]);
+    } else if (Platform.OS === "android") {
+      await Promise.all([
+        syncWeightAndBf(userId, "health_connect"),
+        syncTodayActivity("health_connect"),
+        syncRecentWorkouts("health_connect"),
+        syncRecentSleep("health_connect"),
+      ]);
+    }
+  } catch {
+    /* silent */
+  }
+}
 
 async function syncWeightAndBf(userId: string, source: Source) {
   try {

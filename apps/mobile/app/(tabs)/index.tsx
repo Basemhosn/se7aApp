@@ -442,11 +442,20 @@ export default function Home() {
   }
 
   // ── Derived values ───────────────────────────────────────────────
-  const kcalTarget =
+  const baseKcalTarget =
     dayStatus?.adjusted_target ??
     dayStatus?.base_target ??
     profile?.daily_kcal_target ??
     2200;
+  // When the user opts in, the daily ring expands to cover activity
+  // burn — active energy from steps + summed cardio session kcal.
+  // Only meaningful on today; past/future days don't have this data.
+  const cardioBurnKcal =
+    isToday && profile?.add_cardio_to_target
+      ? (cardio?.activity.active_kcal ?? 0) +
+        (cardio?.sessions.reduce((s, x) => s + (x.kcal_burned ?? 0), 0) ?? 0)
+      : 0;
+  const kcalTarget = baseKcalTarget + cardioBurnKcal;
   const totals = ledger?.totals;
   const kcalLow = totals?.kcal.low ?? 0;
   const kcalHigh = totals?.kcal.high ?? 0;
