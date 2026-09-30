@@ -11,6 +11,7 @@ const LAST_SYNC_KEY = "se7a_hk_last_sync";
 const LAST_WORKOUT_SYNC_KEY = "se7a_hk_last_workout_sync";
 const LAST_SLEEP_SYNC_KEY = "se7a_hc_last_sleep_sync";
 const WEIGHT_HISTORY_DONE_KEY = "se7a_hk_weight_history_done";
+const ACTIVITY_HISTORY_DONE_KEY = "se7a_hk_activity_history_done";
 const RECENT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
 const BACKFILL_MS = 90 * 86_400_000; // 90 days on first connect
 
@@ -58,6 +59,7 @@ export function useHealthSync(userId: string | undefined) {
           syncWeightAndBf(userId, "healthkit"),
           syncWeightHistoryOnce(userId, "healthkit"),
           syncTodayActivity("healthkit"),
+          syncActivityHistoryOnce(userId, "healthkit"),
           syncRecentWorkouts("healthkit"),
           syncRecentSleep("healthkit"),
         ]);
@@ -69,6 +71,7 @@ export function useHealthSync(userId: string | undefined) {
           syncWeightAndBf(userId, "health_connect"),
           syncWeightHistoryOnce(userId, "health_connect"),
           syncTodayActivity("health_connect"),
+          syncActivityHistoryOnce(userId, "health_connect"),
           syncRecentWorkouts("health_connect"),
           syncRecentSleep("health_connect"),
         ]);
@@ -109,6 +112,7 @@ export async function syncHealthNow(
       syncWeightAndBf(userId, source),
       syncWeightHistoryOnce(userId, source),
       syncTodayActivity(source),
+      syncActivityHistoryOnce(userId, source),
       syncRecentWorkouts(source),
       syncRecentSleep(source),
     ]);
@@ -153,6 +157,44 @@ async function syncWeightHistoryOnce(
     await AsyncStorage.setItem(WEIGHT_HISTORY_DONE_KEY, "1");
   } catch {
     /* silent — WEIGHT_HISTORY_DONE_KEY stays unset so next boot retries */
+  }
+}
+
+/**
+ * One-shot 90-day activity history backfill. Reads per-day steps +
+ * active energy from the health store and bulk-upserts daily_activity
+ * so past-day Home views (swipe to yesterday, last week, etc.) show
+ * the right numbers instead of dashes. Same 0-samples-retry policy
+ * as the weight history backfill.
+ */
+async function syncActivityHistoryOnce(
+  _userId: string,
+  source: Source
+): Promise<void> {
+  try {
+    const done = await AsyncStorage.getItem(ACTIVITY_HISTORY_DONE_KEY);
+    if (done === "1") return;
+
+    const sinceIso = new Date(Date.now() - BACKFILL_MS).toISOString();
+    const days =
+      source === "healthkit"
+        ? await HK.readActivityByDaySince(sinceIso)
+        : await HC.readActivityByDaySince(sinceIso);
+
+    if (days.length === 0) {
+      // Retry next session if we got nothing — likely the user
+      // hasn't granted the Steps or Active Energy categories yet.
+      return;
+    }
+
+    await api("/api/activity/bulk-import", {
+      method: "POST",
+      body: JSON.stringify({ days }),
+    });
+    markDayDirty();
+    await AsyncStorage.setItem(ACTIVITY_HISTORY_DONE_KEY, "1");
+  } catch {
+    /* silent — key stays unset so next boot retries */
   }
 }
 

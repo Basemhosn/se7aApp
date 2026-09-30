@@ -241,6 +241,81 @@ export async function readTodaySteps(): Promise<number> {
   }
 }
 
+export interface DailyActivity {
+  day: string; // YYYY-MM-DD (local day)
+  steps: number;
+  active_kcal: number;
+}
+
+/**
+ * Per-day steps + active energy for the range `[sinceIso, now]`.
+ * Powers the 90-day activity backfill so past-day views on Home
+ * show real numbers. Both record types are flat sample streams on
+ * Health Connect; we bucket by local day here.
+ */
+export async function readActivityByDaySince(
+  sinceIso: string
+): Promise<DailyActivity[]> {
+  if (Platform.OS !== "android") return [];
+  const stepsGranted = hasRead("Steps");
+  const kcalGranted = hasRead("ActiveCaloriesBurned");
+  if (!stepsGranted && !kcalGranted) await refreshGranted();
+  const now = new Date().toISOString();
+  const stepsByDay = new Map<string, number>();
+  const kcalByDay = new Map<string, number>();
+  try {
+    if (hasRead("Steps")) {
+      const res = await readRecords("Steps", {
+        timeRangeFilter: { operator: "between", startTime: sinceIso, endTime: now },
+        pageSize: 5000,
+      });
+      for (const r of res.records) {
+        const day = localDayKey(new Date(r.startTime));
+        stepsByDay.set(
+          day,
+          (stepsByDay.get(day) ?? 0) + Number(r.count ?? 0)
+        );
+      }
+    }
+  } catch {
+    /* silent */
+  }
+  try {
+    if (hasRead("ActiveCaloriesBurned")) {
+      const res = await readRecords("ActiveCaloriesBurned", {
+        timeRangeFilter: { operator: "between", startTime: sinceIso, endTime: now },
+        pageSize: 5000,
+      });
+      for (const r of res.records) {
+        const day = localDayKey(new Date(r.startTime));
+        const e = r.energy as unknown as { inKilocalories?: number };
+        const kcal = typeof e?.inKilocalories === "number" ? e.inKilocalories : 0;
+        kcalByDay.set(day, (kcalByDay.get(day) ?? 0) + kcal);
+      }
+    }
+  } catch {
+    /* silent */
+  }
+  const days = new Set<string>([...stepsByDay.keys(), ...kcalByDay.keys()]);
+  const out: DailyActivity[] = [];
+  for (const day of days) {
+    out.push({
+      day,
+      steps: Math.round(stepsByDay.get(day) ?? 0),
+      active_kcal: Math.round(kcalByDay.get(day) ?? 0),
+    });
+  }
+  out.sort((a, b) => a.day.localeCompare(b.day));
+  return out;
+}
+
+function localDayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export async function readTodayActiveEnergy(): Promise<number> {
   if (Platform.OS !== "android") return 0;
   if (!hasRead("ActiveCaloriesBurned")) await refreshGranted();

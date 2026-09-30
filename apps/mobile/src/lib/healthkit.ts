@@ -182,6 +182,80 @@ export function readTodayActiveEnergy(): Promise<number> {
   });
 }
 
+export interface DailyActivity {
+  day: string; // YYYY-MM-DD (local day)
+  steps: number;
+  active_kcal: number;
+}
+
+/**
+ * Read per-day steps + active energy from HealthKit for the range
+ * `[sinceIso, now]`. Powers the 90-day activity backfill so past-day
+ * views on Home show real numbers instead of "—".
+ *
+ * Steps use HealthKit's native day-bucketed API. Active energy is a
+ * flat sample stream (no per-day bucket API in react-native-health),
+ * so we sum per local-day here. Both indexed by YYYY-MM-DD.
+ */
+export function readActivityByDaySince(
+  sinceIso: string
+): Promise<DailyActivity[]> {
+  if (Platform.OS !== "ios") return Promise.resolve([]);
+  const opts: HealthInputOptions = {
+    startDate: sinceIso,
+    endDate: new Date().toISOString(),
+    ascending: true,
+    includeManuallyAdded: true,
+  };
+  return new Promise((resolve) => {
+    // Per-day step counts (HK bucket API).
+    AppleHealthKit.getDailyStepCountSamples(opts, (stepsErr, stepsRows) => {
+      const stepsByDay = new Map<string, number>();
+      if (!stepsErr && stepsRows) {
+        for (const s of stepsRows as unknown as (HealthValue & {
+          startDate: string;
+        })[]) {
+          const day = localDayKey(new Date(s.startDate));
+          stepsByDay.set(day, Math.round(Number(s.value) || 0));
+        }
+      }
+      // Active energy: flat samples, sum per local day.
+      AppleHealthKit.getActiveEnergyBurned(opts, (kcalErr, kcalRows) => {
+        const kcalByDay = new Map<string, number>();
+        if (!kcalErr && kcalRows) {
+          for (const k of kcalRows as unknown as (HealthValue & {
+            startDate: string;
+          })[]) {
+            const day = localDayKey(new Date(k.startDate));
+            kcalByDay.set(day, (kcalByDay.get(day) ?? 0) + Number(k.value || 0));
+          }
+        }
+        const days = new Set<string>([
+          ...stepsByDay.keys(),
+          ...kcalByDay.keys(),
+        ]);
+        const out: DailyActivity[] = [];
+        for (const day of days) {
+          out.push({
+            day,
+            steps: stepsByDay.get(day) ?? 0,
+            active_kcal: Math.round(kcalByDay.get(day) ?? 0),
+          });
+        }
+        out.sort((a, b) => a.day.localeCompare(b.day));
+        resolve(out);
+      });
+    });
+  });
+}
+
+function localDayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export interface WeightSample {
   weight_kg: number;
   body_fat_pct: number | null;

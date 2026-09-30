@@ -307,7 +307,11 @@ export default function Home() {
       api<StreakResponse>(
         `/api/streaks?tz_offset_min=${tzOffsetMin}`
       ).catch(() => null),
-      api<CardioTodayResponse>("/api/cardio/today").catch(() => null),
+      api<CardioTodayResponse>(
+        isToday
+          ? "/api/cardio/today"
+          : `/api/cardio/today?day=${viewDateIso}`
+      ).catch(() => null),
       api<SleepTodayResponse>("/api/sleep/today").catch(() => null),
       api<{
         report: {
@@ -506,25 +510,26 @@ export default function Home() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              // Fire the health-store + connected-integration syncs
-              // in parallel with the ledger reload so a manual refresh
-              // actually reaches back to the health store — not just
-              // the server-side cache. syncHealthNow(force) drops the
-              // local throttles; integration endpoints no-op quickly
-              // if the provider isn't connected.
-              await Promise.all([
-                load(),
-                user?.id
-                  ? syncHealthNow(user.id, { force: true }).catch(() => {})
-                  : Promise.resolve(),
-                api("/api/integrations/whoop/sync", { method: "POST" }).catch(
-                  () => {}
-                ),
-                api("/api/integrations/oura/sync", { method: "POST" }).catch(
-                  () => {}
-                ),
-                reconcileScansFromServer().catch(() => {}),
-              ]);
+              // Only await load() — the primary ledger refresh is
+              // what the user actually sees. Everything else runs in
+              // the background so the spinner drops in <500ms instead
+              // of waiting on external APIs (Whoop/Oura can take
+              // 5-30s) and multi-hundred-sample HK reads. Once each
+              // background sync completes, it triggers a silent
+              // load() so new data folds in without a second pull.
+              if (user?.id) {
+                syncHealthNow(user.id, { force: true })
+                  .then(() => load())
+                  .catch(() => {});
+              }
+              api("/api/integrations/whoop/sync", { method: "POST" })
+                .then(() => load())
+                .catch(() => {});
+              api("/api/integrations/oura/sync", { method: "POST" })
+                .then(() => load())
+                .catch(() => {});
+              void reconcileScansFromServer();
+              await load();
               setRefreshing(false);
             }}
             tintColor={colors.gold}
@@ -611,14 +616,16 @@ export default function Home() {
             sleep: isToday ? sleep : null,
           }}
           activity={{
-            steps: isToday ? cardio?.activity.steps ?? null : null,
-            burnedKcal: isToday
-              ? (cardio?.activity.active_kcal ?? 0) +
-                (cardio?.sessions.reduce(
-                  (s, x) => s + (x.kcal_burned ?? 0),
-                  0
-                ) ?? 0)
-              : null,
+            // Steps + burned kcal are now fetched for past days too
+            // (cardio endpoint accepts ?day=). Water is still today-only
+            // — no historical water logging surface yet.
+            steps: cardio?.activity.steps ?? null,
+            burnedKcal:
+              (cardio?.activity.active_kcal ?? 0) +
+              (cardio?.sessions.reduce(
+                (s, x) => s + (x.kcal_burned ?? 0),
+                0
+              ) ?? 0),
             waterMl: isToday ? water?.total_ml ?? 0 : 0,
             waterTarget: water?.target_ml ?? 2500,
             onAddWater: () => addWater(250),
@@ -1670,15 +1677,13 @@ function MealsList({
                     // rows. Non-plate items (manual, voice, barcode)
                     // stay as individual rows.
                     //
-                    // Tap behavior:
-                    //   • plate-scan groups → jump to the review screen
-                    //     (photo + all items + macro edit)
-                    //   • single items (manual, voice, barcode,
-                    //     single-item plate scan) → open the detail
-                    //     sheet with photo + macros + delete
+                    // Every meal row opens the detail sheet (photo +
+                    // macros + delete). Previously plate-scan groups
+                    // routed to the /scan/plate review screen, which
+                    // showed no photo and offered a distracting
+                    // "log again" action for a meal that was already
+                    // in the ledger.
                     groupMealItems(slotItems).map((group, idx, arr) => {
-                      const isPlateGroup =
-                        !!group.scanId && group.source === "plate_scan";
                       const total = group.items.reduce(
                         (acc, it) =>
                           acc + Math.round((it.kcal_low + it.kcal_high) / 2),
@@ -1690,24 +1695,17 @@ function MealsList({
                         extraCount > 0
                           ? `${primary.name} + ${extraCount} more`
                           : primary.name;
-                      const openDetail = () => onItemTap(primary);
-                      const openScan = () =>
-                        router.push(
-                          `/scan/plate?scan_id=${encodeURIComponent(group.scanId!)}` as never
-                        );
                       return (
                         <Pressable
                           key={group.key}
-                          onPress={isPlateGroup ? openScan : openDetail}
+                          onPress={() => onItemTap(primary)}
                           style={[
                             styles.mealItemRow,
                             idx < arr.length - 1 && styles.mealRowDivider,
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={
-                            isPlateGroup
-                              ? `${displayName}, ${total} kcal. Tap to review scan`
-                              : `${displayName}, ${total} kcal. Tap for details`
+                            `${displayName}, ${total} kcal. Tap for details`
                           }
                         >
                           {group.photoUrl ? (

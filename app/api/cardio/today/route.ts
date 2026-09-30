@@ -4,8 +4,11 @@ import { getRouteClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 /**
- * Today's cardio summary — session totals plus the day's activity
- * counters (steps + active energy) from HealthKit auto-import.
+ * Cardio summary for a given day — session totals plus the day's
+ * activity counters (steps + active energy) from HealthKit / Health
+ * Connect auto-import. Defaults to today; pass `?day=YYYY-MM-DD` for
+ * a past or future day (Home uses this when the user swipes to a
+ * previous date).
  */
 export async function GET(request: Request) {
   const supabase = getRouteClient(request);
@@ -16,16 +19,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const dayKey = `${startOfToday.getFullYear()}-${String(startOfToday.getMonth() + 1).padStart(2, "0")}-${String(startOfToday.getDate()).padStart(2, "0")}`;
+  const url = new URL(request.url);
+  const dayParam = url.searchParams.get("day");
+  const dayValid = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam);
+
+  const startOfDay = new Date();
+  if (dayValid) {
+    const [y, m, d] = dayParam.split("-").map(Number);
+    startOfDay.setFullYear(y, m - 1, d);
+  }
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setDate(endOfDay.getDate() + 1);
+  const dayKey = `${startOfDay.getFullYear()}-${String(startOfDay.getMonth() + 1).padStart(2, "0")}-${String(startOfDay.getDate()).padStart(2, "0")}`;
 
   const [sessionsRes, activityRes] = await Promise.all([
     supabase
       .from("cardio_sessions")
       .select("id, kind, started_at, duration_min, distance_km, kcal_burned")
       .eq("user_id", user.id)
-      .gte("started_at", startOfToday.toISOString())
+      .gte("started_at", startOfDay.toISOString())
+      .lt("started_at", endOfDay.toISOString())
       .order("started_at", { ascending: false }),
     supabase
       .from("daily_activity")
