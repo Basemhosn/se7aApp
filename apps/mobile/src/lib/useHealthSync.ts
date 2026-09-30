@@ -10,7 +10,9 @@ import { supabase } from "./supabase";
 const LAST_SYNC_KEY = "se7a_hk_last_sync";
 const LAST_WORKOUT_SYNC_KEY = "se7a_hk_last_workout_sync";
 const LAST_SLEEP_SYNC_KEY = "se7a_hc_last_sleep_sync";
+const WEIGHT_HISTORY_DONE_KEY = "se7a_hk_weight_history_done";
 const RECENT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
+const BACKFILL_MS = 90 * 86_400_000; // 90 days on first connect
 
 /**
  * On mount: request platform-appropriate health auth (HealthKit on iOS,
@@ -54,6 +56,7 @@ export function useHealthSync(userId: string | undefined) {
         ranThisSession.current = true;
         await Promise.all([
           syncWeightAndBf(userId, "healthkit"),
+          syncWeightHistoryOnce(userId, "healthkit"),
           syncTodayActivity("healthkit"),
           syncRecentWorkouts("healthkit"),
           syncRecentSleep("healthkit"),
@@ -64,6 +67,7 @@ export function useHealthSync(userId: string | undefined) {
         ranThisSession.current = true;
         await Promise.all([
           syncWeightAndBf(userId, "health_connect"),
+          syncWeightHistoryOnce(userId, "health_connect"),
           syncTodayActivity("health_connect"),
           syncRecentWorkouts("health_connect"),
           syncRecentSleep("health_connect"),
@@ -76,30 +80,79 @@ export function useHealthSync(userId: string | undefined) {
 type Source = "healthkit" | "health_connect";
 
 /**
- * Trigger all four sync paths for the current platform. Called from
- * Settings' Enable button after auth succeeds, so newly-granted data
- * lands without waiting for the next Home mount / cold launch.
+ * Trigger all sync paths for the current platform. Called from
+ * Settings' Enable button after auth succeeds AND from Home's
+ * pull-to-refresh so a manual refresh actually re-pulls health data
+ * (rather than relying on the once-per-session ref).
+ *
+ * `force` drops the local throttles (weight 6h window, workout/sleep
+ * "since last sync" cursors) so a manual refresh actually reaches
+ * back to today's data. Server-side dedup keeps this idempotent.
  * Silent on failure — same policy as the auto-sync on Home.
  */
-export async function syncHealthNow(userId: string): Promise<void> {
+export async function syncHealthNow(
+  userId: string,
+  opts: { force?: boolean } = {}
+): Promise<void> {
+  const source: Source = Platform.OS === "ios" ? "healthkit" : "health_connect";
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return;
   try {
-    if (Platform.OS === "ios") {
+    if (opts.force) {
+      // Drop the throttles so this refresh actually re-reads.
       await Promise.all([
-        syncWeightAndBf(userId, "healthkit"),
-        syncTodayActivity("healthkit"),
-        syncRecentWorkouts("healthkit"),
-        syncRecentSleep("healthkit"),
-      ]);
-    } else if (Platform.OS === "android") {
-      await Promise.all([
-        syncWeightAndBf(userId, "health_connect"),
-        syncTodayActivity("health_connect"),
-        syncRecentWorkouts("health_connect"),
-        syncRecentSleep("health_connect"),
+        AsyncStorage.removeItem(LAST_SYNC_KEY),
+        AsyncStorage.removeItem(LAST_WORKOUT_SYNC_KEY),
+        AsyncStorage.removeItem(LAST_SLEEP_SYNC_KEY),
       ]);
     }
+    await Promise.all([
+      syncWeightAndBf(userId, source),
+      syncWeightHistoryOnce(userId, source),
+      syncTodayActivity(source),
+      syncRecentWorkouts(source),
+      syncRecentSleep(source),
+    ]);
   } catch {
     /* silent */
+  }
+}
+
+/**
+ * One-shot 90-day historical weight backfill. Runs on first successful
+ * connect (per platform, per install) so the trend chart has data
+ * beyond just the samples logged since install. Server dedups by
+ * ±1h so re-runs after a bug/reinstall don't duplicate.
+ */
+async function syncWeightHistoryOnce(
+  _userId: string,
+  source: Source
+): Promise<void> {
+  try {
+    const done = await AsyncStorage.getItem(WEIGHT_HISTORY_DONE_KEY);
+    if (done === "1") return;
+
+    const sinceIso = new Date(Date.now() - BACKFILL_MS).toISOString();
+    const samples =
+      source === "healthkit"
+        ? await HK.readWeightSamplesSince(sinceIso)
+        : await HC.readWeightSamplesSince(sinceIso);
+
+    if (samples.length === 0) {
+      // 0 samples might mean "no weight data in HK" OR "weight
+      // permission wasn't granted this session". Leave DONE_KEY
+      // unset so the next session re-checks after the user grants
+      // more categories in iOS Settings. Cheap: just an empty read.
+      return;
+    }
+
+    await api("/api/weight/bulk-import", {
+      method: "POST",
+      body: JSON.stringify({ samples }),
+    });
+    markDayDirty();
+    await AsyncStorage.setItem(WEIGHT_HISTORY_DONE_KEY, "1");
+  } catch {
+    /* silent — WEIGHT_HISTORY_DONE_KEY stays unset so next boot retries */
   }
 }
 
@@ -183,7 +236,7 @@ async function syncRecentWorkouts(source: Source) {
     const lastRaw = await AsyncStorage.getItem(LAST_WORKOUT_SYNC_KEY);
     const sinceIso = lastRaw
       ? new Date(Number(lastRaw)).toISOString()
-      : new Date(Date.now() - 14 * 86_400_000).toISOString();
+      : new Date(Date.now() - BACKFILL_MS).toISOString();
 
     if (source === "healthkit") {
       const workouts = await HK.readWorkoutsSince(sinceIso);
@@ -250,7 +303,7 @@ async function syncRecentSleep(source: Source) {
     const lastRaw = await AsyncStorage.getItem(LAST_SLEEP_SYNC_KEY);
     const sinceIso = lastRaw
       ? new Date(Number(lastRaw)).toISOString()
-      : new Date(Date.now() - 14 * 86_400_000).toISOString();
+      : new Date(Date.now() - BACKFILL_MS).toISOString();
 
     const sessions =
       source === "healthkit"

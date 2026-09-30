@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
+import { reconcileFromServer } from "./scanStore";
 
 /**
  * Notification tap → route mapping. Called from the Home tab (where
@@ -119,9 +120,28 @@ export function useNotificationDeepLinks() {
       .catch(() => {});
 
     // Warm-tap: user taps while the app is running.
-    const sub = Notifications.addNotificationResponseReceivedListener(
+    const tapSub = Notifications.addNotificationResponseReceivedListener(
       handleResponse
     );
-    return () => sub.remove();
+
+    // Receive (no tap) — fires when a push arrives while app is open
+    // or in background. For scan-ready/scan-failed pushes, this is
+    // what flips the pending card from "Analyzing" to "Ready" without
+    // the user having to tap the notification. Reconciles the local
+    // scan store against server truth for anything still in flight.
+    const receiveSub = Notifications.addNotificationReceivedListener(
+      (n) => {
+        const raw = n.request.content.data as { kind?: string } | undefined;
+        const kind = raw?.kind;
+        if (kind === "scan_ready" || kind === "scan_failed") {
+          reconcileFromServer().catch(() => {});
+        }
+      }
+    );
+
+    return () => {
+      tapSub.remove();
+      receiveSub.remove();
+    };
   }, []);
 }

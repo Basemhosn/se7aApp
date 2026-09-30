@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   Dimensions,
   FlatList,
   Image,
@@ -35,7 +36,8 @@ import { useEntitlement } from "@/lib/EntitlementContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { rescheduleWeeklyRituals } from "@/lib/weeklyRitualScheduler";
 import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
-import { useHealthSync } from "@/lib/useHealthSync";
+import { syncHealthNow, useHealthSync } from "@/lib/useHealthSync";
+import { MealDetailSheet } from "@/components/MealDetailSheet";
 import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerDayResponse, MealItemRow, MealSlot, Profile } from "@/types";
 import { SLOTS, SLOT_META } from "@/lib/slot";
@@ -190,12 +192,41 @@ export default function Home() {
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
+  const [selectedMeal, setSelectedMeal] = useState<MealItemRow | null>(null);
 
   // Subscribe to the async scan store so the "Recently uploaded" card
   // reflects in-flight scans without needing a screen refresh.
   useEffect(() => {
     return subscribeScans(setPendingScans);
   }, []);
+
+  // Reconcile pending scans when the app comes back to foreground —
+  // covers the case where a scan-ready push arrived while the app was
+  // fully backgrounded and iOS didn't fire our foreground listener.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void reconcileScansFromServer();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Fallback polling for any scan still in flight — safety net for
+  // when the push notification is dropped (no permission, offline,
+  // OS-level suppression). Reconciles server-side status every 5s
+  // until nothing's pending. The reconcile itself is a no-op when
+  // the list is empty, so this stays cheap.
+  const hasPending = pendingScans.some(
+    (s) => s.status === "uploading" || s.status === "analyzing"
+  );
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => {
+      void reconcileScansFromServer();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [hasPending]);
 
   const viewDateIso = useMemo(() => isoOffset(viewOffset), [viewOffset]);
   const isToday = viewOffset === 0;
@@ -475,7 +506,25 @@ export default function Home() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await load();
+              // Fire the health-store + connected-integration syncs
+              // in parallel with the ledger reload so a manual refresh
+              // actually reaches back to the health store — not just
+              // the server-side cache. syncHealthNow(force) drops the
+              // local throttles; integration endpoints no-op quickly
+              // if the provider isn't connected.
+              await Promise.all([
+                load(),
+                user?.id
+                  ? syncHealthNow(user.id, { force: true }).catch(() => {})
+                  : Promise.resolve(),
+                api("/api/integrations/whoop/sync", { method: "POST" }).catch(
+                  () => {}
+                ),
+                api("/api/integrations/oura/sync", { method: "POST" }).catch(
+                  () => {}
+                ),
+                reconcileScansFromServer().catch(() => {}),
+              ]);
               setRefreshing(false);
             }}
             tintColor={colors.gold}
@@ -593,6 +642,7 @@ export default function Home() {
               return next;
             })
           }
+          onItemTap={setSelectedMeal}
           isToday={isToday}
           isArabic={isArabic}
         />
@@ -689,6 +739,16 @@ export default function Home() {
         onClose={() => setStreakSheetOpen(false)}
         streak={streak}
         onFreeze={applyFreeze}
+        isArabic={isArabic}
+      />
+      <MealDetailSheet
+        item={selectedMeal}
+        onClose={() => setSelectedMeal(null)}
+        onDelete={async (id) => {
+          await api(`/api/ledger/item/${id}`, { method: "DELETE" });
+          markDayDirty();
+          await load();
+        }}
         isArabic={isArabic}
       />
     </SafeAreaView>
@@ -1486,6 +1546,7 @@ function MealsList({
   plannedItems,
   expanded,
   onToggle,
+  onItemTap,
   isToday,
   isArabic,
 }: {
@@ -1493,6 +1554,7 @@ function MealsList({
   plannedItems: NonNullable<LedgerDayResponse["planned_items"]>;
   expanded: Set<string>;
   onToggle: (slot: string) => void;
+  onItemTap: (item: MealItemRow) => void;
   isToday: boolean;
   isArabic: boolean;
 }) {
@@ -1607,10 +1669,16 @@ function MealsList({
                     // rice with a side salad" as one meal, not three
                     // rows. Non-plate items (manual, voice, barcode)
                     // stay as individual rows.
+                    //
+                    // Tap behavior:
+                    //   • plate-scan groups → jump to the review screen
+                    //     (photo + all items + macro edit)
+                    //   • single items (manual, voice, barcode,
+                    //     single-item plate scan) → open the detail
+                    //     sheet with photo + macros + delete
                     groupMealItems(slotItems).map((group, idx, arr) => {
-                      const canOpen =
+                      const isPlateGroup =
                         !!group.scanId && group.source === "plate_scan";
-                      const RowWrap = canOpen ? Pressable : View;
                       const total = group.items.reduce(
                         (acc, it) =>
                           acc + Math.round((it.kcal_low + it.kcal_high) / 2),
@@ -1622,26 +1690,24 @@ function MealsList({
                         extraCount > 0
                           ? `${primary.name} + ${extraCount} more`
                           : primary.name;
+                      const openDetail = () => onItemTap(primary);
+                      const openScan = () =>
+                        router.push(
+                          `/scan/plate?scan_id=${encodeURIComponent(group.scanId!)}` as never
+                        );
                       return (
-                        <RowWrap
+                        <Pressable
                           key={group.key}
-                          onPress={
-                            canOpen
-                              ? () =>
-                                  router.push(
-                                    `/scan/plate?scan_id=${encodeURIComponent(group.scanId!)}` as never
-                                  )
-                              : undefined
-                          }
+                          onPress={isPlateGroup ? openScan : openDetail}
                           style={[
                             styles.mealItemRow,
                             idx < arr.length - 1 && styles.mealRowDivider,
                           ]}
-                          accessibilityRole={canOpen ? "button" : undefined}
+                          accessibilityRole="button"
                           accessibilityLabel={
-                            canOpen
+                            isPlateGroup
                               ? `${displayName}, ${total} kcal. Tap to review scan`
-                              : undefined
+                              : `${displayName}, ${total} kcal. Tap for details`
                           }
                         >
                           {group.photoUrl ? (
@@ -1657,15 +1723,13 @@ function MealsList({
                             {displayName}
                           </Text>
                           <Text style={styles.mealItemMeta}>{total} kcal</Text>
-                          {canOpen ? (
-                            <Ionicons
-                              name="chevron-forward"
-                              size={14}
-                              color={colors.dim}
-                              style={{ marginLeft: 2 }}
-                            />
-                          ) : null}
-                        </RowWrap>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={14}
+                            color={colors.dim}
+                            style={{ marginLeft: 2 }}
+                          />
+                        </Pressable>
                       );
                     })
                   ) : (

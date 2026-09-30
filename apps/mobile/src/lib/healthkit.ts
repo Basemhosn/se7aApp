@@ -182,6 +182,79 @@ export function readTodayActiveEnergy(): Promise<number> {
   });
 }
 
+export interface WeightSample {
+  weight_kg: number;
+  body_fat_pct: number | null;
+  measured_at: string;
+}
+
+/**
+ * Read every weight sample HealthKit has since `sinceIso`. Powers the
+ * historical backfill in useHealthSync (default 90 days on first
+ * connect). Body-fat samples are read separately and matched to the
+ * nearest weight sample by time (±10 min) — HealthKit stores them as
+ * distinct series, and merging server-side would need a join.
+ */
+export function readWeightSamplesSince(
+  sinceIso: string
+): Promise<WeightSample[]> {
+  if (Platform.OS !== "ios") return Promise.resolve([]);
+  const opts: HealthInputOptions = {
+    startDate: sinceIso,
+    endDate: new Date().toISOString(),
+    unit: "gram" as HealthUnit,
+    ascending: true,
+    limit: 500,
+  };
+  return new Promise((resolve) => {
+    AppleHealthKit.getWeightSamples(opts, (err, weightRows) => {
+      if (err || !weightRows) return resolve([]);
+      const weights = (weightRows as unknown as (HealthValue & {
+        endDate: string;
+      })[]).map((w) => {
+        const raw = Number(w.value);
+        const kg = raw > 500 ? raw / 1000 : raw;
+        return {
+          weight_kg: Math.round(kg * 10) / 10,
+          measured_at: w.endDate,
+        };
+      });
+      const bfOpts: HealthInputOptions = {
+        startDate: sinceIso,
+        endDate: new Date().toISOString(),
+        ascending: true,
+        limit: 500,
+      };
+      AppleHealthKit.getBodyFatPercentageSamples(bfOpts, (bfErr, bfRows) => {
+        const bfSamples = bfErr || !bfRows
+          ? []
+          : (bfRows as unknown as (HealthValue & { endDate: string })[]).map(
+              (b) => {
+                const raw = Number(b.value);
+                const pct = raw < 1 ? raw * 100 : raw;
+                return {
+                  pct: Math.round(pct * 10) / 10,
+                  ms: new Date(b.endDate).getTime(),
+                };
+              }
+            );
+        const matched: WeightSample[] = weights.map((w) => {
+          const wMs = new Date(w.measured_at).getTime();
+          const nearBf = bfSamples.find(
+            (b) => Math.abs(b.ms - wMs) < 10 * 60 * 1000
+          );
+          return {
+            weight_kg: w.weight_kg,
+            body_fat_pct: nearBf?.pct ?? null,
+            measured_at: w.measured_at,
+          };
+        });
+        resolve(matched);
+      });
+    });
+  });
+}
+
 /**
  * Read cardio workouts from HealthKit since the given ISO datetime.
  * Maps Apple's `activityName` (e.g. "Running", "Cycling") into SE7A's

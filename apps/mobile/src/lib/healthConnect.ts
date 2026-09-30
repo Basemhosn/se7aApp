@@ -120,6 +120,75 @@ export async function readLatestWeightKg(): Promise<{
   }
 }
 
+export interface WeightSample {
+  weight_kg: number;
+  body_fat_pct: number | null;
+  measured_at: string;
+}
+
+/**
+ * Read every weight sample since `sinceIso`. Matches body-fat samples
+ * to weight by nearest-time (±10 min) — Android Health Connect stores
+ * them as separate record types, same as HealthKit.
+ */
+export async function readWeightSamplesSince(
+  sinceIso: string
+): Promise<WeightSample[]> {
+  if (Platform.OS !== "android") return [];
+  if (!hasRead("Weight")) await refreshGranted();
+  if (!hasRead("Weight")) return [];
+  try {
+    const now = new Date();
+    const [wRes, bfRes] = await Promise.all([
+      readRecords("Weight", {
+        timeRangeFilter: {
+          operator: "between",
+          startTime: sinceIso,
+          endTime: now.toISOString(),
+        },
+        ascendingOrder: true,
+        pageSize: 500,
+      }),
+      hasRead("BodyFat")
+        ? readRecords("BodyFat", {
+            timeRangeFilter: {
+              operator: "between",
+              startTime: sinceIso,
+              endTime: now.toISOString(),
+            },
+            ascendingOrder: true,
+            pageSize: 500,
+          })
+        : Promise.resolve({ records: [] as unknown[] }),
+    ]);
+    const bfSamples = (bfRes.records as unknown as {
+      time: string;
+      percentage: number;
+    }[]).map((b) => ({
+      pct: Math.round(Number(b.percentage) * 10) / 10,
+      ms: new Date(b.time).getTime(),
+    }));
+    const out: WeightSample[] = [];
+    for (const rec of wRes.records) {
+      const mass = rec.weight as unknown as { inKilograms?: number };
+      const kg = typeof mass?.inKilograms === "number" ? mass.inKilograms : null;
+      if (kg === null || !Number.isFinite(kg) || kg <= 0) continue;
+      const wMs = new Date(rec.time).getTime();
+      const nearBf = bfSamples.find(
+        (b) => Math.abs(b.ms - wMs) < 10 * 60 * 1000
+      );
+      out.push({
+        weight_kg: Math.round(kg * 10) / 10,
+        body_fat_pct: nearBf?.pct ?? null,
+        measured_at: rec.time,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export async function readLatestBodyFatPct(): Promise<{
   body_fat_pct: number;
   measured_at: string;
