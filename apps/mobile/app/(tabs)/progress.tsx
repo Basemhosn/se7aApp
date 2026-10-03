@@ -444,6 +444,8 @@ function BodySubtab({
 
       <WeightChangesCard latestKg={latestKg} isArabic={isArabic} />
       <BmiCard latestKg={latestKg} isArabic={isArabic} />
+      <WeeklyEnergyCard isArabic={isArabic} />
+      <ExpenditureChangesCard isArabic={isArabic} />
 
       {/* Weight trend chart */}
       <View style={styles.card}>
@@ -1076,6 +1078,250 @@ function BmiCard({
   );
 }
 
+/**
+ * Expenditure deltas (3/7/14/30/90d/All) — pairs with WeightChangesCard
+ * for a user who wants to see "am I actually burning more over
+ * time?" Pulls once from /api/expenditure/trend?days=365 and slices
+ * windows in-memory. "Delta" is (avg over last N days) minus (avg
+ * over the N days before that), so a positive number = burning more
+ * recently.
+ */
+function ExpenditureChangesCard({ isArabic }: { isArabic: boolean }) {
+  interface ExpResponse {
+    days: number;
+    activity: { day: string; active_kcal: number }[];
+    cardio: { day: string; kcal: number }[];
+  }
+  const [byDay, setByDay] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    api<ExpResponse>("/api/expenditure/trend?days=365")
+      .then((r) => {
+        const m = new Map<string, number>();
+        for (const a of r.activity) m.set(a.day, Number(a.active_kcal) || 0);
+        for (const c of r.cardio) {
+          m.set(c.day, (m.get(c.day) ?? 0) + Number(c.kcal));
+        }
+        setByDay(m);
+      })
+      .catch(() => {});
+  }, []);
+
+  const avgOverLast = (nDays: number, offsetDays = 0): number | null => {
+    if (byDay.size === 0) return null;
+    const end = Date.now() - offsetDays * 86_400_000;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < nDays; i++) {
+      const d = new Date(end - i * 86_400_000);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const v = byDay.get(key);
+      if (v != null) {
+        sum += v;
+        count++;
+      }
+    }
+    return count > 0 ? sum / count : null;
+  };
+
+  const avgAllTime = (): number | null => {
+    if (byDay.size === 0) return null;
+    const vals = Array.from(byDay.values());
+    return vals.reduce((s, x) => s + x, 0) / vals.length;
+  };
+
+  const windows: { key: string; n: number | null; label: string }[] = [
+    { key: "7d", n: 7, label: isArabic ? "7 أيام" : "7 days" },
+    { key: "14d", n: 14, label: isArabic ? "14 يوم" : "14 days" },
+    { key: "30d", n: 30, label: isArabic ? "30 يوم" : "30 days" },
+    { key: "90d", n: 90, label: isArabic ? "90 يوم" : "90 days" },
+    { key: "all", n: null, label: isArabic ? "منذ البداية" : "All time" },
+  ];
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>
+        {isArabic ? "تغيّر الحرق" : "Expenditure changes"}
+      </Text>
+      <Text style={styles.cardSub}>
+        {isArabic
+          ? "متوسط الحرق مقارنةً بالفترة السابقة"
+          : "Avg burn vs the prior equal window"}
+      </Text>
+      <View style={{ gap: 4, marginTop: 4 }}>
+        {windows.map((w) => {
+          const recent = w.n == null ? avgAllTime() : avgOverLast(w.n, 0);
+          const prior = w.n == null ? null : avgOverLast(w.n, w.n);
+          const delta =
+            recent == null || prior == null ? null : recent - prior;
+          const sign =
+            delta == null || Math.abs(delta) < 5
+              ? 0
+              : delta > 0
+                ? 1
+                : -1;
+          const tint =
+            sign === 0 ? colors.dim : sign > 0 ? colors.mint : colors.coral;
+          const label =
+            w.n == null
+              ? recent == null
+                ? isArabic ? "لا بيانات" : "No data"
+                : `${Math.round(recent)} ${isArabic ? "سعرة/يوم" : "kcal/day"}`
+              : delta == null
+                ? isArabic ? "لا بيانات" : "No data"
+                : sign === 0
+                  ? isArabic ? "بدون تغيير" : "No change"
+                  : `${delta > 0 ? "+" : ""}${Math.round(delta)} kcal`;
+          const icon =
+            w.n == null
+              ? "pulse"
+              : sign === 0
+                ? "remove"
+                : sign > 0
+                  ? "arrow-up"
+                  : "arrow-down";
+          return (
+            <View key={w.key} style={progressStyles.changeRow}>
+              <Text style={progressStyles.changeLabel}>{w.label}</Text>
+              <View style={{ flex: 1 }} />
+              <Text style={[progressStyles.changeValue, { color: tint }]}>
+                {label}
+              </Text>
+              <Ionicons name={icon} size={14} color={tint} />
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Weekly Energy stacked bars — Burned vs Consumed for a 7-day
+ * window, with a "This wk / Last wk / 2 wk / 3 wk" selector so a
+ * user can compare rolling periods. Server returns dense per-day
+ * rows so client math is just y-scale normalization.
+ */
+function WeeklyEnergyCard({ isArabic }: { isArabic: boolean }) {
+  interface EnergyResp {
+    week_offset: number;
+    days: { day: string; consumed_kcal: number; burned_kcal: number }[];
+  }
+  const [offset, setOffset] = useState(0);
+  const [data, setData] = useState<EnergyResp | null>(null);
+
+  useEffect(() => {
+    api<EnergyResp>(`/api/energy/weekly?week_offset=${offset}`)
+      .then(setData)
+      .catch(() => {});
+  }, [offset]);
+
+  const max = Math.max(
+    1,
+    ...(data?.days ?? []).map((d) =>
+      Math.max(d.consumed_kcal, d.burned_kcal)
+    )
+  );
+  const dayShort = (iso: string): string => {
+    const d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString(isArabic ? "ar" : "en-US", {
+      weekday: "short",
+    });
+  };
+
+  const totals = (data?.days ?? []).reduce(
+    (acc, d) => ({
+      consumed: acc.consumed + d.consumed_kcal,
+      burned: acc.burned + d.burned_kcal,
+    }),
+    { consumed: 0, burned: 0 }
+  );
+
+  const tabs = [
+    { label: isArabic ? "هذا الأسبوع" : "This wk", v: 0 },
+    { label: isArabic ? "الماضي" : "Last wk", v: 1 },
+    { label: isArabic ? "قبل 2" : "2 wk", v: 2 },
+    { label: isArabic ? "قبل 3" : "3 wk", v: 3 },
+  ];
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>
+        {isArabic ? "طاقة الأسبوع" : "Weekly energy"}
+      </Text>
+      <View style={progressStyles.energyTotals}>
+        <View style={progressStyles.energyTotal}>
+          <View style={[progressStyles.swatch, { backgroundColor: colors.coral }]} />
+          <Text style={progressStyles.energyTotalLabel}>
+            {isArabic ? "محروق" : "Burned"}
+          </Text>
+          <Text style={progressStyles.energyTotalValue}>
+            {Math.round(totals.burned).toLocaleString()}
+          </Text>
+        </View>
+        <View style={progressStyles.energyTotal}>
+          <View style={[progressStyles.swatch, { backgroundColor: colors.mint }]} />
+          <Text style={progressStyles.energyTotalLabel}>
+            {isArabic ? "مستهلك" : "Consumed"}
+          </Text>
+          <Text style={progressStyles.energyTotalValue}>
+            {Math.round(totals.consumed).toLocaleString()}
+          </Text>
+        </View>
+      </View>
+      <View style={progressStyles.energyChart}>
+        {(data?.days ?? []).map((d) => (
+          <View key={d.day} style={progressStyles.energyBarWrap}>
+            <View style={progressStyles.energyBarCol}>
+              <View
+                style={{
+                  width: 7,
+                  height: `${(d.burned_kcal / max) * 100}%`,
+                  backgroundColor: colors.coral,
+                  borderTopLeftRadius: 2,
+                  borderTopRightRadius: 2,
+                }}
+              />
+              <View style={{ width: 2 }} />
+              <View
+                style={{
+                  width: 7,
+                  height: `${(d.consumed_kcal / max) * 100}%`,
+                  backgroundColor: colors.mint,
+                  borderTopLeftRadius: 2,
+                  borderTopRightRadius: 2,
+                }}
+              />
+            </View>
+            <Text style={progressStyles.energyBarLabel}>{dayShort(d.day)}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={progressStyles.weekTabs}>
+        {tabs.map((tab) => (
+          <Pressable
+            key={tab.v}
+            onPress={() => setOffset(tab.v)}
+            style={[
+              progressStyles.weekTab,
+              offset === tab.v && progressStyles.weekTabOn,
+            ]}
+          >
+            <Text
+              style={[
+                progressStyles.weekTabText,
+                offset === tab.v && progressStyles.weekTabTextOn,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const progressStyles = StyleSheet.create({
   changeRow: {
     flexDirection: "row",
@@ -1141,6 +1387,81 @@ const progressStyles = StyleSheet.create({
     color: colors.dim,
     fontFamily: font.mono,
     fontSize: 9,
+  },
+  // Weekly energy chart
+  energyTotals: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    marginTop: 4,
+  },
+  energyTotal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  swatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+  },
+  energyTotalLabel: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  energyTotalValue: {
+    color: colors.ink,
+    fontFamily: font.monoBold,
+    fontSize: 11,
+    marginLeft: 2,
+  },
+  energyChart: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    height: 110,
+    marginTop: spacing.md,
+    paddingBottom: 2,
+  },
+  energyBarWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+  },
+  energyBarCol: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    height: 86,
+  },
+  energyBarLabel: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 9,
+  },
+  weekTabs: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  weekTab: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+  },
+  weekTabOn: {
+    backgroundColor: colors.gold,
+  },
+  weekTabText: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 0.8,
+  },
+  weekTabTextOn: {
+    color: colors.bg,
   },
 });
 

@@ -33,6 +33,14 @@ const prefsSchema = z.object({
   // When true, Home's daily kcal ring adds today's active energy +
   // cardio session kcal_burned on top of the onboarding target.
   add_cardio_to_target: z.boolean().optional(),
+  // Direct macro-target overrides. The onboarding POST writes these
+  // via computeTargets(); the Edit Nutrition Goals screen lets a user
+  // override them without re-running onboarding. Server clamps to
+  // plausible ranges.
+  daily_kcal_target: z.number().int().min(800).max(6000).nullable().optional(),
+  daily_protein_g: z.number().int().min(20).max(400).nullable().optional(),
+  daily_carb_g: z.number().int().min(0).max(800).nullable().optional(),
+  daily_fat_g: z.number().int().min(10).max(300).nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -72,6 +80,14 @@ export async function POST(request: Request) {
   }
   if (parsed.data.add_cardio_to_target !== undefined) {
     patch.add_cardio_to_target = parsed.data.add_cardio_to_target;
+  }
+  for (const k of [
+    "daily_kcal_target",
+    "daily_protein_g",
+    "daily_carb_g",
+    "daily_fat_g",
+  ] as const) {
+    if (parsed.data[k] !== undefined) patch[k] = parsed.data[k];
   }
   if (parsed.data.notification_prefs) {
     const { data: current } = await supabase
@@ -115,7 +131,7 @@ export async function GET(request: Request) {
   const { data } = await supabase
     .from("profiles")
     .select(
-      "notification_prefs, tz_offset_min, goal_weight_kg, city, country, add_cardio_to_target, height_cm"
+      "notification_prefs, tz_offset_min, goal_weight_kg, city, country, add_cardio_to_target, height_cm, daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g"
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -128,5 +144,9 @@ export async function GET(request: Request) {
     country: data?.country ?? null,
     add_cardio_to_target: data?.add_cardio_to_target ?? false,
     height_cm: data?.height_cm ?? null,
+    daily_kcal_target: data?.daily_kcal_target ?? null,
+    daily_protein_g: data?.daily_protein_g ?? null,
+    daily_carb_g: data?.daily_carb_g ?? null,
+    daily_fat_g: data?.daily_fat_g ?? null,
   });
 }

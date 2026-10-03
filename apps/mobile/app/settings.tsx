@@ -457,6 +457,10 @@ export default function Settings() {
           onPress={() => router.push("/onboarding")}
         />
         <RowLink
+          label={isArabic ? "عدّل أهداف التغذية" : "Edit nutrition goals"}
+          onPress={() => router.push("/edit-goals" as never)}
+        />
+        <RowLink
           label={t("language.title")}
           value={isArabic ? "العربية" : "English"}
           onPress={() => router.push("/language")}
