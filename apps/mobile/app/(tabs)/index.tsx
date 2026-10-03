@@ -36,7 +36,11 @@ import { useEntitlement } from "@/lib/EntitlementContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { rescheduleWeeklyRituals } from "@/lib/weeklyRitualScheduler";
 import { useNotificationDeepLinks } from "@/lib/useNotificationDeepLinks";
-import { syncHealthNow, useHealthSync } from "@/lib/useHealthSync";
+import {
+  syncHealthNow,
+  syncTodayHealthNow,
+  useHealthSync,
+} from "@/lib/useHealthSync";
 import { MealDetailSheet } from "@/components/MealDetailSheet";
 import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerDayResponse, MealItemRow, MealSlot, Profile } from "@/types";
@@ -510,13 +514,9 @@ export default function Home() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              // Only await load() — the primary ledger refresh is
-              // what the user actually sees. Everything else runs in
-              // the background so the spinner drops in <500ms instead
-              // of waiting on external APIs (Whoop/Oura can take
-              // 5-30s) and multi-hundred-sample HK reads. Once each
-              // background sync completes, it triggers a silent
-              // load() so new data folds in without a second pull.
+              // Kick heavy syncs in the background — each silently
+              // reloads once done, folding fresh data in without
+              // blocking the spinner.
               if (user?.id) {
                 syncHealthNow(user.id, { force: true })
                   .then(() => load())
@@ -529,6 +529,12 @@ export default function Home() {
                 .then(() => load())
                 .catch(() => {});
               void reconcileScansFromServer();
+              // AWAITED: today-only HK read (~200ms) + ledger reload.
+              // One extra round-trip means today's step count already
+              // matches Health.app the instant the spinner drops.
+              if (user?.id) {
+                await syncTodayHealthNow(user.id).catch(() => {});
+              }
               await load();
               setRefreshing(false);
             }}

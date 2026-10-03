@@ -11,7 +11,11 @@ const LAST_SYNC_KEY = "se7a_hk_last_sync";
 const LAST_WORKOUT_SYNC_KEY = "se7a_hk_last_workout_sync";
 const LAST_SLEEP_SYNC_KEY = "se7a_hc_last_sleep_sync";
 const WEIGHT_HISTORY_DONE_KEY = "se7a_hk_weight_history_done";
-const ACTIVITY_HISTORY_DONE_KEY = "se7a_hk_activity_history_done";
+// _v2 bump: v1 ran the HK daily-step read without period:1440, so the
+// backfill stored just the final hour of each past day. Bumping the
+// key re-runs the backfill with the correct code; the server upsert
+// overwrites the wrong rows cleanly.
+const ACTIVITY_HISTORY_DONE_KEY = "se7a_hk_activity_history_done_v2";
 const RECENT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
 const BACKFILL_MS = 90 * 86_400_000; // 90 days on first connect
 
@@ -81,6 +85,23 @@ export function useHealthSync(userId: string | undefined) {
 }
 
 type Source = "healthkit" | "health_connect";
+
+/**
+ * Fast sync for just today's steps + active energy. Called from
+ * Home's pull-to-refresh BEFORE the spinner drops so today's step
+ * count matches the Health app immediately. One HK aggregate read
+ * (~200ms) + one upsert. Heavier syncs (history, workouts, sleep,
+ * external integrations) continue to run in the background.
+ */
+export async function syncTodayHealthNow(_userId: string): Promise<void> {
+  const source: Source = Platform.OS === "ios" ? "healthkit" : "health_connect";
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return;
+  try {
+    await syncTodayActivity(source);
+  } catch {
+    /* silent */
+  }
+}
 
 /**
  * Trigger all sync paths for the current platform. Called from

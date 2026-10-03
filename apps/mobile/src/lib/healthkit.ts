@@ -201,14 +201,21 @@ export function readActivityByDaySince(
   sinceIso: string
 ): Promise<DailyActivity[]> {
   if (Platform.OS !== "ios") return Promise.resolve([]);
+  // `period: 1440` = 24h buckets. Without this, getDailyStepCountSamples
+  // defaults to hourly buckets, which caused the previous backfill to
+  // overwrite each day's total with only the last-hour slice — the
+  // reason past-day step counts came out way below what Health shows.
   const opts: HealthInputOptions = {
     startDate: sinceIso,
     endDate: new Date().toISOString(),
     ascending: true,
     includeManuallyAdded: true,
+    period: 1440,
   };
   return new Promise((resolve) => {
-    // Per-day step counts (HK bucket API).
+    // Per-day step counts (HK bucket API). HKStatisticsCollectionQuery
+    // under the hood dedupes across sources (iPhone + Apple Watch), so
+    // the value already matches what Health.app shows for the day.
     AppleHealthKit.getDailyStepCountSamples(opts, (stepsErr, stepsRows) => {
       const stepsByDay = new Map<string, number>();
       if (!stepsErr && stepsRows) {
