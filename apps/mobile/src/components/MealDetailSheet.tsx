@@ -103,6 +103,7 @@ export function MealDetailSheet({
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           {item ? (
             <ScrollView
+              style={{ flex: 1 }}
               contentContainerStyle={styles.content}
               showsVerticalScrollIndicator={false}
             >
