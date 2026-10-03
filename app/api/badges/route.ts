@@ -126,6 +126,9 @@ async function buildSnapshot(
   supabase: SupabaseClient,
   userId: string
 ): Promise<BadgeSnapshot> {
+  const since90dIso = new Date(
+    Date.now() - 90 * 86_400_000
+  ).toISOString();
   const [
     { count: mealCount },
     { data: firstMealRow },
@@ -135,6 +138,10 @@ async function buildSnapshot(
     { data: streakSample },
     { data: report },
     { data: profile },
+    { data: waterRows },
+    { data: weightRows },
+    { count: referralCount },
+    { data: midnightRow },
   ] = await Promise.all([
     supabase
       .from("meal_items")
@@ -163,10 +170,11 @@ async function buildSnapshot(
       .eq("user_id", userId),
     supabase
       .from("meal_items")
-      .select("eaten_at")
+      .select("eaten_at, kcal_low, kcal_high")
       .eq("user_id", userId)
+      .gte("eaten_at", since90dIso)
       .order("eaten_at", { ascending: false })
-      .limit(400),
+      .limit(2000),
     supabase
       .from("reports")
       .select("id, generated_at, duration_days")
@@ -176,9 +184,35 @@ async function buildSnapshot(
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("onboarded_at")
+      .select("onboarded_at, daily_kcal_target, tz_offset_min")
       .eq("user_id", userId)
       .maybeSingle(),
+    supabase
+      .from("water_logs")
+      .select("logged_at")
+      .eq("user_id", userId)
+      .gte("logged_at", since90dIso)
+      .limit(2000),
+    supabase
+      .from("weight_logs")
+      .select("weight_kg, logged_at")
+      .eq("user_id", userId)
+      .order("logged_at", { ascending: true })
+      .limit(500),
+    supabase
+      .from("referral_rewards")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_user_id", userId),
+    supabase
+      .from("meal_items")
+      .select("eaten_at")
+      .eq("user_id", userId)
+      .filter(
+        "eaten_at",
+        "gte",
+        new Date(Date.now() - 365 * 86_400_000).toISOString()
+      )
+      .limit(2000),
   ]);
 
   const sources = new Set(
@@ -188,9 +222,76 @@ async function buildSnapshot(
   // Simple streak: walk backwards day-by-day from today (server UTC —
   // MVP; matches /api/streaks' UTC-first approach). Days with ≥ 1
   // meal_item count as active.
-  const streakDays = computeStreak(
-    (streakSample ?? []).map((r: { eaten_at: string }) => r.eaten_at)
+  const mealsSample = (streakSample ?? []) as {
+    eaten_at: string;
+    kcal_low: number;
+    kcal_high: number;
+  }[];
+  const streakDays = computeStreak(mealsSample.map((r) => r.eaten_at));
+
+  // Local-day bucketing uses the user's stored tz_offset_min when
+  // available so "last night" lands on the right day for a Dubai
+  // user; falls back to UTC when the profile hasn't been onboarded.
+  const tzOffsetMin = profile?.tz_offset_min ?? 0;
+  const toLocalDay = (iso: string) => {
+    const ms = new Date(iso).getTime() + tzOffsetMin * 60_000;
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  };
+
+  // Water log days (unique local days)
+  const waterLogDays = Array.from(
+    new Set(
+      ((waterRows ?? []) as { logged_at: string }[]).map((r) =>
+        toLocalDay(r.logged_at)
+      )
+    )
   );
+
+  // Kcal goal hit days: midpoint of (low, high) daily sum within ±10%
+  // of profile's daily_kcal_target. Only evaluated when a target is
+  // set (user has completed onboarding).
+  const kcalGoalHitDays: string[] = [];
+  const target = profile?.daily_kcal_target ?? null;
+  if (target && target > 0) {
+    const byDay = new Map<string, { low: number; high: number }>();
+    for (const r of mealsSample) {
+      const day = toLocalDay(r.eaten_at);
+      const bucket = byDay.get(day) ?? { low: 0, high: 0 };
+      bucket.low += Number(r.kcal_low) || 0;
+      bucket.high += Number(r.kcal_high) || 0;
+      byDay.set(day, bucket);
+    }
+    const lo = target * 0.9;
+    const hi = target * 1.1;
+    for (const [day, b] of byDay) {
+      const mid = (b.low + b.high) / 2;
+      if (mid >= lo && mid <= hi) kcalGoalHitDays.push(day);
+    }
+  }
+
+  // Max meals in a single local day (clean_sweep)
+  const perDayCounts = new Map<string, number>();
+  for (const r of mealsSample) {
+    const day = toLocalDay(r.eaten_at);
+    perDayCounts.set(day, (perDayCounts.get(day) ?? 0) + 1);
+  }
+  const maxMealsInADay = perDayCounts.size === 0
+    ? 0
+    : Math.max(...perDayCounts.values());
+
+  // Weight tracking: starting = earliest, current = latest
+  const weights = (weightRows ?? []) as { weight_kg: number }[];
+  const startingWeight = weights[0]?.weight_kg ?? null;
+  const currentWeight = weights[weights.length - 1]?.weight_kg ?? null;
+
+  // Night-owl check — any meal logged with eaten_at local hour in [0, 5)
+  const midnightMeals = (midnightRow ?? []) as { eaten_at: string }[];
+  const hasLogAfterMidnight = midnightMeals.some((r) => {
+    const ms = new Date(r.eaten_at).getTime() + tzOffsetMin * 60_000;
+    const h = new Date(ms).getUTCHours();
+    return h >= 0 && h < 5;
+  });
 
   let planCheckpoints: number[] = [];
   let planWeeks: number | null = null;
@@ -225,6 +326,13 @@ async function buildSnapshot(
     active_plan_total_weeks: planWeeks,
     active_plan_checkpoints_met: planCheckpoints,
     days_since_onboarded: daysSinceOnboarded,
+    water_log_days: waterLogDays,
+    kcal_goal_hit_days: kcalGoalHitDays,
+    starting_weight_kg: startingWeight,
+    current_weight_kg: currentWeight,
+    referral_count: referralCount ?? 0,
+    has_log_after_midnight: hasLogAfterMidnight,
+    max_meals_in_a_day: maxMealsInADay,
   };
 }
 

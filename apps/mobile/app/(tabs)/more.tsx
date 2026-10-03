@@ -339,6 +339,12 @@ export default function More() {
           onPress={() => router.push("/calendar")}
         />
         <MoreRow
+          icon="trophy-outline"
+          label={isArabic ? "الإنجازات" : "Achievements"}
+          hint={isArabic ? "40 شارة قابلة للفتح" : "40 badges to unlock"}
+          onPress={() => router.push("/achievements" as never)}
+        />
+        <MoreRow
           icon="body-outline"
           label={isArabic ? "الجسم" : "Body"}
           hint={

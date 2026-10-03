@@ -2145,6 +2145,18 @@ function StreakSheet({
               </Text>
             </Pressable>
           ) : null}
+          <Pressable
+            style={styles.sheetBadgesBtn}
+            onPress={() => {
+              onClose();
+              router.push("/achievements" as never);
+            }}
+          >
+            <Ionicons name="trophy" size={14} color={colors.gold} />
+            <Text style={styles.sheetBadgesText}>
+              {isArabic ? "عرض الإنجازات" : "View achievements"}
+            </Text>
+          </Pressable>
           <Pressable style={styles.sheetCloseBtn} onPress={onClose}>
             <Text style={styles.sheetCloseText}>
               {isArabic ? "إغلاق" : "Close"}
@@ -3159,6 +3171,23 @@ const styles = StyleSheet.create({
   sheetCloseText: {
     color: colors.dim,
     fontFamily: font.body,
+    fontSize: 13,
+  },
+  sheetBadgesBtn: {
+    marginTop: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold + "18",
+    borderWidth: 1,
+    borderColor: colors.gold + "55",
+  },
+  sheetBadgesText: {
+    color: colors.gold,
+    fontFamily: font.bodyBold,
     fontSize: 13,
   },
   // Anniversary modal

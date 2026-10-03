@@ -24,7 +24,15 @@
     "g": "g",
     "kg": "kg",
     "min": "min",
-    "day_names": ["M", "T", "W", "T", "F", "S", "S"],
+    "day_names": [
+      "M",
+      "T",
+      "W",
+      "T",
+      "F",
+      "S",
+      "S"
+    ],
     "meal_slot": {
       "breakfast": "breakfast",
       "lunch": "lunch",
@@ -959,6 +967,196 @@
       "benchmark_save": "Save",
       "benchmark_update": "Update"
     },
-    "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    "days": [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+    ]
+  },
+  "achievements": {
+    "title": "Achievements",
+    "earned_count": "{{earned}} of {{total}} earned",
+    "locked": "Locked",
+    "earned_on": "Earned {{date}}",
+    "category_firsts": "First steps",
+    "category_streaks": "Streaks",
+    "category_meals": "Meal logging",
+    "category_water": "Hydration",
+    "category_goals": "Daily goals",
+    "category_weight": "Weight milestones",
+    "category_workouts": "Workouts",
+    "category_referrals": "Referrals",
+    "category_fun": "Fun",
+    "category_anniversaries": "Anniversaries",
+    "tier_bronze": "Bronze",
+    "tier_silver": "Silver",
+    "tier_gold": "Gold",
+    "tier_platinum": "Platinum",
+    "catalog": {
+      "first_meal": {
+        "t": "First Bite",
+        "d": "Log your first meal"
+      },
+      "first_plate_scan": {
+        "t": "Snap Judgement",
+        "d": "Scan your first plate"
+      },
+      "first_menu_scan": {
+        "t": "Menu Reader",
+        "d": "Scan a restaurant menu"
+      },
+      "first_barcode": {
+        "t": "Beep Beep",
+        "d": "Scan your first barcode"
+      },
+      "first_voice_log": {
+        "t": "Say Cheese",
+        "d": "Log a meal with your voice"
+      },
+      "first_weighin": {
+        "t": "On the Scale",
+        "d": "Log your first weigh-in"
+      },
+      "first_water": {
+        "t": "Hydrated",
+        "d": "Log water once"
+      },
+      "first_workout": {
+        "t": "First Rep",
+        "d": "Log your first workout"
+      },
+      "streak_3d": {
+        "t": "Rookie",
+        "d": "3-day logging streak"
+      },
+      "streak_7d": {
+        "t": "Week Warrior",
+        "d": "7-day logging streak"
+      },
+      "streak_30d": {
+        "t": "Getting Serious",
+        "d": "30-day logging streak"
+      },
+      "streak_100d": {
+        "t": "Locked In",
+        "d": "100-day logging streak"
+      },
+      "streak_365d": {
+        "t": "No Days Off",
+        "d": "365-day logging streak"
+      },
+      "logged_10": {
+        "t": "Warming Up",
+        "d": "Log 10 meals total"
+      },
+      "logged_50": {
+        "t": "Half a Hundred",
+        "d": "Log 50 meals total"
+      },
+      "logged_100": {
+        "t": "Centurion",
+        "d": "Log 100 meals total"
+      },
+      "logged_500": {
+        "t": "Logfather",
+        "d": "Log 500 meals total"
+      },
+      "logged_1000": {
+        "t": "Immortal",
+        "d": "Log 1,000 meals total"
+      },
+      "clean_sweep": {
+        "t": "Clean Sweep",
+        "d": "Log 3 meals in a single day"
+      },
+      "water_streak_3d": {
+        "t": "Sippin’",
+        "d": "Log water 3 days in a row"
+      },
+      "water_streak_10d": {
+        "t": "Aquaholic",
+        "d": "Log water 10 days in a row"
+      },
+      "kcal_goal_hit_1": {
+        "t": "Bullseye",
+        "d": "Land your daily kcal target"
+      },
+      "kcal_goal_streak_7d": {
+        "t": "Loyalty",
+        "d": "Hit kcal target 7 days in a row"
+      },
+      "kcal_goal_streak_30d": {
+        "t": "Devoted",
+        "d": "Hit kcal target 30 days in a row"
+      },
+      "weight_lost_1kg": {
+        "t": "First Drop",
+        "d": "Lose your first kilogram"
+      },
+      "weight_lost_5kg": {
+        "t": "Scale Shifter",
+        "d": "Lose 5 kilograms"
+      },
+      "weight_lost_10kg": {
+        "t": "Transformed",
+        "d": "Lose 10 kilograms"
+      },
+      "weight_lost_25kg": {
+        "t": "Final Form",
+        "d": "Lose 25 kilograms"
+      },
+      "workouts_10": {
+        "t": "Sweat Equity",
+        "d": "Log 10 workouts"
+      },
+      "workouts_50": {
+        "t": "Iron Will",
+        "d": "Log 50 workouts"
+      },
+      "plan_week1_complete": {
+        "t": "Week One",
+        "d": "Finish the first week of your plan"
+      },
+      "plan_month1_complete": {
+        "t": "Full Month",
+        "d": "Finish a full month of your plan"
+      },
+      "plan_finished": {
+        "t": "Plan Finisher",
+        "d": "Complete your entire plan"
+      },
+      "referral_1": {
+        "t": "Helping Hand",
+        "d": "Invite your first friend"
+      },
+      "referral_3": {
+        "t": "Influencer",
+        "d": "Invite 3 friends"
+      },
+      "referral_10": {
+        "t": "Cult Leader",
+        "d": "Invite 10 friends"
+      },
+      "log_after_midnight": {
+        "t": "Night Owl",
+        "d": "Log a meal after midnight"
+      },
+      "anniv_30d": {
+        "t": "30 Days with SE7A",
+        "d": "A full month on the app"
+      },
+      "anniv_60d": {
+        "t": "60 Days with SE7A",
+        "d": "Two full months on the app"
+      },
+      "anniv_90d": {
+        "t": "90 Days with SE7A",
+        "d": "Three full months on the app"
+      }
+    }
   }
 }
