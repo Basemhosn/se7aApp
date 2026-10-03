@@ -14,6 +14,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { openHealthConnectSettings } from "react-native-health-connect";
 import {
   readLatestBodyFatPct,
@@ -336,6 +338,54 @@ export default function Settings() {
       );
     }
     setExporting(false);
+  };
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const doPdfExport = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const base =
+        process.env.EXPO_PUBLIC_API_BASE ?? "https://se7a.app";
+      const today = new Date().toISOString().slice(0, 10);
+      const target = `${FileSystem.documentDirectory ?? FileSystem.cacheDirectory}se7a-progress-${today}.pdf`;
+      // downloadAsync writes to disk + handles auth header in one go.
+      const res = await FileSystem.downloadAsync(
+        `${base}/api/reports/pdf`,
+        target,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.status !== 200) {
+        throw new Error(`Server returned ${res.status}`);
+      }
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(res.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: isArabic
+            ? "تقرير تقدّم SE7A"
+            : "SE7A progress report",
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert(
+          isArabic ? "تم الحفظ" : "Saved",
+          isArabic
+            ? `حُفظ في:\n${res.uri}`
+            : `Saved to:\n${res.uri}`
+        );
+      }
+      track("pdf_exported", {});
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "تعذّر التصدير" : "Export failed",
+        (e as Error).message
+      );
+    }
+    setExportingPdf(false);
   };
 
   const confirmExport = () => {
@@ -825,6 +875,18 @@ export default function Settings() {
       </Section>
 
       <Section title={isArabic ? "قانوني" : "Legal"}>
+        <RowLink
+          label={
+            exportingPdf
+              ? isArabic
+                ? "جارٍ التحضير…"
+                : "Preparing…"
+              : isArabic
+                ? "صدّر تقرير PDF"
+                : "Export PDF progress report"
+          }
+          onPress={doPdfExport}
+        />
         <RowLink
           label={
             exporting

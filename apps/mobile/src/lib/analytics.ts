@@ -85,4 +85,5 @@ export type EventName =
   | "account_deleted"
   | "language_changed"
   | "profile_edited"
-  | "data_exported";
+  | "data_exported"
+  | "pdf_exported";
