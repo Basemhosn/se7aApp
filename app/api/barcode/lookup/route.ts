@@ -41,6 +41,37 @@ export async function GET(request: Request) {
   const limit = await checkBarcodeLimits(user.id);
   if (!limit.ok) return rateLimitedResponse(limit);
 
+  // 0. User's personal pantry — their own manual entries win over
+  // the shared cache. Someone who added "Luna cheddar — Al Marai"
+  // for a Gulf product trusts their label-read over whatever OFF
+  // might eventually crowdsource.
+  const { data: pantry } = await supabase
+    .from("user_pantry")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("code", code)
+    .maybeSingle();
+  if (pantry) {
+    return NextResponse.json({
+      product: {
+        code: pantry.code,
+        name: pantry.name,
+        brand: pantry.brand,
+        image_url: null,
+        serving_size_g: pantry.serving_size_g,
+        per_100g: {
+          kcal: Number(pantry.kcal_per_100g),
+          protein_g: Number(pantry.protein_g_per_100g),
+          carb_g: Number(pantry.carb_g_per_100g),
+          fat_g: Number(pantry.fat_g_per_100g),
+        },
+        confidence: "high",
+        source: "user_pantry",
+      },
+      source: "user_pantry",
+    });
+  }
+
   // 1. Cache
   const { data: cached } = await supabase
     .from("barcode_products")

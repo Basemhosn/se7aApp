@@ -28,7 +28,7 @@ export interface NormalizedProduct {
     fat_g: number;
   };
   confidence: "low" | "medium" | "high";
-  source: "off";
+  source: "off" | "user_pantry";
 }
 
 interface OffNutriments {
