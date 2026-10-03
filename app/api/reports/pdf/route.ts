@@ -176,7 +176,10 @@ export async function GET(request: Request) {
 
   let y = 790;
 
-  // Header
+  // Header. SE7A is Helvetica-Bold at 24pt which measures ~55pt
+  // wide, so "Progress Report" needs to start past x: 110 to leave
+  // a clear gap. Previous x: 90 produced an "SE7Aorgress Report"
+  // overlap.
   page.drawText("SE7A", {
     x: 40,
     y,
@@ -185,7 +188,7 @@ export async function GET(request: Request) {
     color: gold,
   });
   page.drawText("Progress Report", {
-    x: 90,
+    x: 115,
     y,
     size: 18,
     font: regular,

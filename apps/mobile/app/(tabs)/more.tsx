@@ -31,14 +31,6 @@ interface CycleStatus {
   prefs: { enabled: boolean };
 }
 
-interface BadgeShelfItem {
-  key: string;
-  icon: string;
-  tier: "bronze" | "silver" | "gold" | "platinum";
-  earned_at: string | null;
-  seen: boolean;
-}
-
 type IconName = keyof typeof Ionicons.glyphMap;
 
 /**
@@ -64,8 +56,6 @@ export default function More() {
     week_index: number;
     total_weeks: number;
   } | null>(null);
-  const [badges, setBadges] = useState<BadgeShelfItem[]>([]);
-
   const load = useCallback(async () => {
     if (!user) return;
     const tzOffsetMin = -new Date().getTimezoneOffset();
@@ -75,7 +65,6 @@ export default function More() {
       trendRes,
       cycleRes,
       reportRes,
-      badgesRes,
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -94,9 +83,6 @@ export default function More() {
           checkpoints_met?: number[];
         } | null;
       }>("/api/reports/current").catch(() => ({ report: null })),
-      api<{ badges: BadgeShelfItem[] }>("/api/badges").catch(() => ({
-        badges: [] as BadgeShelfItem[],
-      })),
     ]);
     setProfile(profileData as Profile | null);
     setStreak(streakRes);
@@ -111,7 +97,6 @@ export default function More() {
     }
     setCycleEnabled(!!cycleRes?.prefs.enabled);
     setReportMeta(reportRes.report);
-    setBadges(badgesRes.badges ?? []);
   }, [user]);
 
   useFocusEffect(
@@ -226,59 +211,6 @@ export default function More() {
           </View>
           <Text style={styles.chevGold}>→</Text>
         </Pressable>
-
-        {/* ── Badges shelf ─────────────────────────────────────────── */}
-        {badges.length > 0 && (
-          <>
-            <SectionHeader
-              label={
-                isArabic
-                  ? `الإنجازات · ${badges.filter((b) => b.earned_at).length}`
-                  : `ACHIEVEMENTS · ${badges.filter((b) => b.earned_at).length}`
-              }
-              isArabic={isArabic}
-            />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.badgeShelf}
-            >
-              {badges.map((b) => {
-                const earned = !!b.earned_at;
-                const tint =
-                  b.tier === "gold"
-                    ? colors.gold
-                    : b.tier === "platinum"
-                      ? colors.mint
-                      : b.tier === "silver"
-                        ? colors.ink
-                        : colors.coral;
-                // Two-letter mark derived from the badge key so every
-                // achievement reads as a small typographic token, not
-                // a game icon. Tier only tints the dot when earned.
-                const mark = badgeMark(b.key);
-                return (
-                  <View
-                    key={b.key}
-                    style={[
-                      styles.badgeItem,
-                      earned && { borderColor: tint },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.badgeItemMark,
-                        { color: earned ? tint : colors.line },
-                      ]}
-                    >
-                      {mark}
-                    </Text>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </>
-        )}
 
         {/* ── Habits ───────────────────────────────────────────────── */}
         <SectionHeader
@@ -395,29 +327,6 @@ export default function More() {
   );
 }
 
-/**
- * Turns a badge_key into a short typographic mark for the shelf.
- * Rules: pick a domain letter + a number/tier suffix so every mark
- * reads deterministically ("S7" streak-7-day, "P1" plan-week-1, etc.)
- * without needing per-badge design.
- */
-function badgeMark(key: string): string {
-  if (key.startsWith("streak_")) return "S" + key.replace("streak_", "").replace("d", "");
-  if (key.startsWith("anniv_")) return "D" + key.replace("anniv_", "").replace("d", "");
-  if (key.startsWith("plan_week")) return "W1";
-  if (key === "plan_month1_complete") return "M1";
-  if (key === "plan_finished") return "P✓";
-  if (key === "logged_100") return "L2";
-  if (key === "logged_1000") return "L3";
-  if (key === "workouts_10") return "W2";
-  if (key.startsWith("first_")) {
-    const rest = key.replace("first_", "");
-    return "1·" + rest[0]!.toUpperCase();
-  }
-  // Fallback: first two letters of the key.
-  return key.slice(0, 2).toUpperCase();
-}
-
 function SectionHeader({
   label,
   isArabic: _isArabic,
@@ -530,26 +439,6 @@ const styles = StyleSheet.create({
     fontFamily: font.displayBold,
     fontSize: 16,
     color: colors.gold,
-  },
-  badgeShelf: {
-    gap: spacing.xs,
-    paddingHorizontal: 2,
-    paddingVertical: spacing.xs,
-  },
-  badgeItem: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: "transparent",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeItemMark: {
-    fontFamily: font.mono,
-    fontSize: 11,
-    letterSpacing: 0.4,
   },
   reportFeatured: {
     flexDirection: "row",
