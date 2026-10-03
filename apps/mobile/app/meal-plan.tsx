@@ -148,6 +148,44 @@ export default function MealPlan() {
     setGenerating(false);
   };
 
+  const [regenKey, setRegenKey] = useState<string | null>(null);
+
+  const regenerateMeal = (dayOfWeek: number, slot: Slot) => {
+    const key = `${dayOfWeek}-${slot}`;
+    Alert.alert(
+      isArabic ? "اقترح بديل؟" : "Suggest an alternative?",
+      isArabic
+        ? "سنولّد وجبة بديلة بنفس السعرات والماكروز تقريباً. قد يستغرق الأمر ١٠-١٥ ثانية."
+        : "We'll generate an alternative meal matching the same macro budget. Takes 10-15s.",
+      [
+        { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+        {
+          text: isArabic ? "ولّد" : "Regenerate",
+          onPress: async () => {
+            setRegenKey(key);
+            try {
+              await api("/api/meal-plan/regenerate-meal", {
+                method: "POST",
+                body: JSON.stringify({
+                  week_start: weekStart,
+                  day_of_week: dayOfWeek,
+                  slot,
+                }),
+              });
+              await load();
+            } catch (e) {
+              Alert.alert(
+                isArabic ? "لم ينجح" : "Couldn't regenerate",
+                (e as Error).message
+              );
+            }
+            setRegenKey(null);
+          },
+        },
+      ]
+    );
+  };
+
   const logMeal = async (dayOfWeek: number, slot: Slot) => {
     const key = `${dayOfWeek}-${slot}`;
     setLoggingKey(key);
@@ -292,8 +330,12 @@ export default function MealPlan() {
                       meta={meta}
                       logged={logged}
                       logging={loggingKey === key}
+                      regenerating={regenKey === key}
                       isArabic={isArabic}
                       onLog={() => logMeal(day.day_of_week, meal.slot)}
+                      onRegenerate={() =>
+                        regenerateMeal(day.day_of_week, meal.slot)
+                      }
                     />
                   );
                 })}
@@ -347,15 +389,19 @@ function MealCard({
   meta,
   logged,
   logging,
+  regenerating,
   isArabic,
   onLog,
+  onRegenerate,
 }: {
   meal: PlannedMeal;
   meta: (typeof SLOT_META)[Slot];
   logged: boolean;
   logging: boolean;
+  regenerating: boolean;
   isArabic: boolean;
   onLog: () => void;
+  onRegenerate: () => void;
 }) {
   const photoUrl = useFoodImage(meal.name);
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -400,21 +446,40 @@ function MealCard({
             ✓ {isArabic ? "مسجل" : "logged"}
           </Text>
         ) : (
-          <Pressable
-            onPress={onLog}
-            disabled={logging}
-            style={styles.logBtn}
-          >
-            <Text style={styles.logBtnLabel}>
-              {logging
-                ? isArabic
-                  ? "جارٍ التسجيل…"
-                  : "Logging…"
-                : isArabic
-                  ? "سجّل الأكلة"
-                  : "Mark as eaten"}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <Pressable
+              onPress={onLog}
+              disabled={logging || regenerating}
+              style={[styles.logBtn, { flex: 1 }]}
+            >
+              <Text style={styles.logBtnLabel}>
+                {logging
+                  ? isArabic
+                    ? "جارٍ التسجيل…"
+                    : "Logging…"
+                  : isArabic
+                    ? "سجّل الأكلة"
+                    : "Mark as eaten"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onRegenerate}
+              disabled={logging || regenerating}
+              style={styles.regenBtn}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isArabic
+                  ? "اقترح وجبة بديلة"
+                  : "Suggest an alternative meal"
+              }
+            >
+              <Ionicons
+                name={regenerating ? "ellipsis-horizontal" : "refresh"}
+                size={16}
+                color={colors.gold}
+              />
+            </Pressable>
+          </View>
         )}
       </View>
     </View>
@@ -601,6 +666,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: "rgba(246,183,60,0.10)",
+  },
+  regenBtn: {
+    marginTop: spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.panel2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   logBtnLabel: {
     fontFamily: font.mono,
