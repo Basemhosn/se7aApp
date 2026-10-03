@@ -802,6 +802,24 @@ export default function Settings() {
         </Text>
       </View>
 
+      <Section title={isArabic ? "تابعنا" : "Follow us"}>
+        <RowLink
+          label="Instagram"
+          onPress={() => Linking.openURL("https://instagram.com/se7a.app")}
+          external
+        />
+        <RowLink
+          label="TikTok"
+          onPress={() => Linking.openURL("https://tiktok.com/@se7a.app")}
+          external
+        />
+        <RowLink
+          label="X"
+          onPress={() => Linking.openURL("https://x.com/se7a_app")}
+          external
+        />
+      </Section>
+
       <Section title={isArabic ? "قانوني" : "Legal"}>
         <RowLink
           label={
@@ -823,6 +841,15 @@ export default function Settings() {
         <RowLink
           label={isArabic ? "سياسة الخصوصية" : "Privacy Policy"}
           onPress={openPrivacy}
+          external
+        />
+        <RowLink
+          label={isArabic ? "اقترح ميزة" : "Request a feature"}
+          onPress={() =>
+            Linking.openURL(
+              "mailto:hello@se7a.app?subject=SE7A%20feature%20request"
+            )
+          }
           external
         />
         <RowLink

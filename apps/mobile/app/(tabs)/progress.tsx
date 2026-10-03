@@ -442,6 +442,9 @@ function BodySubtab({
         </View>
       </View>
 
+      <WeightChangesCard latestKg={latestKg} isArabic={isArabic} />
+      <BmiCard latestKg={latestKg} isArabic={isArabic} />
+
       {/* Weight trend chart */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("progress.weight_trend")}</Text>
@@ -881,6 +884,265 @@ const TOP_MACRO_META: Record<
   carb: { labelKey: "progress_cards.top_foods.macro_carbs", tint: colors.coral },
   fat: { labelKey: "progress_cards.top_foods.macro_fat", tint: "#8b7dd6" },
 };
+
+/**
+ * Compact table of weight deltas across common lookback windows
+ * (7/14/30/90/All). Mirrors the Cal AI "Weight Changes" surface —
+ * fast way to see "how much have I actually moved in the last month?"
+ * without reading a trend chart. Fetches a 365d trend once; windows
+ * slice that in memory.
+ */
+function WeightChangesCard({
+  latestKg,
+  isArabic,
+}: {
+  latestKg: number | null;
+  isArabic: boolean;
+}) {
+  const [points, setPoints] = useState<TrendResponse["points"]>([]);
+
+  useEffect(() => {
+    api<TrendResponse>("/api/weight/trend?days=365")
+      .then((r) => setPoints(r.points))
+      .catch(() => {});
+  }, []);
+
+  const windows: { key: string; days: number | null; label: string }[] = [
+    { key: "7d", days: 7, label: isArabic ? "7 أيام" : "7 days" },
+    { key: "14d", days: 14, label: isArabic ? "14 يوم" : "14 days" },
+    { key: "30d", days: 30, label: isArabic ? "30 يوم" : "30 days" },
+    { key: "90d", days: 90, label: isArabic ? "90 يوم" : "90 days" },
+    { key: "all", days: null, label: isArabic ? "منذ البداية" : "All time" },
+  ];
+
+  const deltaFor = (daysBack: number | null): number | null => {
+    if (points.length === 0 || latestKg == null) return null;
+    if (daysBack === null) {
+      // All-time: earliest point in the 365d window
+      return latestKg - points[0]!.weight_kg;
+    }
+    const cutoff = Date.now() - daysBack * 86_400_000;
+    // Closest point whose logged_at is ≤ cutoff (walk forward from
+    // oldest; stop at the one just before the cutoff). If every
+    // sample is newer than the cutoff, use the earliest.
+    let baseline = points[0]!;
+    for (const p of points) {
+      if (new Date(p.logged_at).getTime() > cutoff) break;
+      baseline = p;
+    }
+    return latestKg - baseline.weight_kg;
+  };
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>
+        {isArabic ? "تغيّر الوزن" : "Weight changes"}
+      </Text>
+      <View style={{ gap: 4 }}>
+        {windows.map((w) => {
+          const delta = deltaFor(w.days);
+          const sign = delta == null || Math.abs(delta) < 0.05
+            ? 0
+            : delta > 0
+              ? 1
+              : -1;
+          const tint =
+            sign === 0 ? colors.dim : sign > 0 ? colors.coral : colors.mint;
+          const label =
+            delta == null
+              ? isArabic
+                ? "لا بيانات"
+                : "No data"
+              : sign === 0
+                ? isArabic
+                  ? "بدون تغيير"
+                  : "No change"
+                : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} kg`;
+          const icon =
+            sign === 0 ? "remove" : sign > 0 ? "arrow-up" : "arrow-down";
+          return (
+            <View key={w.key} style={progressStyles.changeRow}>
+              <Text style={progressStyles.changeLabel}>{w.label}</Text>
+              <View style={{ flex: 1 }} />
+              <Text style={[progressStyles.changeValue, { color: tint }]}>
+                {label}
+              </Text>
+              <Ionicons name={icon} size={14} color={tint} />
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * BMI meter — colored band (Underweight / Healthy / Overweight /
+ * Obese) with a marker at the user's current BMI. Needs height from
+ * the profile; renders a prompt if the user hasn't finished
+ * onboarding yet or weight is missing.
+ */
+function BmiCard({
+  latestKg,
+  isArabic,
+}: {
+  latestKg: number | null;
+  isArabic: boolean;
+}) {
+  const [heightCm, setHeightCm] = useState<number | null>(null);
+
+  useEffect(() => {
+    api<{ height_cm: number | null }>("/api/profile/prefs")
+      .then((r) => setHeightCm(r.height_cm ?? null))
+      .catch(() => {});
+  }, []);
+
+  if (!heightCm || !latestKg) return null;
+  const bmi = latestKg / (heightCm / 100) ** 2;
+  // Standard WHO bands; marker clamped visually to [16, 36] so an
+  // outlier BMI still shows up on-band instead of off-screen.
+  const clamped = Math.max(16, Math.min(36, bmi));
+  const pct = ((clamped - 16) / (36 - 16)) * 100;
+
+  const band =
+    bmi < 18.5
+      ? isArabic
+        ? "نقص وزن"
+        : "Underweight"
+      : bmi < 25
+        ? isArabic
+          ? "صحي"
+          : "Healthy"
+        : bmi < 30
+          ? isArabic
+            ? "زيادة وزن"
+            : "Overweight"
+          : isArabic
+            ? "سمنة"
+            : "Obese";
+  const bandColor =
+    bmi < 18.5
+      ? "#4a9ad6"
+      : bmi < 25
+        ? colors.mint
+        : bmi < 30
+          ? colors.gold
+          : colors.coral;
+
+  return (
+    <View style={styles.card}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "baseline",
+          gap: spacing.sm,
+        }}
+      >
+        <Text style={styles.cardTitle}>{isArabic ? "مؤشر BMI" : "BMI"}</Text>
+        <Text style={progressStyles.bmiValue}>{bmi.toFixed(1)}</Text>
+        <View style={{ flex: 1 }} />
+        <View
+          style={[progressStyles.bmiBandPill, { backgroundColor: bandColor + "22", borderColor: bandColor }]}
+        >
+          <Text style={[progressStyles.bmiBandText, { color: bandColor }]}>
+            {band}
+          </Text>
+        </View>
+      </View>
+      <View style={progressStyles.bmiBar}>
+        <View style={[progressStyles.bmiBarSeg, { backgroundColor: "#4a9ad6" }]} />
+        <View style={[progressStyles.bmiBarSeg, { backgroundColor: colors.mint, flex: 1.3 }]} />
+        <View style={[progressStyles.bmiBarSeg, { backgroundColor: colors.gold }]} />
+        <View style={[progressStyles.bmiBarSeg, { backgroundColor: colors.coral }]} />
+        <View
+          style={[progressStyles.bmiMarker, { left: `${pct}%` }]}
+        />
+      </View>
+      <View style={progressStyles.bmiLegend}>
+        <Text style={progressStyles.bmiLegendText}>
+          {isArabic ? "نقص وزن" : "Under"} &lt;18.5
+        </Text>
+        <Text style={progressStyles.bmiLegendText}>
+          {isArabic ? "صحي" : "Healthy"} 18.5–24.9
+        </Text>
+        <Text style={progressStyles.bmiLegendText}>
+          {isArabic ? "زيادة" : "Over"} 25–29.9
+        </Text>
+        <Text style={progressStyles.bmiLegendText}>
+          {isArabic ? "سمنة" : "Obese"} &ge;30
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const progressStyles = StyleSheet.create({
+  changeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  changeLabel: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 13,
+    width: 90,
+  },
+  changeValue: {
+    fontFamily: font.mono,
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  bmiValue: {
+    color: colors.ink,
+    fontFamily: font.displayBold,
+    fontSize: 22,
+  },
+  bmiBandPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  bmiBandText: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  bmiBar: {
+    flexDirection: "row",
+    height: 10,
+    borderRadius: 5,
+    overflow: "hidden",
+    marginTop: spacing.sm,
+    position: "relative",
+  },
+  bmiBarSeg: {
+    flex: 1,
+  },
+  bmiMarker: {
+    position: "absolute",
+    top: -4,
+    width: 3,
+    height: 18,
+    backgroundColor: colors.ink,
+    borderRadius: 1.5,
+    marginLeft: -1.5,
+  },
+  bmiLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: 4,
+    gap: 4,
+  },
+  bmiLegendText: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 9,
+  },
+});
 
 function TopFoods({ days }: { days: number }) {
   const { t } = useTranslation();

@@ -115,7 +115,7 @@ export async function GET(request: Request) {
   const { data } = await supabase
     .from("profiles")
     .select(
-      "notification_prefs, tz_offset_min, goal_weight_kg, city, country, add_cardio_to_target"
+      "notification_prefs, tz_offset_min, goal_weight_kg, city, country, add_cardio_to_target, height_cm"
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -127,5 +127,6 @@ export async function GET(request: Request) {
     city: data?.city ?? null,
     country: data?.country ?? null,
     add_cardio_to_target: data?.add_cardio_to_target ?? false,
+    height_cm: data?.height_cm ?? null,
   });
 }
