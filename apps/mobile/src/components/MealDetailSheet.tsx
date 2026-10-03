@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { MealItemRow } from "@/types";
+import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -52,8 +53,10 @@ export function MealDetailSheet({
             setDeleting(true);
             try {
               await onDelete(item.id);
+              haptics.success();
               onClose();
             } catch (e) {
+              haptics.errorHaptic();
               Alert.alert(
                 isArabic ? "لم يتم الحذف" : "Delete failed",
                 (e as Error).message

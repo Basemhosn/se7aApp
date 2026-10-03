@@ -51,6 +51,7 @@ import {
   removeScan as removeScanFromStore,
   subscribeScans,
 } from "@/lib/scanStore";
+import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -459,9 +460,10 @@ export default function Home() {
                 method: "POST",
                 body: JSON.stringify({ day: target }),
               });
+              haptics.success();
               load();
             } catch {
-              /* silent */
+              haptics.errorHaptic();
             }
           },
         },
@@ -545,6 +547,18 @@ export default function Home() {
         <Header
           streakDays={streak?.current_days ?? 0}
           onStreakTap={() => setStreakSheetOpen(true)}
+          onStreakLongPress={
+            // Shortcut: skip the StreakSheet when the user has an
+            // available freeze AND there's at least one freezable
+            // past day. Falls back to just opening the sheet when
+            // either precondition fails so the long-press never
+            // feels "dead".
+            streak &&
+            streak.freezes_available_this_month > 0 &&
+            streak.freezable_days.length > 0
+              ? applyFreeze
+              : () => setStreakSheetOpen(true)
+          }
           fastingActive={fasting?.active ?? null}
           isPro={isPro}
           isArabic={isArabic}
@@ -774,12 +788,14 @@ export default function Home() {
 function Header({
   streakDays,
   onStreakTap,
+  onStreakLongPress,
   fastingActive,
   isPro,
   isArabic,
 }: {
   streakDays: number;
   onStreakTap: () => void;
+  onStreakLongPress?: () => void;
   fastingActive: { started_at: string; target_hours: number } | null;
   isPro: boolean;
   isArabic: boolean;
@@ -822,12 +838,24 @@ function Header({
         ) : null}
         <Pressable
           style={styles.streakChip}
-          onPress={onStreakTap}
+          onPress={() => {
+            haptics.tap();
+            onStreakTap();
+          }}
+          onLongPress={
+            onStreakLongPress
+              ? () => {
+                  haptics.tapMedium();
+                  onStreakLongPress();
+                }
+              : undefined
+          }
+          delayLongPress={450}
           accessibilityRole="button"
           accessibilityLabel={
             isArabic
-              ? `سلسلة ${streakDays} أيام. اضغط للتفاصيل`
-              : `Streak ${streakDays} ${streakDays === 1 ? "day" : "days"}. Tap for details`
+              ? `سلسلة ${streakDays} أيام. اضغط للتفاصيل، أو اضغط مطولاً لتجميد يوم`
+              : `Streak ${streakDays} ${streakDays === 1 ? "day" : "days"}. Tap for details, long-press to freeze a day`
           }
         >
           <Ionicons name="flame" size={14} color={colors.gold} />
@@ -1475,11 +1503,20 @@ function PendingScanCard({
   const failed = scan.status === "failed";
   const busy = scan.status === "uploading" || scan.status === "analyzing";
   const onPress = () => {
-    if (ready || failed) {
+    if (ready) {
+      haptics.tap();
       router.push({
         pathname: "/scan/plate",
         params: { resume: scan.localId },
       });
+    } else if (failed) {
+      // Retry: drop the failed card from the store so Home doesn't
+      // keep showing the error, then start fresh in the camera.
+      // The old flow dropped the user into the camera with the
+      // broken card still sitting on Home — confusing.
+      haptics.warning();
+      removeScanFromStore(scan.localId);
+      router.push("/scan/plate");
     }
   };
   return (

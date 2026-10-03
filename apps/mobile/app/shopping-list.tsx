@@ -17,6 +17,7 @@ import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/BackButton";
 import { PlanTabs } from "@/components/PlanTabs";
 import { ApiError, api } from "@/lib/api";
+import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 interface Item {
@@ -161,6 +162,7 @@ export default function ShoppingList() {
   }, [customItems, week_start]);
 
   const toggle = (key: string) => {
+    haptics.selection();
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 

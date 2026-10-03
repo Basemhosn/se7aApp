@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import * as haptics from "@/lib/haptics";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -467,8 +468,10 @@ export default function PlateScan() {
           fat_g_high: it.fat_g_high,
         }))
       );
+      haptics.success();
       router.replace("/");
     } catch (e) {
+      haptics.errorHaptic();
       setErr((e as Error).message || t("scan.plate.couldnt_save"));
       setPhase("review");
     }
