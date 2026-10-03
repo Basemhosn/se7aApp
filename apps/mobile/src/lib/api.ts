@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import i18n from "./i18n";
 import { supabase } from "./supabase";
 
@@ -86,7 +87,7 @@ export function rateLimitMessage(err: RateLimitedError): {
   };
 }
 
-async function parseOrThrow<T>(res: Response): Promise<T> {
+async function parseOrThrow<T>(res: Response, route: string): Promise<T> {
   let body: unknown = null;
   try {
     body = await res.json();
@@ -98,6 +99,21 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
       (body && typeof body === "object" && "error" in body
         ? String((body as { error: unknown }).error)
         : null) || `HTTP ${res.status}`;
+    // Fire-and-forget Sentry capture for server-side failures. 402
+    // (Pro required) and 429 (rate limited) are expected UX paths —
+    // skip. 5xx and unexpected 4xx are things we want to know about.
+    if (res.status >= 500 || (res.status >= 400 && res.status !== 402 && res.status !== 429 && res.status !== 401)) {
+      Sentry.captureMessage(`api ${res.status} on ${route}`, {
+        level: res.status >= 500 ? "error" : "warning",
+        tags: { route, http_status: String(res.status), error_code: err },
+        extra: {
+          body:
+            typeof body === "object" && body !== null
+              ? Object.keys(body).slice(0, 10)
+              : null,
+        },
+      });
+    }
     if (res.status === 402 && body && typeof body === "object") {
       const b = body as { details?: string; feature?: string };
       throw new ProRequiredError({
@@ -154,7 +170,7 @@ export async function api<T>(
     headers,
     cache: "no-store",
   });
-  return parseOrThrow<T>(res);
+  return parseOrThrow<T>(res, path.split("?")[0] ?? path);
 }
 
 /**
@@ -188,7 +204,7 @@ export async function apiUpload<T>(
     },
     cache: "no-store",
   });
-  return parseOrThrow<T>(res);
+  return parseOrThrow<T>(res, path.split("?")[0] ?? path);
 }
 
 function extOf(mime: string): string {

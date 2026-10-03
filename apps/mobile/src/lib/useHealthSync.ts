@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Sentry from "@sentry/react-native";
 import * as HK from "./healthkit";
 import * as HC from "./healthConnect";
 import { api } from "./api";
@@ -56,6 +57,18 @@ export function useHealthSync(userId: string | undefined) {
           // once permission is granted. Otherwise the user would
           // have to force-quit the app to see data flow.
           console.warn("[healthkit] auth failed", res.error);
+          // Capture the detail string so we can tell native-link
+          // issues (native_module_not_linked, healthkit_constants_
+          // missing) apart from user-denied / undetermined states.
+          // Alertable in Sentry — these are regressions, not
+          // normal states.
+          Sentry.captureMessage("healthkit auth failed", {
+            level: "warning",
+            tags: {
+              surface: "home_mount",
+              hk_error: res.error ?? "unknown",
+            },
+          });
           return;
         }
         ranThisSession.current = true;

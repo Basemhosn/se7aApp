@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -37,6 +37,11 @@ export default function PlateScan() {
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
   const [items, setItems] = useState<PlateItem[]>([]);
+  // Snapshot of the AI's original estimate taken the first time
+  // items hydrate. Used to compute a correction-training payload
+  // when the user saves — any portion/kcal/selection diff gets
+  // POSTed to /api/scan/correction for offline prompt tuning.
+  const originalItemsRef = useRef<PlateItem[] | null>(null);
   const [confidence, setConfidence] = useState<"low" | "medium" | "high">("medium");
   const [invisible, setInvisible] = useState<string[]>([]);
   const [notes, setNotes] = useState<string>("");
@@ -74,6 +79,9 @@ export default function PlateScan() {
       setPreviewUri(s.previewUri);
       setScanId(s.scanId);
       setItems(s.items);
+      if (originalItemsRef.current === null) {
+        originalItemsRef.current = s.items.map((it) => ({ ...it }));
+      }
       setConfidence(s.confidence ?? "medium");
       setInvisible(s.invisibleCosts ?? []);
       setNotes(s.notes ?? "");
@@ -126,6 +134,11 @@ export default function PlateScan() {
           setPreviewUri(null);
           setScanId(remote.id);
           setItems(remote.parsed.items ?? []);
+          if (originalItemsRef.current === null) {
+            originalItemsRef.current = (remote.parsed.items ?? []).map(
+              (it) => ({ ...it })
+            );
+          }
           setConfidence(remote.parsed.confidence ?? "medium");
           setInvisible(remote.parsed.invisible_costs ?? []);
           setNotes(remote.parsed.notes ?? "");
@@ -413,6 +426,23 @@ export default function PlateScan() {
         }),
       });
       markDayDirty();
+      // Correction signal: if the user actually changed anything
+      // (removed items, adjusted grammage/macros), ship the diff to
+      // /api/scan/correction for offline prompt tuning. Fire-and-
+      // forget — this isn't user-facing so a failure must never
+      // affect the save flow.
+      const original = originalItemsRef.current;
+      if (original && original.length > 0 && didUserEditPlate(original, scaledPicked)) {
+        api("/api/scan/correction", {
+          method: "POST",
+          body: JSON.stringify({
+            scan_id: scanId,
+            source: "plate_scan",
+            original_items: original,
+            final_items: scaledPicked,
+          }),
+        }).catch(() => {});
+      }
       // Clean up the pending-scan card on Home now that the review
       // is committed to the ledger.
       if (resumeLocalId) removeScan(resumeLocalId);
@@ -453,6 +483,7 @@ export default function PlateScan() {
     setPreviewUri(null);
     setScanId(null);
     setItems([]);
+    originalItemsRef.current = null;
     setInvisible([]);
     setSelected(new Set());
     setErr("");
@@ -943,3 +974,30 @@ const styles = StyleSheet.create({
   chipTextOn: { color: colors.gold },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },
 });
+
+/**
+ * Decide whether a plate review actually changed in a way worth
+ * storing. Returns true when:
+ *   • the user removed any items (final length < original length), OR
+ *   • any kept item had its kcal_low/kcal_high midpoint shift by
+ *     > 5 kcal, OR
+ *   • any kept item had its portion_estimate string change.
+ *
+ * Pure selection changes with no edits aren't signal — we only
+ * care when the user actively disagreed with the model's number.
+ */
+function didUserEditPlate(
+  original: PlateItem[],
+  final: PlateItem[]
+): boolean {
+  if (final.length !== original.length) return true;
+  for (let i = 0; i < final.length; i++) {
+    const o = original[i]!;
+    const f = final[i]!;
+    if (o.portion_estimate !== f.portion_estimate) return true;
+    const oMid = ((o.kcal_low ?? 0) + (o.kcal_high ?? 0)) / 2;
+    const fMid = ((f.kcal_low ?? 0) + (f.kcal_high ?? 0)) / 2;
+    if (Math.abs(oMid - fMid) > 5) return true;
+  }
+  return false;
+}
