@@ -414,22 +414,43 @@ async function evalWeeklyWrapped(
   now: Date
 ): Promise<{ fire: false } | { fire: true; teaser: string }> {
   const localNow = new Date(now.getTime() + tz * 60_000);
+  // Monday of LAST week (the one we're wrapping)
   const weekStart = new Date(localNow);
   weekStart.setUTCHours(0, 0, 0, 0);
-  weekStart.setUTCDate(weekStart.getUTCDate() - 7); // Monday of last week
+  weekStart.setUTCDate(weekStart.getUTCDate() - 7);
   const weekEnd = new Date(weekStart.getTime() + 7 * DAY_MS);
-  const startIso = new Date(
-    weekStart.getTime() - tz * 60_000
-  ).toISOString();
-  const endIso = new Date(weekEnd.getTime() - tz * 60_000).toISOString();
+  // Prior week — for the delta comparison
+  const priorWeekStart = new Date(weekStart.getTime() - 7 * DAY_MS);
+  const priorWeekEnd = weekStart;
 
-  const [mealsRes, workoutsRes, weightsRes] = await Promise.all([
+  const toServerIso = (local: Date) =>
+    new Date(local.getTime() - tz * 60_000).toISOString();
+  const startIso = toServerIso(weekStart);
+  const endIso = toServerIso(weekEnd);
+  const priorStartIso = toServerIso(priorWeekStart);
+  const priorEndIso = toServerIso(priorWeekEnd);
+
+  const [
+    mealsRes,
+    priorMealsRes,
+    workoutsRes,
+    weightsRes,
+    streakSampleRes,
+  ] = await Promise.all([
     admin
       .from("meal_items")
-      .select("id", { count: "exact", head: true })
+      .select("eaten_at, kcal_low, kcal_high")
       .eq("user_id", userId)
       .gte("eaten_at", startIso)
-      .lt("eaten_at", endIso),
+      .lt("eaten_at", endIso)
+      .limit(2000),
+    admin
+      .from("meal_items")
+      .select("eaten_at, kcal_low, kcal_high")
+      .eq("user_id", userId)
+      .gte("eaten_at", priorStartIso)
+      .lt("eaten_at", priorEndIso)
+      .limit(2000),
     admin
       .from("workout_sessions")
       .select("id", { count: "exact", head: true })
@@ -442,34 +463,97 @@ async function evalWeeklyWrapped(
       .eq("user_id", userId)
       .gte("logged_at", startIso)
       .lt("logged_at", endIso),
+    admin
+      .from("meal_items")
+      .select("eaten_at")
+      .eq("user_id", userId)
+      .order("eaten_at", { ascending: false })
+      .limit(400),
   ]);
 
-  const meals = mealsRes.count ?? 0;
+  const meals = (mealsRes.data ?? []) as {
+    eaten_at: string;
+    kcal_low: number;
+    kcal_high: number;
+  }[];
+  const priorMeals = (priorMealsRes.data ?? []) as {
+    eaten_at: string;
+    kcal_low: number;
+    kcal_high: number;
+  }[];
   const workouts = workoutsRes.count ?? 0;
   const weighins = weightsRes.count ?? 0;
-  if (meals + workouts + weighins === 0) return { fire: false };
+  if (meals.length + workouts + weighins === 0) return { fire: false };
 
-  // Teaser prioritizes workouts (users emotionally react to it more
-  // than meal counts), then meal-log days, then a fallback.
-  if (workouts > 0) {
-    return {
-      fire: true,
-      teaser:
-        workouts === 1
-          ? "You crushed 1 session — see the rest of the numbers."
-          : `You logged ${workouts} workouts. See the rest of the numbers.`,
-    };
-  }
-  if (meals > 0) {
-    return {
-      fire: true,
-      teaser: "Your logging streak, macros, and coach's take are in.",
-    };
-  }
-  return {
-    fire: true,
-    teaser: "Numbers, streaks, and the coach's take on your week.",
+  // Average daily kcal (midpoint). Bucket by local day so a user who
+  // logged 1 meal 7 days running isn't averaged like one who logged 10
+  // meals in a single day.
+  const toLocalDay = (iso: string) => {
+    const d = new Date(new Date(iso).getTime() + tz * 60_000);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
   };
+  const avgDailyKcal = (rows: typeof meals): number => {
+    if (rows.length === 0) return 0;
+    const byDay = new Map<string, number>();
+    for (const r of rows) {
+      const day = toLocalDay(r.eaten_at);
+      const mid = (Number(r.kcal_low) + Number(r.kcal_high)) / 2;
+      byDay.set(day, (byDay.get(day) ?? 0) + mid);
+    }
+    const days = byDay.size;
+    const total = Array.from(byDay.values()).reduce((s, v) => s + v, 0);
+    return days > 0 ? Math.round(total / days) : 0;
+  };
+  const avgKcal = avgDailyKcal(meals);
+  const priorAvgKcal = avgDailyKcal(priorMeals);
+  const deltaKcal = priorAvgKcal > 0 ? avgKcal - priorAvgKcal : null;
+
+  // Current streak — walk back from today in local time, days with
+  // ≥1 meal_item count. Matches /api/badges' logic.
+  const streakDays = new Set(
+    ((streakSampleRes.data ?? []) as { eaten_at: string }[]).map((r) =>
+      toLocalDay(r.eaten_at)
+    )
+  );
+  let streak = 0;
+  const cursor = new Date(localNow);
+  cursor.setUTCHours(0, 0, 0, 0);
+  for (let i = 0; i < 400; i++) {
+    const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}-${String(cursor.getUTCDate()).padStart(2, "0")}`;
+    if (streakDays.has(key)) {
+      streak += 1;
+    } else if (streak > 0) {
+      break;
+    }
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+
+  // Compose a numbers-first teaser. Starts with avg kcal (always
+  // present when meals > 0), then delta vs prior week (only if prior
+  // week had data), then streak if nonzero. Falls back to the
+  // workout/wrap-only line when the user didn't log meals.
+  const parts: string[] = [];
+  if (avgKcal > 0) {
+    parts.push(`Avg ${avgKcal.toLocaleString()} kcal`);
+    if (deltaKcal !== null && Math.abs(deltaKcal) >= 25) {
+      const sign = deltaKcal > 0 ? "+" : "−";
+      parts.push(`${sign}${Math.abs(deltaKcal)} vs last week`);
+    }
+  }
+  if (streak > 0) {
+    parts.push(`${streak}-day streak`);
+  }
+  if (workouts > 0 && avgKcal === 0) {
+    parts.push(
+      workouts === 1 ? "1 workout" : `${workouts} workouts`
+    );
+  }
+  const teaser =
+    parts.length > 0
+      ? `${parts.join(" · ")}.`
+      : "Numbers, streaks, and the coach's take on your week.";
+
+  return { fire: true, teaser };
 }
 
 async function evalPlanYourWeek(
