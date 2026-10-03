@@ -1,5 +1,6 @@
 import Image from "next/image";
-import Waitlist from "@/components/Waitlist";
+import { AppStoreCta } from "@/components/AppStoreCta";
+import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { Reveal } from "@/components/Reveal";
 import { StickyNav } from "@/components/StickyNav";
 import { PlanBandAccent } from "@/components/PlanBandAccent";
@@ -13,13 +14,11 @@ import { HowItWorks } from "@/components/HowItWorks";
 import { Comparison } from "@/components/Comparison";
 import { Pricing } from "@/components/Pricing";
 import { FAQ } from "@/components/FAQ";
-import { getWaitlistCount } from "@/lib/waitlistCount";
 
-export const revalidate = 300; // 5 min — waitlist count freshness
+// No revalidate needed now — the page is fully static (store CTAs
+// are hard-coded links, no waitlist count to re-fetch).
 
-export default async function Home() {
-  const waitlistCount = await getWaitlistCount();
-
+export default function Home() {
   return (
     <>
       <ScrollProgress />
@@ -52,15 +51,7 @@ export default async function Home() {
               <strong>Every macro is a range.</strong> A photo can&apos;t see
               the oil {"—"} we don&apos;t pretend it can.
             </p>
-            <Waitlist />
-            {waitlistCount !== null && waitlistCount > 0 && (
-              <div className="waitlist-social">
-                <span className="waitlist-dot" />
-                <span>
-                  Join {waitlistCount.toLocaleString()}+ others waiting
-                </span>
-              </div>
-            )}
+            <AppStoreCta />
           </div>
           <div className="hero-shot">
             <div className="hero-shot-wrap">
@@ -123,6 +114,11 @@ export default async function Home() {
         {/* ─── HOW IT WORKS ───────────────────────────────────────── */}
         <Reveal>
           <HowItWorks />
+        </Reveal>
+
+        {/* ─── INSIDE THE APP (screenshot grid) ───────────────────── */}
+        <Reveal>
+          <FeatureShowcase />
         </Reveal>
 
         {/* ─── FEATURE: LOG ───────────────────────────────────────── */}
@@ -501,26 +497,17 @@ export default async function Home() {
         <Reveal>
           <section className="final-cta final-cta-bg">
             <Particles count={18} variant="cta" />
-            <div className="hero-kicker">EARLY ACCESS</div>
+            <div className="hero-kicker">GET IN NOW</div>
             <StaggerText as="h2" className="final-h" step={80}>
-              {"Be first "}
-              <span className="gold">in line.</span>
+              {"Join the "}
+              <span className="gold">iOS beta.</span>
             </StaggerText>
             <p className="final-sub">
-              SE7A launches soon on iOS. Get on the waitlist to be one of the
-              first in when it opens.
+              SE7A is in TestFlight — a limited, free beta while we polish
+              the final touches before the App Store launch. Android lands
+              right after.
             </p>
-            <Waitlist />
-            <div className="app-badges">
-              <div className="app-badge">
-                <div className="app-badge-tag">COMING SOON TO</div>
-                <div className="app-badge-store">App Store</div>
-              </div>
-              <div className="app-badge">
-                <div className="app-badge-tag">COMING SOON TO</div>
-                <div className="app-badge-store">Google Play</div>
-              </div>
-            </div>
+            <AppStoreCta />
           </section>
         </Reveal>
 
