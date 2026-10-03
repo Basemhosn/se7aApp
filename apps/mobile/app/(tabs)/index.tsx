@@ -41,7 +41,6 @@ import {
   syncTodayHealthNow,
   useHealthSync,
 } from "@/lib/useHealthSync";
-import { writeWidgetSnapshot } from "@/lib/widgetData";
 import { MealDetailSheet } from "@/components/MealDetailSheet";
 import { useWidgetToken } from "@/lib/useWidgetToken";
 import type { LedgerDayResponse, MealItemRow, MealSlot, Profile } from "@/types";
@@ -371,21 +370,6 @@ export default function Home() {
           }
         : null
     );
-    // Keep the home-screen widget in sync. Fire-and-forget — the
-    // widget write is a nice-to-have, never a blocker for the main
-    // flow. iOS batches timeline refreshes on its own cadence.
-    void writeWidgetSnapshot({
-      kcalEaten: Math.round(
-        ((ledgerRes.totals.kcal.low ?? 0) + (ledgerRes.totals.kcal.high ?? 0)) /
-          2
-      ),
-      kcalTarget:
-        dayRes?.adjusted_target ??
-        dayRes?.base_target ??
-        profileData?.daily_kcal_target ??
-        2200,
-      streakDays: streakRes?.current_days ?? 0,
-    });
     setLoading(false);
     } catch (e) {
       // Never swallow silently — a failed ledger fetch was previously

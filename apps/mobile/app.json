@@ -33,8 +33,7 @@
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
-        "com.apple.developer.healthkit.access": [],
-        "com.apple.security.application-groups": ["group.app.se7a.mobile"]
+        "com.apple.developer.healthkit.access": []
       }
     },
     "android": {
@@ -101,8 +100,7 @@
           "organization": "se7a-app"
         }
       ],
-      "@react-native-community/datetimepicker",
-      "@bacons/apple-targets"
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
