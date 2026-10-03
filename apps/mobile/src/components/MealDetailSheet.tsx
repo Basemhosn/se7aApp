@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -36,6 +36,21 @@ export function MealDetailSheet({
   isArabic: boolean;
 }) {
   const [deleting, setDeleting] = useState(false);
+  // Guard against the open-and-close race: when the user taps the
+  // meal row on Home, the modal mounts with a slide animation but
+  // iOS still routes the touchEnd event from the originating tap to
+  // whatever is now under the finger — which is this modal's
+  // backdrop. The backdrop's onPress then fires onClose immediately
+  // and the sheet appears to never open. 300ms ignore window lets
+  // the slide-in finish before the backdrop becomes dismissive.
+  const openedAt = useRef<number>(0);
+  useEffect(() => {
+    if (item) openedAt.current = Date.now();
+  }, [item]);
+  const handleBackdropPress = () => {
+    if (Date.now() - openedAt.current < 300) return;
+    onClose();
+  };
 
   const confirmDelete = () => {
     if (!item) return;
@@ -102,7 +117,7 @@ export function MealDetailSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={handleBackdropPress}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           {item ? (
             <ScrollView
