@@ -197,7 +197,11 @@ export default function Home() {
   const [streakSheetOpen, setStreakSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
-  const [selectedMeal, setSelectedMeal] = useState<MealItemRow | null>(null);
+  // Array shape so a plate-scan group opens with ALL its items
+  // visible in the detail sheet, not just the first one. For
+  // non-plate rows (manual, barcode, voice) the array has length 1
+  // and the sheet renders the same single-item view as before.
+  const [selectedMeal, setSelectedMeal] = useState<MealItemRow[] | null>(null);
 
   // Subscribe to the async scan store so the "Recently uploaded" card
   // reflects in-flight scans without needing a screen refresh.
@@ -769,10 +773,16 @@ export default function Home() {
         isArabic={isArabic}
       />
       <MealDetailSheet
-        item={selectedMeal}
+        items={selectedMeal}
         onClose={() => setSelectedMeal(null)}
-        onDelete={async (id) => {
-          await api(`/api/ledger/item/${id}`, { method: "DELETE" });
+        onDelete={async (ids) => {
+          // Multi-item plate-scan groups delete all rows at once.
+          // Fire sequentially rather than in parallel so RLS or
+          // transient failure on one surfaces clearly instead of
+          // leaving a half-deleted group.
+          for (const id of ids) {
+            await api(`/api/ledger/item/${id}`, { method: "DELETE" });
+          }
           markDayDirty();
           await load();
         }}
@@ -1604,7 +1614,7 @@ function MealsList({
   plannedItems: NonNullable<LedgerDayResponse["planned_items"]>;
   expanded: Set<string>;
   onToggle: (slot: string) => void;
-  onItemTap: (item: MealItemRow) => void;
+  onItemTap: (items: MealItemRow[]) => void;
   isToday: boolean;
   isArabic: boolean;
 }) {
@@ -1741,7 +1751,7 @@ function MealsList({
                       return (
                         <Pressable
                           key={group.key}
-                          onPress={() => onItemTap(primary)}
+                          onPress={() => onItemTap(group.items)}
                           style={[
                             styles.mealItemRow,
                             idx < arr.length - 1 && styles.mealRowDivider,

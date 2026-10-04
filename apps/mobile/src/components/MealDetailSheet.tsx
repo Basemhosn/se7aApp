@@ -31,14 +31,14 @@ import { colors, font, radius, spacing } from "@/lib/theme";
  * the user confirms.
  */
 export function MealDetailSheet({
-  item,
+  items,
   onClose,
   onDelete,
   isArabic,
 }: {
-  item: MealItemRow | null;
+  items: MealItemRow[] | null;
   onClose: () => void;
-  onDelete: (id: number) => Promise<void>;
+  onDelete: (ids: number[]) => Promise<void>;
   isArabic: boolean;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -51,17 +51,26 @@ export function MealDetailSheet({
   // the slide-in finish before the backdrop becomes dismissive.
   const openedAt = useRef<number>(0);
   useEffect(() => {
-    if (item) openedAt.current = Date.now();
-  }, [item]);
+    if (items && items.length > 0) openedAt.current = Date.now();
+  }, [items]);
   const handleBackdropPress = () => {
     if (Date.now() - openedAt.current < 300) return;
     onClose();
   };
 
+  const primary = items && items.length > 0 ? items[0]! : null;
+  const multi = (items?.length ?? 0) > 1;
+
   const confirmDelete = () => {
-    if (!item) return;
+    if (!items || items.length === 0) return;
     Alert.alert(
-      isArabic ? "احذف الوجبة؟" : "Delete this meal?",
+      multi
+        ? isArabic
+          ? `احذف الوجبة (${items.length} عناصر)؟`
+          : `Delete this meal (${items.length} items)?`
+        : isArabic
+          ? "احذف الوجبة؟"
+          : "Delete this meal?",
       isArabic
         ? "لا يمكن التراجع عن هذا الإجراء."
         : "This can't be undone.",
@@ -73,7 +82,7 @@ export function MealDetailSheet({
           onPress: async () => {
             setDeleting(true);
             try {
-              await onDelete(item.id);
+              await onDelete(items.map((it) => it.id));
               haptics.success();
               onClose();
             } catch (e) {
@@ -104,20 +113,82 @@ export function MealDetailSheet({
     }
   };
 
-  const midKcal = item ? Math.round((item.kcal_low + item.kcal_high) / 2) : 0;
-  const midProtein = item
-    ? Math.round((item.protein_g_low + item.protein_g_high) / 2)
-    : 0;
-  const midCarb = item
-    ? Math.round((item.carb_g_low + item.carb_g_high) / 2)
-    : 0;
-  const midFat = item
-    ? Math.round((item.fat_g_low + item.fat_g_high) / 2)
-    : 0;
+  // Summed macros across the whole group. For single-item taps this
+  // is identical to the item's own numbers; for multi-item plate
+  // scans it reflects the whole meal.
+  const sumRange = (
+    low: (it: MealItemRow) => number,
+    high: (it: MealItemRow) => number
+  ): { low: number; high: number } => {
+    if (!items) return { low: 0, high: 0 };
+    return items.reduce(
+      (acc, it) => ({ low: acc.low + low(it), high: acc.high + high(it) }),
+      { low: 0, high: 0 }
+    );
+  };
+  const sumOpt = (
+    low: (it: MealItemRow) => number | null | undefined,
+    high: (it: MealItemRow) => number | null | undefined
+  ): { low: number; high: number } | null => {
+    if (!items || items.length === 0) return null;
+    // Only emit a sum if at least one item has the field populated.
+    const anyHas = items.some((it) => low(it) != null && high(it) != null);
+    if (!anyHas) return null;
+    return items.reduce(
+      (acc, it) => ({
+        low: acc.low + (low(it) ?? 0),
+        high: acc.high + (high(it) ?? 0),
+      }),
+      { low: 0, high: 0 }
+    );
+  };
+
+  const kcalSum = sumRange(
+    (it) => it.kcal_low,
+    (it) => it.kcal_high
+  );
+  const proteinSum = sumRange(
+    (it) => it.protein_g_low,
+    (it) => it.protein_g_high
+  );
+  const carbSum = sumRange(
+    (it) => it.carb_g_low,
+    (it) => it.carb_g_high
+  );
+  const fatSum = sumRange(
+    (it) => it.fat_g_low,
+    (it) => it.fat_g_high
+  );
+  const fiberSum = sumOpt(
+    (it) => it.fiber_g_low,
+    (it) => it.fiber_g_high
+  );
+  const sugarSum = sumOpt(
+    (it) => it.sugar_g_low,
+    (it) => it.sugar_g_high
+  );
+  const sodiumSum = sumOpt(
+    (it) => it.sodium_mg_low,
+    (it) => it.sodium_mg_high
+  );
+  const satFatSum = sumOpt(
+    (it) => it.saturated_fat_g_low,
+    (it) => it.saturated_fat_g_high
+  );
+
+  const midKcal = Math.round((kcalSum.low + kcalSum.high) / 2);
+  const midProtein = Math.round((proteinSum.low + proteinSum.high) / 2);
+  const midCarb = Math.round((carbSum.low + carbSum.high) / 2);
+  const midFat = Math.round((fatSum.low + fatSum.high) / 2);
+  const displayName = primary
+    ? multi
+      ? `${primary.name} + ${items!.length - 1} more`
+      : primary.name
+    : "";
 
   return (
     <Modal
-      visible={!!item}
+      visible={!!primary}
       transparent
       animationType="slide"
       onRequestClose={onClose}
@@ -132,7 +203,7 @@ export function MealDetailSheet({
           onPress={handleBackdropPress}
         />
         <View style={styles.sheet}>
-          {item ? (
+          {primary ? (
             <ScrollView
               style={{ flex: 1 }}
               contentContainerStyle={styles.content}
@@ -140,32 +211,40 @@ export function MealDetailSheet({
             >
               <View style={styles.grabber} />
 
-              {item.photo_url ? (
-                <Image source={{ uri: item.photo_url }} style={styles.hero} />
+              {primary.photo_url ? (
+                <Image
+                  source={{ uri: primary.photo_url }}
+                  style={styles.hero}
+                />
               ) : (
                 <View style={[styles.hero, styles.heroPh]}>
-                  <Ionicons
-                    name="restaurant"
-                    size={40}
-                    color={colors.dim}
-                  />
+                  <Ionicons name="restaurant" size={40} color={colors.dim} />
                 </View>
               )}
 
-              <Text style={styles.name}>{item.name}</Text>
-              {item.portion_estimate ? (
-                <Text style={styles.portion}>{item.portion_estimate}</Text>
+              <Text style={styles.name}>{displayName}</Text>
+              {!multi && primary.portion_estimate ? (
+                <Text style={styles.portion}>{primary.portion_estimate}</Text>
+              ) : null}
+              {multi ? (
+                <Text style={styles.portion}>
+                  {isArabic
+                    ? `مجموع ${items!.length} عناصر`
+                    : `Combined across ${items!.length} items`}
+                </Text>
               ) : null}
 
               <View style={styles.badges}>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{sourceLabel(item.source)}</Text>
+                  <Text style={styles.badgeText}>
+                    {sourceLabel(primary.source)}
+                  </Text>
                 </View>
-                {item.confidence ? (
+                {primary.confidence ? (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
                       {isArabic ? "دقة: " : "Confidence: "}
-                      {item.confidence}
+                      {primary.confidence}
                     </Text>
                   </View>
                 ) : null}
@@ -175,7 +254,7 @@ export function MealDetailSheet({
                 <Text style={styles.kcalValue}>{midKcal}</Text>
                 <Text style={styles.kcalUnit}>kcal</Text>
                 <Text style={styles.kcalRange}>
-                  {item.kcal_low}–{item.kcal_high}
+                  {kcalSum.low}–{kcalSum.high}
                 </Text>
               </View>
 
@@ -183,58 +262,71 @@ export function MealDetailSheet({
                 <MacroPill
                   label={isArabic ? "بروتين" : "Protein"}
                   value={midProtein}
-                  low={item.protein_g_low}
-                  high={item.protein_g_high}
+                  low={proteinSum.low}
+                  high={proteinSum.high}
                   tint={colors.mint}
                 />
                 <MacroPill
                   label={isArabic ? "كارب" : "Carbs"}
                   value={midCarb}
-                  low={item.carb_g_low}
-                  high={item.carb_g_high}
+                  low={carbSum.low}
+                  high={carbSum.high}
                   tint={colors.gold}
                 />
                 <MacroPill
                   label={isArabic ? "دهون" : "Fat"}
                   value={midFat}
-                  low={item.fat_g_low}
-                  high={item.fat_g_high}
+                  low={fatSum.low}
+                  high={fatSum.high}
                   tint={colors.coral}
                 />
               </View>
 
-              {item.fiber_g_low != null ||
-              item.sugar_g_low != null ||
-              item.sodium_mg_low != null ||
-              item.saturated_fat_g_low != null ? (
+              {multi ? (
+                <View style={styles.detailBlock}>
+                  <Text style={styles.detailHead}>
+                    {(isArabic ? "عناصر" : "Items").toUpperCase()}
+                  </Text>
+                  {items!.map((it) => (
+                    <View key={it.id} style={styles.itemRow}>
+                      <Text style={styles.itemName} numberOfLines={1}>
+                        {it.name}
+                      </Text>
+                      <Text style={styles.itemKcal}>
+                        {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {fiberSum || sugarSum || sodiumSum || satFatSum ? (
                 <View style={styles.detailBlock}>
                   <Text style={styles.detailHead}>
                     {isArabic ? "تفاصيل إضافية" : "More detail"}
                   </Text>
-                  {item.fiber_g_low != null && item.fiber_g_high != null ? (
+                  {fiberSum ? (
                     <DetailRow
                       label={isArabic ? "ألياف" : "Fiber"}
-                      value={`${Math.round((item.fiber_g_low + item.fiber_g_high) / 2)}g`}
+                      value={`${Math.round((fiberSum.low + fiberSum.high) / 2)}g`}
                     />
                   ) : null}
-                  {item.sugar_g_low != null && item.sugar_g_high != null ? (
+                  {sugarSum ? (
                     <DetailRow
                       label={isArabic ? "سكر" : "Sugar"}
-                      value={`${Math.round((item.sugar_g_low + item.sugar_g_high) / 2)}g`}
+                      value={`${Math.round((sugarSum.low + sugarSum.high) / 2)}g`}
                     />
                   ) : null}
-                  {item.sodium_mg_low != null &&
-                  item.sodium_mg_high != null ? (
+                  {sodiumSum ? (
                     <DetailRow
                       label={isArabic ? "صوديوم" : "Sodium"}
-                      value={`${Math.round((item.sodium_mg_low + item.sodium_mg_high) / 2)}mg`}
+                      value={`${Math.round((sodiumSum.low + sodiumSum.high) / 2)}mg`}
                     />
                   ) : null}
-                  {item.saturated_fat_g_low != null &&
-                  item.saturated_fat_g_high != null ? (
+                  {satFatSum ? (
                     <DetailRow
                       label={isArabic ? "دهون مشبعة" : "Sat. fat"}
-                      value={`${Math.round((item.saturated_fat_g_low + item.saturated_fat_g_high) / 2)}g`}
+                      value={`${Math.round((satFatSum.low + satFatSum.high) / 2)}g`}
                     />
                   ) : null}
                 </View>
@@ -252,7 +344,13 @@ export function MealDetailSheet({
                   <>
                     <Ionicons name="trash" size={16} color={colors.coral} />
                     <Text style={styles.deleteText}>
-                      {isArabic ? "احذف هذه الوجبة" : "Delete this meal"}
+                      {multi
+                        ? isArabic
+                          ? `احذف الوجبة (${items!.length} عناصر)`
+                          : `Delete this meal (${items!.length} items)`
+                        : isArabic
+                          ? "احذف هذه الوجبة"
+                          : "Delete this meal"}
                     </Text>
                   </>
                 )}
@@ -458,6 +556,25 @@ const styles = StyleSheet.create({
     color: colors.dim,
     fontFamily: font.mono,
     fontSize: 13,
+  },
+  // Per-item rows inside the Items block for multi-item groups
+  itemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+    gap: spacing.sm,
+  },
+  itemName: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 13,
+  },
+  itemKcal: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 12,
   },
   deleteBtn: {
     marginTop: spacing.lg,
