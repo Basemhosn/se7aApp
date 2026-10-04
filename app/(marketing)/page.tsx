@@ -67,7 +67,7 @@ export default function Home() {
               <FloatingCard
                 pos="tr"
                 kicker="RING · LIVE"
-                title="2,236 kcal"
+                title="2,113 kcal"
                 sub="Remaining today"
                 delay={0.4}
                 accent
@@ -75,7 +75,7 @@ export default function Home() {
               <FloatingCard
                 pos="bl"
                 kicker="STREAK"
-                title="17 days"
+                title="4 days"
                 sub="Longest yet"
                 delay={1.1}
               />
