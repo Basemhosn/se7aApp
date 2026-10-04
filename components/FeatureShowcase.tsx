@@ -25,10 +25,10 @@ const FEATURES = [
     body: "Snap a plate photo, say what you ate, or scan a barcode — SE7A does the macro math and respects what's actually knowable.",
   },
   {
-    img: "/screenshots/plan.png",
-    kicker: "90-DAY PLAN",
-    headline: "A plan that writes itself",
-    body: "Generate a personalized 90-day plan with phased training intensity, periodized nutrition, and weekly milestones — then watch it adapt as you log.",
+    img: "/screenshots/nutrients.png",
+    kicker: "NUTRIENTS",
+    headline: "Every nutrient, every day",
+    body: "Daily averages for calories, protein, carbs, fat, fiber, sugar, sodium, saturated fat — each with your target and how close you landed.",
   },
   {
     img: "/screenshots/coach.png",

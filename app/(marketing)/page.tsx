@@ -292,8 +292,8 @@ export default function Home() {
             </div>
             <div className="plan-band-shot">
               <Image
-                src="/screens/nutrients.png"
-                alt="Detailed nutrients breakdown"
+                src="/screenshots/plan.png"
+                alt="90-day plan narrative with safety notes and nutrition section"
                 width={280}
                 height={575}
                 className="phone"
