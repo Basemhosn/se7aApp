@@ -295,7 +295,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    maxHeight: "88%",
+    // Explicit height (not maxHeight) so the ScrollView inside has
+    // something concrete to flex: 1 into. The earlier `maxHeight`
+    // was just a cap — the sheet had no actual height, so a
+    // flex-1 ScrollView collapsed to 0 and the user saw only the
+    // dark backdrop.
+    height: "88%",
   },
   content: {
     padding: spacing.lg,
