@@ -48,10 +48,17 @@ workflows:
       - name: Set up code-signing
         script: |
           keychain initialize
-          app-store-connect fetch-signing-files \
-            "$BUNDLE_IDENTIFIER" \
+          # Hardcode the bundle ID (don't rely on $BUNDLE_IDENTIFIER
+          # expansion from ios_signing block — not guaranteed in all
+          # Codemagic yaml contexts). Explicit --platform + the
+          # --certificate-key reference to our generated private key
+          # so --create can actually create a Distribution cert
+          # when none exists in App Store Connect yet.
+          app-store-connect fetch-signing-files app.se7a.mobile \
+            --platform IOS \
             --type IOS_APP_STORE \
-            --create
+            --create \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY
           keychain add-certificates
           xcode-project use-profiles
       - name: Install JS deps
