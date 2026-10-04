@@ -1,0 +1,89 @@
+# CodeMagic workflow for SE7A iOS builds — fallback for when EAS
+# free-tier builds are exhausted. Produces an App Store-signed
+# .ipa and emails it to the configured address.
+#
+# Setup (one-time, in the CodeMagic web UI):
+#   1. Codemagic team settings → Integrations → App Store Connect
+#      → add the same App Store Connect API key you use for EAS
+#      (ID / Issuer / .p8 file). Save as integration name
+#      "se7a_asc_key".
+#   2. Codemagic app settings → Environment variables → add group
+#      "se7a_ios":
+#        APP_STORE_CONNECT_PRIVATE_KEY   (contents of .p8 file,
+#                                         secure)
+#        APP_STORE_CONNECT_KEY_IDENTIFIER
+#        APP_STORE_CONNECT_ISSUER_ID
+#        CERTIFICATE_PRIVATE_KEY          (base64 of your signing
+#                                          cert's private key, or
+#                                          generate via `ssh-keygen
+#                                          -t rsa -b 2048 -m PEM
+#                                          -f apple_dist.key`)
+#   3. Trigger a build manually or push to main.
+#
+# Signing uses Codemagic's automatic signing path — it fetches /
+# creates the Distribution cert + Provisioning profile for the
+# bundle ID via the ASC API, so you don't need to upload .mobile-
+# provision files by hand.
+
+workflows:
+  ios-production:
+    name: SE7A iOS (production)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        - se7a_ios
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.se7a.mobile
+      node: 20.11.0
+      xcode: 16.0
+      cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/CocoaPods
+        - $HOME/.npm
+        - apps/mobile/node_modules
+    scripts:
+      - name: Set up code-signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files \
+            "$BUNDLE_IDENTIFIER" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Install JS deps
+        script: |
+          cd apps/mobile
+          npm ci --legacy-peer-deps
+      - name: Expo prebuild (generate native iOS project)
+        script: |
+          cd apps/mobile
+          npx expo prebuild --platform ios --no-install --clean
+      - name: Install pods
+        script: |
+          cd apps/mobile/ios
+          pod install
+      - name: Set build number from Codemagic BUILD_NUMBER
+        script: |
+          cd apps/mobile/ios
+          agvtool new-version -all "$(($(date +%s) % 10000))"
+      - name: Build .ipa
+        script: |
+          cd apps/mobile
+          xcode-project build-ipa \
+            --workspace ios/SE7A.xcworkspace \
+            --scheme SE7A
+    artifacts:
+      - apps/mobile/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+    publishing:
+      email:
+        recipients:
+          - basem.aboulhosn@gmail.com
+        notify:
+          success: true
+          failure: true
