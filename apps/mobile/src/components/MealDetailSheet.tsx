@@ -10,6 +10,12 @@ import {
   Text,
   View,
 } from "react-native";
+// StyleSheet.absoluteFillObject is used for the backdrop Pressable
+// so it sits as a sibling under the sheet View, not as a parent
+// wrapping it. The old parent-wrapping Pressable intercepted touch
+// events before the ScrollView could claim them for scrolling —
+// which is why the sheet rendered but refused to scroll down to
+// the Delete button.
 import { Ionicons } from "@expo/vector-icons";
 import type { MealItemRow } from "@/types";
 import * as haptics from "@/lib/haptics";
@@ -117,8 +123,15 @@ export function MealDetailSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={handleBackdropPress}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.root}>
+        {/* Backdrop sits BENEATH the sheet so taps on the sheet
+            don't bubble through to close, and the ScrollView
+            inside the sheet owns its pan gestures cleanly. */}
+        <Pressable
+          style={StyleSheet.absoluteFillObject}
+          onPress={handleBackdropPress}
+        />
+        <View style={styles.sheet}>
           {item ? (
             <ScrollView
               style={{ flex: 1 }}
@@ -246,8 +259,8 @@ export function MealDetailSheet({
               </Pressable>
             </ScrollView>
           ) : null}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -286,10 +299,14 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  // Container holds the backdrop (absolute, under) + the sheet
+  // (flex child, bottom-aligned). This separation is what makes
+  // the ScrollView inside the sheet scrollable — the old wrapping
+  // Pressable captured pan gestures before ScrollView could.
+  root: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
   sheet: {
     backgroundColor: colors.bg,
