@@ -30,7 +30,7 @@ export default function Home() {
               SE<span className="seven">7</span>A
               <span className="arabic">{"صحة"}</span>
             </div>
-            <div className="nav-tag">EAT SMART {"·"} TRAIN SMART</div>
+            <div className="nav-tag">EAT SMART {"·"} TRACK SMART</div>
           </nav>
         </div>
       </StickyNav>
@@ -515,7 +515,7 @@ export default function Home() {
           <div className="footer-left">
             <div className="mono">SE7A {"©"} 2026 {"·"} DUBAI, UAE</div>
             <div className="footer-sub">
-              Eat smart · Train smart · Built in the Gulf, for the Gulf.
+              Eat smart · Track smart · Built in the Gulf, for the Gulf.
             </div>
           </div>
           <div className="footer-right">

@@ -25,10 +25,10 @@ const FEATURES = [
     body: "Snap a plate photo, say what you ate, or scan a barcode — SE7A does the macro math and respects what's actually knowable.",
   },
   {
-    img: "/screenshots/progress.png",
-    kicker: "PROGRESS",
-    headline: "Honest ranges, not fake precision",
-    body: "Weight changes over 7/14/30/90 days. BMI with context. Weekly energy as burned vs consumed. No vanity numbers.",
+    img: "/screenshots/plan.png",
+    kicker: "90-DAY PLAN",
+    headline: "A plan that writes itself",
+    body: "Generate a personalized 90-day plan with phased training intensity, periodized nutrition, and weekly milestones — then watch it adapt as you log.",
   },
   {
     img: "/screenshots/coach.png",
@@ -72,8 +72,8 @@ export function FeatureShowcase() {
               <Image
                 src={f.img}
                 alt={f.headline}
-                width={322}
-                height={698}
+                width={1290}
+                height={2646}
                 sizes="(max-width: 720px) 80vw, 320px"
                 className="showcase-img"
               />
