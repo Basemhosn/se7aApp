@@ -5,25 +5,40 @@
 # Setup (one-time, in the CodeMagic web UI):
 #   1. Team settings → Integrations → App Store Connect → Add new.
 #      Name it exactly "se7a_asc_key". Paste your App Store Connect
-#      API key: Issuer ID + Key ID + the .p8 file. Save.
-#   2. Open this app in CodeMagic → the workflow should now show
-#      "App Store Connect: se7a_asc_key" linked.
-#   3. Trigger a build. CodeMagic auto-handles cert + profile via
-#      the integration — no CERTIFICATE_PRIVATE_KEY or manual
-#      fetch-signing-files script needed. The 4 env vars from the
-#      earlier manual approach can be deleted; this is cleaner.
+#      API key: Issuer ID + Key ID + the .p8 file. Save. This
+#      integration auto-populates APP_STORE_CONNECT_PRIVATE_KEY,
+#      APP_STORE_CONNECT_KEY_IDENTIFIER and APP_STORE_CONNECT_ISSUER_ID
+#      for the build.
+#
+#   2. App settings → Environment variables → group "se7a_ios".
+#      Add ONE secure variable:
+#        CERTIFICATE_PRIVATE_KEY  (contents of ~/apple_dist.key —
+#                                  the PEM private key used to sign
+#                                  the CSR when --create mints a new
+#                                  Distribution certificate)
+#      The 4 old env vars from the manual approach can be deleted;
+#      only CERTIFICATE_PRIVATE_KEY is still needed.
+#
+#   3. Push to main and trigger a build.
+#
+# Signing: ios_signing on its own only FETCHES existing profiles.
+# To make Codemagic CREATE a Distribution cert + App Store profile
+# when none exist yet, we run an explicit app-store-connect
+# fetch-signing-files --create step. On first run it mints the cert
+# via the ASC API using CERTIFICATE_PRIVATE_KEY, registers the
+# bundle id if needed, and creates the profile. Subsequent runs
+# just fetch what's already there.
 
 workflows:
   ios-production:
     name: SE7A iOS (production)
     max_build_duration: 60
     instance_type: mac_mini_m2
-    # Links this workflow to the App Store Connect integration
-    # configured in CodeMagic UI. Named "se7a_asc_key" — must match
-    # the integration name in step 1 above.
     integrations:
       app_store_connect: se7a_asc_key
     environment:
+      groups:
+        - se7a_ios
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.se7a.mobile
@@ -48,15 +63,23 @@ workflows:
         script: |
           cd apps/mobile/ios
           pod install
-      - name: Apply signing profiles to Xcode project
-        # Codemagic's auto-signing (triggered by integrations +
-        # ios_signing above) has already fetched/created the cert
-        # and provisioning profile by this point. This step wires
-        # them into the Xcode project files.
+      - name: Fetch or create signing files (cert + profile)
+        # ios_signing alone only FETCHES profiles. --create here
+        # actually mints a Distribution cert and App Store profile
+        # on first run when none exist in Apple Developer yet. The
+        # ASC API credentials come from the integration above; the
+        # cert key comes from the CERTIFICATE_PRIVATE_KEY env var.
         script: |
+          keychain initialize
+          app-store-connect fetch-signing-files app.se7a.mobile \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --create \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY
+          keychain add-certificates
           cd apps/mobile
           xcode-project use-profiles
-      - name: Set build number from Codemagic BUILD_NUMBER
+      - name: Set build number
         script: |
           cd apps/mobile/ios
           agvtool new-version -all "$(($(date +%s) % 10000))"
@@ -77,4 +100,3 @@ workflows:
         notify:
           success: true
           failure: true
-# touch 1791122214
