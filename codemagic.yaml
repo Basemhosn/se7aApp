@@ -27,6 +27,12 @@ workflows:
       node: 20.11.0
       xcode: 16.0
       cocoapods: default
+      vars:
+        # Sentry's "Upload Debug Symbols to Sentry" build phase (from
+        # the @sentry/react-native/expo plugin) fails the archive when
+        # no SENTRY_AUTH_TOKEN is present. Skip the upload here; same
+        # policy used for EAS production builds.
+        SENTRY_DISABLE_AUTO_UPLOAD: "true"
     cache:
       cache_paths:
         - $HOME/Library/Caches/CocoaPods
