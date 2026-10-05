@@ -25,7 +25,11 @@ workflows:
         certificates:
           - se7a_distribution_cert
       node: 20.11.0
-      xcode: 16.0
+      # Apple requires iOS 26 SDK (Xcode 26+) for App Store uploads
+      # as of Oct 2026. `latest` picks whatever Codemagic has most
+      # recent on their build image — switch to a pinned version
+      # like `26.0` if a specific one is needed.
+      xcode: latest
       cocoapods: default
       vars:
         # Sentry's "Upload Debug Symbols to Sentry" build phase (from
