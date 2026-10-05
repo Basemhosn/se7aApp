@@ -71,9 +71,16 @@ workflows:
           cd apps/mobile
           xcode-project use-profiles --project ios/SE7A.xcodeproj
       - name: Set build number
+        # CFBundleVersion must be strictly greater than any previously-
+        # uploaded build within the same CFBundleShortVersion. Previous
+        # scheme (`$(date +%s) % 10000`) cycles every ~2.8h, which
+        # silently blocks uploads once the mod value drops below the
+        # highest existing TestFlight build (Apple accepts the upload
+        # then rejects it async with ITMS). Use the raw Unix timestamp
+        # instead — 10-digit, monotonic, forever-future-proof.
         script: |
           cd apps/mobile/ios
-          agvtool new-version -all "$(($(date +%s) % 10000))"
+          agvtool new-version -all "$(date +%s)"
       - name: Build .ipa
         script: |
           cd apps/mobile
