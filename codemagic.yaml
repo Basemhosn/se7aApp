@@ -46,9 +46,13 @@ workflows:
           cd apps/mobile/ios
           pod install
       - name: Apply signing profiles to Xcode project
+        # Default --project glob is '**/*.xcodeproj' which recurses
+        # into node_modules and tries to re-sign every nested library
+        # (RNDateTimePicker, etc). Those don't need the app's
+        # distribution profile — scope to the main app project only.
         script: |
           cd apps/mobile
-          xcode-project use-profiles
+          xcode-project use-profiles --project ios/SE7A.xcodeproj
       - name: Set build number
         script: |
           cd apps/mobile/ios
