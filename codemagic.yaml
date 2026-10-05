@@ -77,6 +77,12 @@ workflows:
       - apps/mobile/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      # dSYM paths — needed to symbolicate crashes. Codemagic's
+      # build-ipa drops them next to the archive and in DerivedData.
+      - apps/mobile/build/ios/**/*.dSYM
+      - apps/mobile/build/ios/xcarchive/dSYMs/*.dSYM
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+      - $HOME/Library/Developer/Xcode/Archives/**/*.xcarchive
     publishing:
       email:
         recipients:
