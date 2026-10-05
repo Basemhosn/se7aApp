@@ -31,6 +31,13 @@ workflows:
       # like `26.0` if a specific one is needed.
       xcode: latest
       cocoapods: default
+      # Env var group `se7a_env` holds the EXPO_PUBLIC_* vars that
+      # Expo bakes into the JS bundle at build time (Supabase URL +
+      # anon key, RevenueCat iOS key, Sentry DSN, PostHog key…).
+      # Without these, createClient() throws "supabaseUrl is required"
+      # on first launch and the app crashes before rendering.
+      groups:
+        - se7a_env
       vars:
         # Sentry's "Upload Debug Symbols to Sentry" build phase (from
         # the @sentry/react-native/expo plugin) fails the archive when
