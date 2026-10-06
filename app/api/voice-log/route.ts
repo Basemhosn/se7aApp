@@ -5,6 +5,7 @@ import { getRouteClient } from "@/lib/supabase/server";
 import { voiceLogResultSchema } from "@/lib/schemas/voiceLog";
 import { VOICE_LOG_SYSTEM_PROMPT } from "@/lib/prompts/voiceLog.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
+import { getEntitlement } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -34,7 +35,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const rl = await checkScanLimits(user.id);
+  const ent = await getEntitlement(supabase, user.id);
+  const rl = await checkScanLimits(user.id, { isPro: ent.is_pro });
   if (!rl.ok) return rateLimitedResponse(rl);
 
   const form = await request.formData().catch(() => null);
