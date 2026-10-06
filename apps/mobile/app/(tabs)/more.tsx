@@ -316,7 +316,10 @@ export default function More() {
         <MoreRow
           icon="log-out-outline"
           label={isArabic ? "تسجيل الخروج" : "Sign out"}
-          onPress={signOut}
+          onPress={async () => {
+            await signOut();
+            router.replace("/login");
+          }}
           tint={colors.coral}
           last
         />
