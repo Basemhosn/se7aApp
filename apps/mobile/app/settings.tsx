@@ -43,6 +43,7 @@ import { useEntitlement } from "@/lib/EntitlementContext";
 import { restorePurchases, hasProEntitlement } from "@/lib/rc";
 import { track } from "@/lib/analytics";
 import { colors, font, radius, spacing } from "@/lib/theme";
+import { Btn } from "@/components/Btn";
 
 const WEB_BASE = "https://se7a.vercel.app";
 const HEALTH_CONNECTED_KEY = "se7a_health_connected";
@@ -66,10 +67,15 @@ interface NotificationPrefs {
 }
 
 interface Integration {
-  provider: "strava" | "whoop" | "oura" | "fitbit";
+  provider: "strava" | "whoop" | "oura" | "fitbit" | "ultrahuman";
   provider_user_id: string | null;
   connected_at: string;
   last_sync_at: string | null;
+}
+
+interface UltrahumanConfig {
+  enabled: boolean;
+  share_code: string | null;
 }
 
 export default function Settings() {
@@ -94,6 +100,7 @@ export default function Settings() {
   const [busy, setBusy] = useState<
     Partial<Record<Integration["provider"], "connecting" | "syncing">>
   >({});
+  const [uhConfig, setUhConfig] = useState<UltrahumanConfig | null>(null);
 
   useEffect(() => {
     api<{ notification_prefs: NotificationPrefs }>("/api/profile/prefs")
@@ -102,6 +109,11 @@ export default function Settings() {
     api<{ integrations: Integration[] }>("/api/integrations")
       .then((r) => setIntegrations(r.integrations))
       .catch(() => setIntegrations([]));
+    // UH config is a feature-flag + share-code fetch. If the flag is
+    // off server-side, the row doesn't render — scaffold-safe default.
+    api<UltrahumanConfig>("/api/integrations/ultrahuman/config")
+      .then((r) => setUhConfig(r))
+      .catch(() => setUhConfig({ enabled: false, share_code: null }));
     if (user?.id) {
       supabase
         .from("profiles")
@@ -132,6 +144,7 @@ export default function Settings() {
   const strava = integrations.find((i) => i.provider === "strava");
   const whoop = integrations.find((i) => i.provider === "whoop");
   const oura = integrations.find((i) => i.provider === "oura");
+  const ultrahuman = integrations.find((i) => i.provider === "ultrahuman");
 
   const refreshIntegrations = useCallback(async () => {
     const listRes = await api<{ integrations: Integration[] }>(
@@ -661,8 +674,21 @@ export default function Settings() {
           onSync={() => sync("oura")}
           onDisconnect={() => disconnect("oura", "Oura")}
           isArabic={isArabic}
-          last
+          last={!uhConfig?.enabled}
         />
+        {uhConfig?.enabled && (
+          <UltrahumanRow
+            integration={ultrahuman}
+            shareCode={uhConfig.share_code}
+            onChanged={async () => {
+              const r = await api<{ integrations: Integration[] }>(
+                "/api/integrations"
+              );
+              if (r) setIntegrations(r.integrations);
+            }}
+            isArabic={isArabic}
+          />
+        )}
       </Section>
 
       {prefs && (
@@ -2230,4 +2256,199 @@ function shortAgo(iso: string): string {
   const hours = Math.round(minutes / 60);
   if (hours < 48) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
+}
+
+/**
+ * Ultrahuman row — distinct from IntegrationRow because UH's connect
+ * flow is "paste your UH email + enter SE7A's share code in the UH
+ * app", not OAuth. Flag-gated: only renders when the server returns
+ * enabled=true from /api/integrations/ultrahuman/config.
+ */
+function UltrahumanRow({
+  integration,
+  shareCode,
+  onChanged,
+  isArabic,
+}: {
+  integration: Integration | undefined;
+  shareCode: string | null;
+  onChanged: () => void | Promise<void>;
+  isArabic: boolean;
+}) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState<"connecting" | "syncing" | null>(null);
+  const connected = !!integration;
+
+  const doConnect = async () => {
+    if (!email) return;
+    setBusy("connecting");
+    try {
+      await api("/api/integrations/ultrahuman/connect", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      setEmail("");
+      await onChanged();
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "تعذّر الربط" : "Couldn't connect",
+        (e as Error).message
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doSync = async () => {
+    setBusy("syncing");
+    try {
+      const res = await api<{
+        days_synced: number;
+        sleep_upserted: number;
+        recovery_upserted: number;
+        glucose_upserted: number;
+        error?: string;
+      }>("/api/integrations/ultrahuman/sync", { method: "POST" });
+      await onChanged();
+      Alert.alert(
+        isArabic ? "تمت المزامنة" : "Synced",
+        res.error
+          ? res.error
+          : `${res.days_synced} day(s) • sleep ${res.sleep_upserted} • recovery ${res.recovery_upserted} • glucose ${res.glucose_upserted}`
+      );
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "تعذّرت المزامنة" : "Sync failed",
+        (e as Error).message
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doDisconnect = async () => {
+    try {
+      await api("/api/integrations/ultrahuman/disconnect", { method: "POST" });
+      await onChanged();
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "تعذّر الفصل" : "Couldn't disconnect",
+        (e as Error).message
+      );
+    }
+  };
+
+  return (
+    <View style={{ paddingVertical: spacing.md, gap: spacing.sm }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: "#5A3FFF",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="pulse" size={20} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: font.body, fontSize: 15, color: colors.ink }}>
+            Ultrahuman
+          </Text>
+          <Text style={{ fontFamily: font.mono, fontSize: 11, color: colors.dim }}>
+            {connected
+              ? `${integration?.provider_user_id ?? ""}${
+                  integration?.last_sync_at
+                    ? ` • synced ${shortAgo(integration.last_sync_at)}`
+                    : ""
+                }`
+              : isArabic
+                ? "اربط لاستيراد النوم والتعافي والجلوكوز."
+                : "Import sleep, recovery, and glucose."}
+          </Text>
+        </View>
+      </View>
+
+      {!connected && (
+        <>
+          {shareCode && (
+            <View
+              style={{
+                backgroundColor: colors.panel2,
+                borderRadius: radius.sm,
+                padding: spacing.sm,
+                gap: 4,
+              }}
+            >
+              <Text style={{ fontFamily: font.mono, fontSize: 10, color: colors.dim, letterSpacing: 1.2 }}>
+                {isArabic ? "خطوة ١: أدخل هذا الرمز في تطبيق Ultrahuman" : "STEP 1 — ENTER IN THE ULTRAHUMAN APP"}
+              </Text>
+              <Text style={{ fontFamily: font.displayBold, fontSize: 18, color: colors.gold, letterSpacing: 2 }}>
+                {shareCode}
+              </Text>
+              <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.dim }}>
+                {isArabic
+                  ? "Ultrahuman → الملف الشخصي → الإعدادات → Partner ID"
+                  : "Ultrahuman app → Profile → Settings → Partner ID"}
+              </Text>
+            </View>
+          )}
+          <View style={{ gap: spacing.xs }}>
+            <Text style={{ fontFamily: font.mono, fontSize: 10, color: colors.dim, letterSpacing: 1.2 }}>
+              {isArabic ? "خطوة ٢: البريد الإلكتروني لحساب Ultrahuman" : "STEP 2 — YOUR ULTRAHUMAN EMAIL"}
+            </Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.dim}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={{
+                backgroundColor: colors.panel2,
+                borderRadius: radius.sm,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: 10,
+                color: colors.ink,
+                fontFamily: font.body,
+                fontSize: 14,
+              }}
+            />
+            <Btn
+              label={
+                busy === "connecting"
+                  ? isArabic ? "جاري الربط…" : "Connecting…"
+                  : isArabic ? "ربط" : "Connect"
+              }
+              onPress={doConnect}
+              disabled={!email || busy === "connecting"}
+              loading={busy === "connecting"}
+            />
+          </View>
+        </>
+      )}
+
+      {connected && (
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Btn
+              label={busy === "syncing" ? "Syncing…" : isArabic ? "مزامنة الآن" : "Sync now"}
+              onPress={doSync}
+              loading={busy === "syncing"}
+              disabled={busy === "syncing"}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn
+              label={isArabic ? "فصل" : "Disconnect"}
+              onPress={doDisconnect}
+              variant="ghost"
+            />
+          </View>
+        </View>
+      )}
+    </View>
+  );
 }
