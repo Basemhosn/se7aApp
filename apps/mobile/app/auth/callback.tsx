@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as Sentry from "@sentry/react-native";
 import { supabase } from "@/lib/supabase";
-import { colors, font, spacing } from "@/lib/theme";
+import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
  * Deep-link landing for the magic-link redirect. Supabase emails the
@@ -79,10 +79,23 @@ export default function AuthCallback() {
 
   return (
     <View style={styles.center}>
-      <ActivityIndicator color={colors.gold} />
-      <Text style={styles.text}>
-        {err ? err : t("auth.callback.signing_in")}
-      </Text>
+      {err ? (
+        <>
+          <Text style={styles.err}>{err}</Text>
+          <Pressable
+            onPress={() => router.replace("/login")}
+            style={styles.backBtn}
+            accessibilityRole="button"
+          >
+            <Text style={styles.backBtnText}>{t("auth.callback.back_to_login")}</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <ActivityIndicator color={colors.gold} />
+          <Text style={styles.text}>{t("auth.callback.signing_in")}</Text>
+        </>
+      )}
     </View>
   );
 }
@@ -114,6 +127,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.md,
+    padding: spacing.lg,
   },
   text: { color: colors.dim, fontFamily: font.body, fontSize: 14 },
+  err: {
+    color: colors.coral,
+    fontFamily: font.body,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  backBtn: {
+    marginTop: spacing.sm,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.08)",
+  },
+  backBtnText: {
+    color: colors.gold,
+    fontFamily: font.displayBold,
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
 });

@@ -489,7 +489,8 @@
     "callback": {
       "signing_in": "Signing you in…",
       "missing_code": "Missing sign-in code.",
-      "no_user": "Sign-in succeeded but no user — try again."
+      "no_user": "Sign-in succeeded but no user — try again.",
+      "back_to_login": "Back to sign in"
     }
   },
   "onboarding": {

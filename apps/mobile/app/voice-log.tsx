@@ -186,8 +186,11 @@ export default function VoiceLog() {
       setPhase("review");
     } catch (e) {
       if (e instanceof RateLimitedError) {
-        const { title, body } = rateLimitMessage(e);
-        Alert.alert(title, body);
+        // Keep the rate-limit message pinned on the idle screen rather
+        // than only showing it in a dismissed Alert — the user needs
+        // to know they're blocked without re-navigating.
+        const { body } = rateLimitMessage(e);
+        setErr(body);
         setPhase("idle");
         return;
       }
