@@ -409,6 +409,7 @@
       "pending_ready_body": "Tap to see what we saw · {{n}} items",
       "pending_failed_title": "Scan failed",
       "pending_failed_body": "Tap to retry",
+      "pending_retry": "RETRY",
       "pending_uploaded_header": "Recently uploaded"
     },
     "menu": {

@@ -1582,12 +1582,18 @@ function PendingScanCard({
               : t("scan.plate.pending_wait_body")}
         </Text>
       </View>
-      {(ready || failed) ? (
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={ready ? colors.gold : colors.coral}
-        />
+      {ready ? (
+        <Ionicons name="chevron-forward" size={18} color={colors.gold} />
+      ) : failed ? (
+        // Explicit retry pill so users know tapping the card re-opens
+        // the camera. Previously the retry action was invisible — only
+        // a coral chevron hinted at it.
+        <View style={styles.pendingRetryPill}>
+          <Ionicons name="refresh" size={12} color={colors.coral} />
+          <Text style={styles.pendingRetryText}>
+            {t("scan.plate.pending_retry")}
+          </Text>
+        </View>
       ) : (
         <Pressable
           hitSlop={12}
@@ -3470,6 +3476,23 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontFamily: font.bodyBold,
     fontSize: 14,
+  },
+  pendingRetryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220, 90, 70, 0.4)",
+    backgroundColor: "rgba(220, 90, 70, 0.08)",
+  },
+  pendingRetryText: {
+    color: colors.coral,
+    fontFamily: font.mono,
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   pendingBody: {
     color: colors.dim,

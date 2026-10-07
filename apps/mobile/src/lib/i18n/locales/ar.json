@@ -409,6 +409,7 @@
       "pending_ready_body": "اضغط لرؤية ما رأيناه · {{n}} عناصر",
       "pending_failed_title": "فشل المسح",
       "pending_failed_body": "اضغط للمحاولة مرة أخرى",
+      "pending_retry": "إعادة",
       "pending_uploaded_header": "تم رفعه مؤخرًا"
     },
     "menu": {
