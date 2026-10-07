@@ -849,6 +849,14 @@ function TrainingSubtab({
           <Text style={styles.emptyBody}>
             {t("progress.training_no_prs_body")}
           </Text>
+          <Pressable
+            style={styles.emptyCta}
+            onPress={() => router.push("/workout")}
+          >
+            <Text style={styles.emptyCtaText}>
+              {t("progress.training_cta_log_workout")}
+            </Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -2242,5 +2250,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     lineHeight: 17,
+  },
+  emptyCta: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.08)",
+  },
+  emptyCtaText: {
+    color: colors.gold,
+    fontFamily: font.displayBold,
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
 });

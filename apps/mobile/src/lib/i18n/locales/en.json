@@ -216,6 +216,7 @@
     "body_no_change": "No change yet",
     "training_no_prs_title": "No PRs yet",
     "training_no_prs_body": "Log workouts to see your PRs here.",
+    "training_cta_log_workout": "Log a workout",
     "streak_kicker": "STREAK",
     "streak_this_week": "{{done}}/7 this week · best {{best}}",
     "photos_watch": "Watch yourself change",

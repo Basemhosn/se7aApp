@@ -216,6 +216,7 @@
     "body_no_change": "لا تغيير بعد",
     "training_no_prs_title": "لا PRs بعد",
     "training_no_prs_body": "سجّل تمارينك لتظهر PRs هنا.",
+    "training_cta_log_workout": "سجّل تمريناً",
     "streak_kicker": "السلسلة",
     "streak_this_week": "{{done}}/7 هذا الأسبوع · أفضل {{best}}",
     "photos_watch": "شاهد تغيّرك",

@@ -27,7 +27,7 @@ export function TrendChart({
       <View style={[styles.empty, { width, height }]}>
         <Text style={styles.emptyText}>
           {points.length === 0
-            ? "Log two weigh-ins to see a trend."
+            ? "Log two weigh-ins to see a trend. The form is right below."
             : "One more log and we'll draw the trend."}
         </Text>
       </View>
