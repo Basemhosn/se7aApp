@@ -476,12 +476,14 @@ export default function Home() {
   }, [streak, isArabic, load]);
 
   // ── Loading ──────────────────────────────────────────────────────
+  // Render a skeleton (greeting + ring placeholder + two meal row
+  // skeletons) instead of a bare spinner. Keeps the user oriented
+  // during the ~500ms-2s cold-start fetch so the screen never feels
+  // like a dead loading page.
   if (loading) {
     return (
       <SafeAreaView style={styles.shell} edges={["top", "bottom"]}>
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.gold} />
-        </View>
+        <HomeSkeleton />
       </SafeAreaView>
     );
   }
@@ -2478,6 +2480,89 @@ function mergePendingIntoLedger(
     },
   };
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Loading skeleton — avoids a dead full-screen spinner on cold start.
+
+function HomeSkeleton() {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.85, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const Row = ({ w, h, radius: r = 8 }: { w: number | string; h: number; radius?: number }) => (
+    <Animated.View
+      style={{
+        width: w as number,
+        height: h,
+        borderRadius: r,
+        backgroundColor: colors.panel2,
+        opacity: pulse,
+      }}
+    />
+  );
+
+  return (
+    <View style={skeletonStyles.wrap}>
+      <View style={skeletonStyles.headerRow}>
+        <Row w={140} h={14} />
+        <Row w={36} h={36} radius={18} />
+      </View>
+      <View style={skeletonStyles.ringWrap}>
+        <Animated.View
+          style={[skeletonStyles.ring, { opacity: pulse }]}
+        />
+      </View>
+      <View style={skeletonStyles.mealsHead}>
+        <Row w={120} h={11} />
+      </View>
+      <View style={skeletonStyles.meals}>
+        <View style={skeletonStyles.mealRow}>
+          <Row w={44} h={44} radius={10} />
+          <View style={{ gap: 6, flex: 1 }}>
+            <Row w="60%" h={12} />
+            <Row w="40%" h={10} />
+          </View>
+        </View>
+        <View style={skeletonStyles.mealRow}>
+          <Row w={44} h={44} radius={10} />
+          <View style={{ gap: 6, flex: 1 }}>
+            <Row w="70%" h={12} />
+            <Row w="35%" h={10} />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  wrap: { flex: 1, paddingHorizontal: 20, paddingTop: 12, gap: 20 },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  ringWrap: { alignItems: "center", marginVertical: 20 },
+  ring: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 18,
+    borderColor: colors.panel2,
+  },
+  mealsHead: { marginTop: 4 },
+  meals: { gap: 14 },
+  mealRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+});
 
 // ────────────────────────────────────────────────────────────────────
 // Styles
