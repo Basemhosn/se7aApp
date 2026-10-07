@@ -69,7 +69,14 @@ export default function Log() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await load();
+              // Cap the spinner at 10s so a hung fetch doesn't lock the
+              // pull-to-refresh gesture indefinitely. load() still runs
+              // to completion in the background and will update the UI
+              // if it eventually succeeds.
+              await Promise.race([
+                load(),
+                new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+              ]);
               setRefreshing(false);
             }}
             tintColor={colors.gold}

@@ -22,6 +22,7 @@ import {
   rateLimitMessage,
 } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
+import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
 import { slotForNow } from "@/lib/slot";
@@ -263,8 +264,10 @@ export default function VoiceLog() {
           saturated_fat_g_high: it.saturated_fat_g_high ?? null,
         }))
       );
+      haptics.success();
       router.replace("/");
     } catch (e) {
+      haptics.errorHaptic();
       setErr((e as Error).message ?? "Couldn't save — try again.");
       setPhase("review");
     }

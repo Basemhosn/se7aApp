@@ -15,6 +15,7 @@ import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { api } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
+import * as haptics from "@/lib/haptics";
 import type { MealSlot } from "@/types";
 import { slotForNow } from "@/lib/slot";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -131,8 +132,10 @@ export default function ManualMeal() {
       pushOptimisticLogItems([
         { ...item, source: "manual", meal_slot: slot },
       ]);
+      haptics.success();
       router.replace("/");
     } catch (e) {
+      haptics.errorHaptic();
       setErr((e as Error).message || t("manual_meal.couldnt_save"));
       setBusy(false);
     }

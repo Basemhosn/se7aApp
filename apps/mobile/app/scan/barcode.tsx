@@ -22,6 +22,7 @@ import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
+import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
 import { SLOTS, slotForNow } from "@/lib/slot";
@@ -208,8 +209,10 @@ export default function BarcodeScan() {
       pushOptimisticLogItems([
         { ...item, source: "barcode", meal_slot: slot },
       ]);
+      haptics.success();
       router.replace("/");
     } catch (e) {
+      haptics.errorHaptic();
       setErr((e as Error).message || "Couldn't log — try again.");
       setPhase("review");
     }
