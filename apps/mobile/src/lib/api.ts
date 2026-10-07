@@ -213,3 +213,70 @@ function extOf(mime: string): string {
   if (mime === "image/webp") return "webp";
   return "bin";
 }
+
+/**
+ * Stream a POST that returns plain-text chunks (used by the coach
+ * endpoint, which calls streamText + toTextStreamResponse server-side).
+ *
+ * Uses XMLHttpRequest.onprogress because RN's fetch() in Hermes does
+ * not expose a usable ReadableStream on all platforms. onprogress gives
+ * the accumulated responseText so far on every network flush, which is
+ * exactly what we want for token-by-token rendering.
+ *
+ * onChunk is called with the FULL accumulated text each time; the
+ * caller just overwrites its "streaming" state with that value. Resolves
+ * with the final text once the connection closes successfully.
+ */
+export async function streamTextPost(
+  path: string,
+  body: unknown,
+  onChunk: (fullText: string) => void
+): Promise<string> {
+  const auth = await bearerHeader();
+  const headers = {
+    "Content-Type": "application/json",
+    ...localeHeader(),
+    ...tzHeader(),
+    ...auth,
+  };
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BASE}${path}`);
+    for (const [k, v] of Object.entries(headers)) {
+      xhr.setRequestHeader(k, v);
+    }
+    xhr.onprogress = () => {
+      // responseText accumulates — RN gives us a growing buffer, which
+      // is exactly what the UI wants (overwrite the streaming turn each
+      // flush rather than tracking deltas ourselves).
+      onChunk(xhr.responseText);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.responseText);
+      } else {
+        // The server returns JSON on failure (`{ error: ... }`). Try to
+        // parse an error message; fall back to the status.
+        try {
+          const parsed = JSON.parse(xhr.responseText) as {
+            error?: string;
+            details?: string;
+          };
+          reject(
+            new ApiError(
+              xhr.status,
+              parsed.details ?? parsed.error ?? `HTTP ${xhr.status}`,
+              parsed
+            )
+          );
+        } catch {
+          reject(new ApiError(xhr.status, `HTTP ${xhr.status}`));
+        }
+      }
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network_error"));
+    xhr.ontimeout = () => reject(new ApiError(0, "timeout"));
+    xhr.send(JSON.stringify(body));
+  });
+}

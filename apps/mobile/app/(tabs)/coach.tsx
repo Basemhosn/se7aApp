@@ -15,7 +15,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { api, ProRequiredError } from "@/lib/api";
+import { api, ProRequiredError, streamTextPost } from "@/lib/api";
 import { Btn } from "@/components/Btn";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -98,29 +98,46 @@ export default function Coach() {
     if (!clean || busy) return;
     setInput("");
     setErr("");
+    const userTurnId = Date.now();
+    const assistantTurnId = userTurnId + 1;
     const optimistic: Message = {
-      id: Date.now(),
+      id: userTurnId,
       role: "user",
       content: clean,
       created_at: new Date().toISOString(),
     };
-    setMessages((m) => [...m, optimistic]);
+    // Push the user turn + an empty assistant placeholder in one batch
+    // so the streamed response fills in-place rather than popping a
+    // second bubble when the first chunk arrives.
+    setMessages((m) => [
+      ...m,
+      optimistic,
+      {
+        id: assistantTurnId,
+        role: "assistant",
+        content: "",
+        created_at: new Date().toISOString(),
+      },
+    ]);
     setBusy(true);
     try {
-      const res = await api<{ reply: string }>("/api/chat/send", {
-        method: "POST",
-        body: JSON.stringify({ content: clean }),
-      });
-      setMessages((m) => [
-        ...m,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          content: res.reply,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      await streamTextPost(
+        "/api/chat/send",
+        { content: clean },
+        (full) => {
+          // Overwrite the assistant placeholder with the accumulated
+          // text on every network flush.
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === assistantTurnId ? { ...msg, content: full } : msg
+            )
+          );
+        }
+      );
     } catch (e) {
+      // Drop the empty assistant placeholder on failure — the UX is
+      // the user's turn + an error banner, not a blank reply bubble.
+      setMessages((m) => m.filter((msg) => msg.id !== assistantTurnId));
       if (e instanceof ProRequiredError) {
         router.push({ pathname: "/paywall", params: { feature: "ai_coach" } });
       } else {

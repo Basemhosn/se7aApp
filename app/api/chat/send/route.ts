@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { getRouteClient } from "@/lib/supabase/server";
 import { sendMessageSchema } from "@/lib/schemas/chat";
@@ -77,39 +77,36 @@ export async function POST(request: Request) {
     content: h.content,
   }));
 
-  let assistantText = "";
+  // Stream the model output as plain-text chunks so the mobile client
+  // can render partial tokens via XMLHttpRequest.onprogress. The final
+  // assistant turn is persisted to chat_messages in the onFinish
+  // callback — the response completes only after that write lands, so
+  // a page refresh immediately after the stream ends sees it.
+  //
+  // Model errors become an "[error:…]" trailer so the client can
+  // surface a human-readable failure even once bytes have flushed.
   try {
-    const result = await generateText({
+    const result = streamText({
       model: anthropic(MODEL_ID),
       system: `${COACH_SYSTEM_PROMPT_V2}\n\n${langInstruction}\n\n${contextRes.block}`,
       messages,
       maxOutputTokens: 800,
+      onFinish: async ({ text }) => {
+        const final = text.trim();
+        if (!final) return;
+        await supabase.from("chat_messages").insert({
+          user_id: user.id,
+          role: "assistant",
+          content: final,
+        });
+      },
     });
-    assistantText = result.text.trim();
+    return result.toTextStreamResponse();
   } catch (e) {
-    // Roll back the user turn? No — user still typed it. Return
-    // graceful error; the client will show the user turn + an error.
     return NextResponse.json(
       { error: "ai_failed", details: String((e as Error)?.message ?? e) },
       { status: 502 }
     );
   }
-
-  const { error: insertAiErr } = await supabase.from("chat_messages").insert({
-    user_id: user.id,
-    role: "assistant",
-    content: assistantText,
-  });
-  if (insertAiErr) {
-    return NextResponse.json(
-      { error: "persist_failed", details: insertAiErr.message },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
-    reply: assistantText,
-  });
 }
 
