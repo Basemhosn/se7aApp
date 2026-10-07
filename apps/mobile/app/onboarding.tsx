@@ -187,7 +187,7 @@ export default function Onboarding() {
       case "allergies": return true; // skippable
       case "rate": return !Number.isNaN(rate);
       case "reveal": return true; // no workout program picker anymore
-      case "attribution": return !!attribution;
+      case "attribution": return true; // optional — don't gate the funnel on marketing analytics
       case "trial_offer": return true;
       default: return false;
     }
@@ -378,7 +378,7 @@ export default function Onboarding() {
     <>
       {!!err && <Text style={styles.err}>{err}</Text>}
       <View style={styles.footerRow}>
-        {stepIndex > 0 && step !== "reveal" ? (
+        {stepIndex > 0 ? (
           <View style={{ flex: 1 }}>
             <Btn label={t("common.back")} variant="ghost" onPress={back} disabled={busy} />
           </View>
