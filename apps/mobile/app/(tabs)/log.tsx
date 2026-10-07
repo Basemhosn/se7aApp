@@ -34,6 +34,7 @@ export default function Log() {
   const [ledger, setLedger] = useState<LedgerDayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -42,8 +43,12 @@ export default function Log() {
         `/api/ledger/today?tz_offset_min=${tzOffsetMin}`
       );
       setLedger(today);
-    } catch {
-      /* empty */
+      setLoadErr(null);
+    } catch (e) {
+      // Surface the error instead of silently rendering an empty state —
+      // users previously saw "no meals" when the fetch had actually
+      // failed, with no path forward.
+      setLoadErr((e as Error)?.message ?? "network_error");
     }
     setLoading(false);
   }, []);
@@ -141,6 +146,20 @@ export default function Log() {
             count: ledger?.totals.items.length ?? 0,
           })}
         </SectionKicker>
+        {loadErr && !loading && (
+          <Pressable
+            style={styles.errBanner}
+            onPress={() => {
+              setLoading(true);
+              void load();
+            }}
+          >
+            <Ionicons name="warning-outline" size={16} color={colors.coral} />
+            <Text style={styles.errBannerText}>
+              Couldn't load today's meals. Tap to retry.
+            </Text>
+          </Pressable>
+        )}
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator color={colors.gold} />
@@ -515,6 +534,24 @@ const styles = StyleSheet.create({
   loadingRow: {
     alignItems: "center",
     paddingVertical: spacing.xl,
+  },
+  errBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: "rgba(220, 90, 70, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(220, 90, 70, 0.25)",
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  errBannerText: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.coral,
+    flex: 1,
   },
   todayCard: {
     backgroundColor: colors.panel,
