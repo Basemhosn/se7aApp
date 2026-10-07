@@ -21,7 +21,7 @@ import {
   RateLimitedError,
   rateLimitMessage,
 } from "@/lib/api";
-import { markDayDirty } from "@/lib/calendarCache";
+import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { MealSlot } from "@/types";
 import { slotForNow } from "@/lib/slot";
@@ -60,6 +60,11 @@ interface VoiceLogResponse {
 
 type Phase = "idle" | "recording" | "transcribing" | "review" | "saving";
 
+// Hard cap on recording length. Beyond ~30s the user is almost certainly
+// rambling (not meal-naming), the audio approaches the 15MB upload cap,
+// and Whisper's cost scales linearly with duration. Auto-stop + submit.
+const MAX_RECORDING_SEC = 30;
+
 export default function VoiceLog() {
   const { i18n, t } = useTranslation();
   const isArabic = i18n.language === "ar";
@@ -77,8 +82,31 @@ export default function VoiceLog() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [slot, setSlot] = useState<MealSlot>(initialSlot);
   const [err, setErr] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const pulse = useRef(new Animated.Value(1)).current;
+
+  // Elapsed-seconds counter while recording. Auto-stops + sends at
+  // MAX_RECORDING_SEC so a long press / forgotten mic doesn't rack up
+  // Whisper cost or hit the 15MB server cap silently.
+  useEffect(() => {
+    if (phase !== "recording") {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const tick = setInterval(() => {
+      const sec = Math.floor((Date.now() - started) / 1000);
+      setElapsed(sec);
+      if (sec >= MAX_RECORDING_SEC) {
+        clearInterval(tick);
+        void stopAndSend();
+      }
+    }, 250);
+    return () => clearInterval(tick);
+    // stopAndSend is stable (useCallback); including it keeps hooks lint happy
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Pulse the mic while recording so the user knows it's live.
   useEffect(() => {
@@ -207,6 +235,34 @@ export default function VoiceLog() {
         }),
       });
       markDayDirty();
+      // Instant Home ring update — Home's useFocusEffect merges these
+      // in before load() finishes, so the just-logged voice meal
+      // doesn't take a round-trip to appear.
+      pushOptimisticLogItems(
+        picked.map((it) => ({
+          name: it.name,
+          portion_estimate: it.portion_estimate ?? null,
+          source: "voice",
+          confidence: it.confidence ?? null,
+          meal_slot: slot,
+          kcal_low: it.kcal_low,
+          kcal_high: it.kcal_high,
+          protein_g_low: it.protein_g_low,
+          protein_g_high: it.protein_g_high,
+          carb_g_low: it.carb_g_low,
+          carb_g_high: it.carb_g_high,
+          fat_g_low: it.fat_g_low,
+          fat_g_high: it.fat_g_high,
+          sodium_mg_low: it.sodium_mg_low ?? null,
+          sodium_mg_high: it.sodium_mg_high ?? null,
+          fiber_g_low: it.fiber_g_low ?? null,
+          fiber_g_high: it.fiber_g_high ?? null,
+          sugar_g_low: it.sugar_g_low ?? null,
+          sugar_g_high: it.sugar_g_high ?? null,
+          saturated_fat_g_low: it.saturated_fat_g_low ?? null,
+          saturated_fat_g_high: it.saturated_fat_g_high ?? null,
+        }))
+      );
       router.replace("/");
     } catch (e) {
       setErr((e as Error).message ?? "Couldn't save — try again.");
@@ -262,6 +318,9 @@ export default function VoiceLog() {
               <Ionicons name="stop" size={44} color={colors.bg} />
             </Animated.View>
           </Pressable>
+          <Text style={styles.elapsed}>
+            {elapsed}s / {MAX_RECORDING_SEC}s
+          </Text>
           <Text style={styles.hint}>
             {isArabic ? "اضغط للإيقاف والتحويل" : "Tap to stop and process"}
           </Text>
@@ -416,6 +475,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.dim,
     letterSpacing: 1.2,
+    marginTop: spacing.sm,
+  },
+  elapsed: {
+    fontFamily: font.mono,
+    fontSize: 14,
+    color: colors.coral,
+    letterSpacing: 1.4,
     marginTop: spacing.sm,
   },
   err: { color: colors.coral, fontFamily: font.body, fontSize: 13 },

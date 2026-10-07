@@ -63,13 +63,14 @@ export async function POST(request: Request) {
   }
 
   // ── 1. Transcribe with Whisper ──────────────────────────────────
+  const locale = localeFromRequest(request);
   const whisperForm = new FormData();
   whisperForm.append("file", file);
   whisperForm.append("model", "whisper-1");
-  // language hint helps Arabic/English mixed transcription accuracy.
-  // "en" is a safe default; Whisper still recognizes Arabic words
-  // embedded in an English utterance.
-  whisperForm.append("language", "en");
+  // Pass the user's app locale as a hint. Arabic-primary users get
+  // noticeably better accuracy with "ar"; Whisper still handles
+  // code-switched Arabic/English either way.
+  whisperForm.append("language", locale);
   whisperForm.append("response_format", "text");
 
   let transcript = "";
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
   }
 
   // ── 2. Parse transcript into meal items with Claude ─────────────
-  const locale = localeFromRequest(request);
   let parsed;
   try {
     const result = await generateObject({
