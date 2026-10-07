@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getRouteClient } from "@/lib/supabase/server";
+import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
 import {
   BADGES,
   evaluateBadges,
   type BadgeDef,
   type BadgeSnapshot,
 } from "@/lib/badges";
+import {
+  claimNotification,
+  loadTokensByUser,
+  localDayKey,
+  sendExpoPush,
+} from "@/lib/notifications";
+import { badgeNotificationCopy } from "@/lib/badgePushCopy";
+import { localeFromRequest } from "@/lib/i18n";
+import { tzOffsetFromRequest } from "@/lib/tz";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +76,11 @@ export async function GET(request: Request) {
         r as { badge_key: string; earned_at: string; seen_at: string | null }
       );
     }
+    // Fire a push per newly earned badge. Dedup via claimNotification
+    // so a user who hammers the Achievements tab doesn't get spammed.
+    // All failures are swallowed — the badge award itself is more
+    // important than the celebratory push.
+    void sendBadgePushes(request, user.id, toInsert.map((t) => t.badge_key));
   }
 
   const shelf: (BadgeDef & {
@@ -120,6 +134,51 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, marked: keys.length });
+}
+
+/**
+ * Fire one Expo push per newly earned badge. Runs out-of-band from the
+ * GET response so the badge payload returns at normal speed. Failures
+ * are swallowed — badges are already persisted; the push is just the
+ * celebration layer.
+ *
+ * Dedup kind is `badge:<key>` with the user's local day as the day
+ * key. If somehow the same badge is awarded twice (shouldn't happen
+ * given the onConflict upsert) the dedup keeps us honest.
+ */
+async function sendBadgePushes(
+  request: Request,
+  userId: string,
+  badgeKeys: string[]
+): Promise<void> {
+  if (badgeKeys.length === 0) return;
+  try {
+    const admin = getAdminClient();
+    const locale = localeFromRequest(request) === "ar" ? "ar" : "en";
+    const tzOffsetMin = tzOffsetFromRequest(request) ?? 0;
+    const dayKey = localDayKey(new Date(), tzOffsetMin);
+
+    const tokensByUser = await loadTokensByUser(admin);
+    const tokens = tokensByUser.get(userId) ?? [];
+    if (tokens.length === 0) return;
+
+    for (const key of badgeKeys) {
+      const copy = badgeNotificationCopy(key, locale);
+      if (!copy) continue;
+      const claimed = await claimNotification(admin, userId, `badge:${key}`, dayKey);
+      if (!claimed) continue;
+      await sendExpoPush(
+        tokens.map((tok) => ({
+          to: tok.expo_token,
+          title: copy.title,
+          body: copy.body,
+          data: { kind: "badge_earned", badge_key: key },
+        }))
+      );
+    }
+  } catch {
+    /* swallow — never fail the GET on push failure */
+  }
 }
 
 async function buildSnapshot(
