@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { api, ProRequiredError, streamTextPost } from "@/lib/api";
 import { Btn } from "@/components/Btn";
+import { InlineMarkdown } from "@/components/InlineMarkdown";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
@@ -320,9 +321,15 @@ function Bubble({
             : { borderBottomLeftRadius: 4 }),
       ]}
     >
-      <Text style={isUser ? styles.userText : styles.assistantText}>
-        {msg.content}
-      </Text>
+      {isUser ? (
+        <Text style={styles.userText}>{msg.content}</Text>
+      ) : (
+        <InlineMarkdown
+          text={msg.content}
+          style={styles.assistantText}
+          boldStyle={{ fontFamily: font.bodyBold }}
+        />
+      )}
     </View>
   );
 }

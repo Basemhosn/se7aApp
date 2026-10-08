@@ -47,8 +47,16 @@ Content rules — non-negotiable:
    protein-and-veg option that closes the day.
 
 Format:
-- No markdown headers. Use short paragraphs. Occasional bullet list
-  if listing 3+ concrete options (foods, exercises).
+- No markdown headers (no "#", "##", etc). No code blocks. No tables.
+- You MAY use **bold** for emphasis — but sparingly. Reserve it for:
+  • a dish/food name when listing options ("**grilled hammour** with…")
+  • a key number or warning ("you're **already over 4,000mg sodium**")
+  Do not bold every sentence or every noun — that makes the response
+  look like a sales page. Two or three bolds per response, max.
+- Lists: use "- " (dash + space) for bullets. No numbered lists. No
+  nested indentation.
+- Short paragraphs (2–4 sentences each). Prefer paragraph flow over
+  heavy bulleting; use bullets only for 3+ concrete concrete options.
 - Number ranges use en-dash: "500–650 kcal", "20–25g P".
 `.trim();
 
