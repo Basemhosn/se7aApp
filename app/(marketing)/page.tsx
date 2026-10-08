@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { AppStoreCta } from "@/components/AppStoreCta";
+import Waitlist from "@/components/Waitlist";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { Reveal } from "@/components/Reveal";
 import { StickyNav } from "@/components/StickyNav";
@@ -51,7 +51,7 @@ export default function Home() {
               <strong>Every macro is a range.</strong> A photo can&apos;t see
               the oil {"—"} we don&apos;t pretend it can.
             </p>
-            <AppStoreCta />
+            <Waitlist />
           </div>
           <div className="hero-shot">
             <div className="hero-shot-wrap">
@@ -503,11 +503,11 @@ export default function Home() {
               <span className="gold">iOS beta.</span>
             </StaggerText>
             <p className="final-sub">
-              SE7A is in TestFlight — a limited, free beta while we polish
-              the final touches before the App Store launch. Android lands
-              right after.
+              SE7A is in private beta while we polish the final touches
+              before the App Store launch. Join the waitlist and we&apos;ll
+              reach out when invites open. Android lands right after.
             </p>
-            <AppStoreCta />
+            <Waitlist />
           </section>
         </Reveal>
 

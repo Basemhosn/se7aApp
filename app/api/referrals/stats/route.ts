@@ -51,7 +51,7 @@ export async function GET(request: Request) {
   }
 
   const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://se7a.vercel.app";
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://se7a.app";
 
   const rewardRows = [
     ...(referrerRewards ?? []),

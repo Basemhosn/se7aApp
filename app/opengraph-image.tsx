@@ -88,7 +88,7 @@ export default async function OG() {
             fontFamily: "ui-monospace, monospace",
           }}
         >
-          <div>SE7A.VERCEL.APP</div>
+          <div>SE7A.APP</div>
           <div>DUBAI · UAE</div>
         </div>
       </div>

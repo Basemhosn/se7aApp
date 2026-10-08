@@ -1,10 +1,12 @@
 /**
- * Download / TestFlight CTA — replaces the old email-capture Waitlist.
+ * Download / TestFlight CTA.
  *
- * Current state: iOS is in TestFlight beta; Android (Google Play) is
- * still waitlisted. When the App Store listing is live, swap the
- * TestFlight href for the real App Store URL and remove the "beta"
- * tag. Google Play copy flips when that build lands.
+ * NOT CURRENTLY MOUNTED. The marketing page uses <Waitlist /> instead
+ * because the beta is private / invite-only — we don't want random
+ * visitors downloading a hand-picked build. Keep this file around:
+ * when the App Store listing goes live, swap <Waitlist /> back to
+ * <AppStoreCta /> in app/(marketing)/page.tsx and replace the
+ * placeholder URL below with the real App Store link.
  */
 
 const TESTFLIGHT_URL = "https://testflight.apple.com/join/XXXXXXXX";

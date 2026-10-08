@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-const SITE_URL = "https://se7a.vercel.app";
+const SITE_URL = "https://se7a.app";
 const TITLE = "SE7A — AI Food & Fitness Coach";
 const DESCRIPTION =
   "Scan a plate, scan a menu, ask a coach — honest calorie ranges built for the Gulf. Not fake precision.";
