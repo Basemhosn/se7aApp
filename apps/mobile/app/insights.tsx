@@ -222,7 +222,12 @@ export default function Insights() {
           />
         ) : !data || totalAlive === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="hourglass" size={32} color={colors.dim} />
+            {/* telescope reads as "looking for something" — the old
+                hourglass icon was ambiguous with "loading". */}
+            <Ionicons name="telescope-outline" size={32} color={colors.dim} />
+            {totalDismissed === 0 && (
+              <Text style={styles.emptyTitle}>{t("insights.empty_title")}</Text>
+            )}
             <Text style={styles.emptyText}>
               {totalDismissed > 0
                 ? isArabic
@@ -412,6 +417,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  emptyTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 18,
+    color: colors.ink,
+    textAlign: "center",
   },
   emptyText: {
     fontFamily: font.body,

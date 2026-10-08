@@ -218,14 +218,15 @@ export default function Onboarding() {
     if (i > 0) setStep(STEPS[i - 1]!);
   };
 
-  // Reveal step's CTA normally advances to the attribution step (which
-  // then flows into trial_offer). For users who are already Pro
-  // (reopening onboarding to redo their plan), we skip both and finish.
+  // Reveal step's CTA normally advances to the trial offer (which
+  // then flows into attribution and finish). For users who are already
+  // Pro (reopening onboarding to redo their plan), we skip both and
+  // finish directly.
   const revealCta = () => {
     if (ent.is_pro) {
       finish();
     } else {
-      setStep("attribution");
+      setStep("trial_offer");
     }
   };
 

@@ -786,6 +786,12 @@ export default function Home() {
             await api(`/api/ledger/item/${id}`, { method: "DELETE" });
           }
           markDayDirty();
+          // Clear any pending optimistic items BEFORE reloading. If
+          // the user deleted a meal that was still in the optimistic
+          // buffer (just logged, not yet server-synced), the next
+          // useFocusEffect merge would re-add it to the ring. Dropping
+          // the buffer here keeps delete authoritative.
+          clearOptimisticLogItems();
           await load();
         }}
         isArabic={isArabic}
@@ -1468,7 +1474,14 @@ const ActivityPage = memo(function ActivityPage({
               / {(data.waterTarget / 1000).toFixed(1)}L
             </Text>
           </Text>
-          <Pressable style={styles.waterAddBtn} onPress={data.onAddWater}>
+          <Pressable
+            style={styles.waterAddBtn}
+            onPress={data.onAddWater}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isArabic ? "أضف ٢٥٠ مل ماء" : "Add 250 ml of water"
+            }
+          >
             <Text style={styles.waterAddText}>+250ml</Text>
           </Pressable>
         </View>
@@ -1598,6 +1611,8 @@ function PendingScanCard({
         <Pressable
           hitSlop={12}
           onPress={() => removeScanFromStore(scan.localId)}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel upload"
         >
           <Ionicons name="close" size={18} color={colors.dim} />
         </Pressable>
@@ -1684,6 +1699,9 @@ function MealsList({
                   i < SLOTS.length - 1 && !isExpanded && styles.mealRowDivider,
                 ]}
                 onPress={() => onToggle(slot)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isExpanded }}
+                accessibilityLabel={`${isArabic ? meta.ar : capitalize(meta.en.toLowerCase())}, ${displayCount} ${displayCount === 1 ? "item" : "items"}`}
               >
                 <View
                   style={[
