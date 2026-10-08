@@ -15,8 +15,9 @@ import {
   apiUpload,
   ProRequiredError,
   RateLimitedError,
-  rateLimitMessage,
 } from "@/lib/api";
+import { showRateLimitAlert } from "@/lib/rateLimitAlert";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { markDayDirty } from "@/lib/calendarCache";
 import { pollScan } from "@/lib/pollScan";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -52,7 +53,9 @@ interface PastDishesResponse {
 type Phase = "idle" | "analyzing" | "result" | "saving";
 
 export default function MenuScan() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === "ar";
+  const { ent } = useEntitlement();
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -171,8 +174,11 @@ export default function MenuScan() {
         return;
       }
       if (e instanceof RateLimitedError) {
-        const { title, body } = rateLimitMessage(e);
-        Alert.alert(title, body);
+        showRateLimitAlert(e, {
+          isArabic,
+          isPro: ent.is_pro,
+          paywallFeature: "menu_scan",
+        });
         setPhase("idle");
         return;
       }

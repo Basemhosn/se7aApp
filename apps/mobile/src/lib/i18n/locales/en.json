@@ -706,6 +706,7 @@
     "trial_kicker": "SE7A · PRO",
     "trial_hero": "Try Pro free for 7 days.",
     "trial_hero_sub": "Meal plans, AI coach, unlimited scans. Cancel anytime — no charge during the trial.",
+    "trial_charge_notice": "Trial ends {{date}}. We'll remind you 2 days before — cancel any time before then and you won't be charged.",
     "trial_benefit_meals_title": "Weekly meal plans",
     "trial_benefit_meals_body": "7-day plan + auto shopping list.",
     "trial_benefit_coach_title": "AI coach chat",

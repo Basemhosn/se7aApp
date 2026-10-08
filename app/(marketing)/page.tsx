@@ -89,6 +89,22 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ─── BETA TRUST BAND ────────────────────────────────────── */}
+        {/* Honest social-proof: we don't have a public user count to
+            brag about yet, but the private-beta framing is itself a
+            trust signal (scarcity + "something real is happening"
+            without fabricated numbers). Keep this crisp. */}
+        <section className="trust-band">
+          <div className="trust-row">
+            <span className="trust-pill">PRIVATE BETA</span>
+            <span className="trust-text">
+              Invite-only while we polish the final touches. UAE first,
+              GCC next — <strong>join the waitlist</strong> and we'll
+              reach out when the next batch opens.
+            </span>
+          </div>
+        </section>
+
         {/* ─── TICKER ─────────────────────────────────────────────── */}
         <section className="ticker-band">
           <Marquee duration={36}>

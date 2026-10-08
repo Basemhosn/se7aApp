@@ -11,8 +11,9 @@ import {
   apiUpload,
   ProRequiredError,
   RateLimitedError,
-  rateLimitMessage,
 } from "@/lib/api";
+import { showRateLimitAlert } from "@/lib/rateLimitAlert";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { pollScan } from "@/lib/pollScan";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { BodyProjection, BodyScanResult } from "@/types";
@@ -21,7 +22,9 @@ type Phase = "idle" | "analyzing" | "result";
 type Pose = "front" | "side" | "back";
 
 export default function BodyScan() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === "ar";
+  const { ent } = useEntitlement();
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [pose, setPose] = useState<Pose>("front");
@@ -89,8 +92,11 @@ export default function BodyScan() {
         return;
       }
       if (e instanceof RateLimitedError) {
-        const { title, body } = rateLimitMessage(e);
-        Alert.alert(title, body);
+        showRateLimitAlert(e, {
+          isArabic,
+          isPro: ent.is_pro,
+          paywallFeature: "body_scan",
+        });
         setPhase("idle");
         return;
       }

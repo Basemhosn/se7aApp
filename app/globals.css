@@ -661,6 +661,49 @@ footer a:hover { color: var(--gold); }
   transition: transform 80ms linear;
 }
 
+/* ---------- beta trust band ---------- */
+.trust-band {
+  margin-top: 24px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(
+    180deg,
+    rgba(246, 183, 60, 0.04),
+    rgba(246, 183, 60, 0.01)
+  );
+}
+.trust-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.trust-pill {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--gold);
+  background: rgba(246, 183, 60, 0.08);
+  color: var(--gold);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  border-radius: 999px;
+}
+.trust-text {
+  flex: 1;
+  min-width: 240px;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.trust-text strong {
+  color: var(--ink);
+}
+
 /* ---------- marquee ticker ---------- */
 .ticker-band {
   border-top: 1px solid var(--line);

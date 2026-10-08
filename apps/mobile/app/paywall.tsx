@@ -116,25 +116,22 @@ export default function Paywall() {
 
       <Text style={styles.kicker}>SE7A · PRO</Text>
       <Text style={styles.h1}>
-        {isArabic ? "خذها للمستوى التالي." : "Take it up a level."}
+        {feature
+          ? featureHeadline(feature, isArabic)
+          : isArabic
+            ? "خذها للمستوى التالي."
+            : "Take it up a level."}
       </Text>
       <Text style={styles.sub}>
-        {isArabic
-          ? "خطط أسبوعية، مسح القوائم، تحليل الجسم، وكوتش الذكاء الاصطناعي."
-          : "Meal plans, menu scans, body composition, and AI coach chat."}
+        {feature
+          ? featureSub(feature, isArabic)
+          : isArabic
+            ? "خطط أسبوعية، مسح القوائم، تحليل الجسم، وكوتش الذكاء الاصطناعي."
+            : "Meal plans, menu scans, body composition, and AI coach chat."}
       </Text>
 
-      {feature && (
-        <View style={styles.featureCard}>
-          <Text style={styles.featureLabel}>
-            {isArabic ? "متطلب لهذه الميزة" : "REQUIRED FOR"}
-          </Text>
-          <Text style={styles.featureName}>{featureLabel(feature, isArabic)}</Text>
-        </View>
-      )}
-
       <View style={styles.benefitCard}>
-        {BENEFITS(isArabic).map((b) => (
+        {BENEFITS(isArabic, feature).map((b) => (
           <View key={b.title} style={styles.benefitRow}>
             <Text style={styles.benefitCheck}>✓</Text>
             <View style={{ flex: 1 }}>
@@ -167,7 +164,16 @@ export default function Paywall() {
               titleTop={isArabic ? "سنوي" : "Annual"}
               price={annualPkg?.product.priceString ?? "—"}
               subPeriod={isArabic ? "سنة" : "year"}
+              // Lead note = per-month equivalent (anchoring), second
+              // note = savings vs monthly. Showing "~20.75 AED/mo"
+              // reframes the sticker from a 249 commitment to a
+              // ~daily-coffee one.
               note={
+                annualPkg
+                  ? perMonthEquivalent(annualPkg, isArabic)
+                  : null
+              }
+              subNote={
                 annualPkg && monthlyPkg
                   ? isArabic
                     ? computeYearlySavingsAr(annualPkg, monthlyPkg)
@@ -235,6 +241,7 @@ function PkgCard({
   subPeriod,
   badge,
   note,
+  subNote,
 }: {
   on: boolean;
   onPress: () => void;
@@ -243,6 +250,7 @@ function PkgCard({
   subPeriod: string;
   badge?: string;
   note: string | null;
+  subNote?: string | null;
 }) {
   return (
     <Pressable
@@ -258,60 +266,138 @@ function PkgCard({
       <Text style={[styles.pkgPrice, on && styles.pkgPriceOn]}>{price}</Text>
       <Text style={styles.pkgPeriod}>/ {subPeriod}</Text>
       {note && <Text style={styles.pkgNote}>{note}</Text>}
+      {subNote && <Text style={styles.pkgSubNote}>{subNote}</Text>}
     </Pressable>
   );
 }
 
-function BENEFITS(isArabic: boolean) {
-  return [
+/**
+ * "~20.75 AED/mo" style note on the annual card. Reads the raw price
+ * number from RC, divides by 12, uses the same currency code the
+ * priceString carries. Returns null if we can't determine either.
+ */
+function perMonthEquivalent(
+  annual: PurchasesPackage,
+  isArabic: boolean
+): string | null {
+  const yr = annual.product.price;
+  if (!yr || !Number.isFinite(yr)) return null;
+  // Extract the currency symbol/code from priceString (e.g. "249 AED",
+  // "AED 249", "$29.99"). Grab the non-numeric portion.
+  const priceStr = annual.product.priceString ?? "";
+  const currency = priceStr.replace(/[\d.,\s]/g, "").trim() || "";
+  const perMo = yr / 12;
+  // One decimal if the result isn't whole; strip trailing .0.
+  const rounded = Math.round(perMo * 10) / 10;
+  const display = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1);
+  return isArabic
+    ? `≈ ${display} ${currency}/شهر`
+    : `≈ ${display} ${currency}/mo`;
+}
+
+interface Benefit {
+  key: "meal_plan" | "menu_scan" | "body_scan" | "ai_coach" | "scan" | "programs";
+  title: string;
+  body: string;
+}
+
+function BENEFITS(isArabic: boolean, feature: string | undefined): Benefit[] {
+  const all: Benefit[] = [
     {
+      key: "meal_plan",
       title: isArabic ? "خطط وجبات أسبوعية" : "Weekly meal plans",
       body: isArabic
         ? "خطة ٧ أيام تصيب ماكروك، مع قائمة تسوق تلقائية."
         : "A 7-day plan that hits your macros, with an auto shopping list.",
     },
     {
+      key: "menu_scan",
       title: isArabic ? "مسح قوائم المطاعم" : "Menu scans",
       body: isArabic
         ? "التقط قائمة المطعم — نرتب الأطباق حسب ما تبقى لك."
         : "Snap a restaurant menu — dishes ranked by what fits your day.",
     },
     {
+      key: "body_scan",
       title: isArabic ? "تحليل تكوين الجسم" : "Body composition scans",
       body: isArabic
         ? "تقدير نسبة الدهون + وقت الوصول للهدف. الصور لا تُخزن."
         : "Body-fat range + weeks-to-goal. Photos never stored.",
     },
     {
+      key: "ai_coach",
       title: isArabic ? "كوتش SE7A بالذكاء الاصطناعي" : "AI coach chat",
       body: isArabic
         ? "دردشة مع كوتش يعرف سجلك وأهدافك."
         : "Chat with a coach that knows your logs and goals.",
     },
     {
+      key: "scan",
       title: isArabic ? "مسح غير محدود" : "Unlimited scans",
       body: isArabic
         ? "بدلاً من ٥ يومياً في الخطة المجانية."
         : "Up from 5 a day on Free — snap as much as you want.",
     },
     {
+      key: "programs",
       title: isArabic ? "كل برامج التمرين" : "All workout programs",
       body: isArabic
         ? "PPL، الشد المنزلي، تحمّل، Full Body، وأكثر."
         : "PPL, home cutting, endurance, full body, and more.",
     },
   ];
+  // Float the triggering feature to the top so the user's intent is
+  // reflected in the first bullet — "you came here for X, here's X first."
+  if (!feature) return all;
+  const idx = all.findIndex((b) => b.key === feature);
+  if (idx <= 0) return all;
+  const [match] = all.splice(idx, 1);
+  return [match!, ...all];
 }
 
-function featureLabel(feature: string, isArabic: boolean): string {
+/**
+ * Headline tailored to the feature that triggered the paywall, so the
+ * user sees "Unlock menu scans" instead of a generic "Take it up a level"
+ * when they came here from the menu-scan button.
+ */
+function featureHeadline(feature: string, isArabic: boolean): string {
   const map: Record<string, [string, string]> = {
-    meal_plan: ["Weekly meal plan", "خطة الأسبوع"],
-    menu_scan: ["Menu scan", "مسح القائمة"],
-    body_scan: ["Body composition scan", "تحليل تكوين الجسم"],
-    ai_coach: ["AI coach", "كوتش الذكاء الاصطناعي"],
+    meal_plan: ["Unlock weekly meal plans.", "افتح خطط الأسبوع."],
+    menu_scan: ["Scan any restaurant menu.", "امسح أي قائمة مطعم."],
+    body_scan: ["See your body composition.", "اعرف تكوين جسمك."],
+    ai_coach: ["Chat with your AI coach.", "دردش مع كوتشك."],
   };
   const pair = map[feature];
-  if (!pair) return feature;
+  if (!pair) return isArabic ? "خذها للمستوى التالي." : "Take it up a level.";
+  return isArabic ? pair[1] : pair[0];
+}
+
+function featureSub(feature: string, isArabic: boolean): string {
+  const map: Record<string, [string, string]> = {
+    meal_plan: [
+      "A 7-day plan that hits your macros, with an auto shopping list. Pro also unlocks menu scans, body composition, and AI coach.",
+      "خطة ٧ أيام تصيب ماكروك مع قائمة تسوق. مع Pro تحصل أيضاً على مسح القوائم، تحليل الجسم، وكوتش AI.",
+    ],
+    menu_scan: [
+      "AI reads the menu and ranks dishes by what fits your remaining macros. Pro also unlocks meal plans, body scans, and coach chat.",
+      "AI يقرأ القائمة ويرتب الأطباق حسب ماكروك المتبقي. مع Pro تحصل أيضاً على خطط الأسبوع، تحليل الجسم، وكوتش AI.",
+    ],
+    body_scan: [
+      "Body-fat range + weeks-to-goal from a photo. Photos never stored. Pro also unlocks meal plans, menu scans, and AI coach.",
+      "نسبة الدهون + وقت الوصول للهدف من صورة. الصور لا تُخزن. مع Pro أيضاً خطط الأسبوع، مسح القوائم، وكوتش AI.",
+    ],
+    ai_coach: [
+      "An AI dietitian that knows your logs, goals, and PRs. Pro also unlocks meal plans, menu scans, and body composition.",
+      "كوتش AI يعرف سجلك وأهدافك وأرقامك. مع Pro أيضاً خطط الأسبوع، مسح القوائم، وتحليل الجسم.",
+    ],
+  };
+  const pair = map[feature];
+  if (!pair)
+    return isArabic
+      ? "خطط أسبوعية، مسح القوائم، تحليل الجسم، وكوتش الذكاء الاصطناعي."
+      : "Meal plans, menu scans, body composition, and AI coach chat.";
   return isArabic ? pair[1] : pair[0];
 }
 
@@ -460,9 +546,17 @@ const styles = StyleSheet.create({
   pkgNote: {
     fontFamily: font.mono,
     fontSize: 10,
-    color: colors.mint,
+    color: colors.ink,
     letterSpacing: 0.8,
     marginTop: 4,
+    textAlign: "center",
+  },
+  pkgSubNote: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    color: colors.mint,
+    letterSpacing: 0.8,
+    marginTop: 2,
     textAlign: "center",
   },
   errCard: {

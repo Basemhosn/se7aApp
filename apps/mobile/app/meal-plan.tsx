@@ -21,8 +21,9 @@ import {
   api,
   ProRequiredError,
   RateLimitedError,
-  rateLimitMessage,
 } from "@/lib/api";
+import { showRateLimitAlert } from "@/lib/rateLimitAlert";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import { SLOT_META } from "@/lib/slot";
 import type { MealSlot } from "@/types";
@@ -98,6 +99,7 @@ function formatDayHeader(dow: number, weekStart: string, isArabic: boolean): str
 export default function MealPlan() {
   const { i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
+  const { ent } = useEntitlement();
   const [weekStart, setWeekStart] = useState<string>(mondayOf(new Date()));
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,8 +141,11 @@ export default function MealPlan() {
           params: { feature: "meal_plan" },
         });
       } else if (e instanceof RateLimitedError) {
-        const { title, body } = rateLimitMessage(e);
-        Alert.alert(title, body);
+        showRateLimitAlert(e, {
+          isArabic,
+          isPro: ent.is_pro,
+          paywallFeature: "meal_plan",
+        });
       } else {
         setErr((e as Error).message || "Couldn't generate.");
       }

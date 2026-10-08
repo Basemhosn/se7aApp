@@ -15,7 +15,9 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/EmptyState";
-import { api, RateLimitedError, rateLimitMessage } from "@/lib/api";
+import { api, RateLimitedError } from "@/lib/api";
+import { showRateLimitAlert } from "@/lib/rateLimitAlert";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import type { MealSlot } from "@/types";
 import { SLOTS, slotForNow } from "@/lib/slot";
@@ -79,6 +81,7 @@ export default function MealsSuggest() {
 
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
+  const { ent } = useEntitlement();
   const [slot, setSlot] = useState<MealSlot>(initialSlot);
   const [data, setData] = useState<SuggestResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -135,8 +138,12 @@ export default function MealsSuggest() {
       setData(res);
     } catch (e) {
       if (e instanceof RateLimitedError) {
-        const { title, body } = rateLimitMessage(e);
-        Alert.alert(title, body);
+        showRateLimitAlert(e, {
+          isArabic,
+          isPro: ent.is_pro,
+          // Meal-suggest is free but shares scan limits; nudge
+          // toward the generic Pro upgrade (no specific feature).
+        });
       } else {
         setErr((e as Error).message || "Couldn't get suggestions.");
       }

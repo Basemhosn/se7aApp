@@ -21,6 +21,8 @@ import {
   RateLimitedError,
   rateLimitMessage,
 } from "@/lib/api";
+import { showRateLimitAlert } from "@/lib/rateLimitAlert";
+import { useEntitlement } from "@/lib/EntitlementContext";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -69,6 +71,7 @@ const MAX_RECORDING_SEC = 30;
 export default function VoiceLog() {
   const { i18n, t } = useTranslation();
   const isArabic = i18n.language === "ar";
+  const { ent } = useEntitlement();
   const params = useLocalSearchParams<{ slot?: string }>();
   const initialSlot: MealSlot =
     params.slot && ["breakfast", "lunch", "dinner", "snack"].includes(
@@ -186,18 +189,20 @@ export default function VoiceLog() {
       setPhase("review");
     } catch (e) {
       if (e instanceof RateLimitedError) {
-        // Keep the rate-limit message pinned on the idle screen rather
-        // than only showing it in a dismissed Alert — the user needs
-        // to know they're blocked without re-navigating.
+        // Dual UX: Alert gives the user an immediate Upgrade button
+        // for the daily limit (per rateLimitAlert helper), AND we pin
+        // the body text on the idle screen so they still see why
+        // they're blocked after dismissing the Alert.
         const { body } = rateLimitMessage(e);
         setErr(body);
+        showRateLimitAlert(e, { isArabic, isPro: ent.is_pro });
         setPhase("idle");
         return;
       }
       setErr((e as Error).message ?? "Couldn't process the recording.");
       setPhase("idle");
     }
-  }, []);
+  }, [isArabic, ent.is_pro]);
 
   const cancelRecording = useCallback(async () => {
     const rec = recordingRef.current;

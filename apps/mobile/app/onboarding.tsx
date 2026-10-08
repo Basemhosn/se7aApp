@@ -945,6 +945,11 @@ export default function Onboarding() {
           <Text style={styles.trialKickerV2}>{t("onboarding.trial_kicker")}</Text>
           <Text style={styles.trialHeroV2}>{t("onboarding.trial_hero")}</Text>
           <Text style={styles.trialSubV2}>{t("onboarding.trial_hero_sub")}</Text>
+          <Text style={styles.trialChargeNoticeV2}>
+            {t("onboarding.trial_charge_notice", {
+              date: trialEndDate(i18n.language),
+            })}
+          </Text>
           <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
             <SelectCard
               icon="restaurant-outline"
@@ -1461,6 +1466,26 @@ function rateOptions(g: Goal, t: TFn): { v: number; label: string }[] {
     ];
   }
   return [{ v: 0, label: t("onboarding.rate.maintain_zero") }];
+}
+
+/**
+ * The date 7 days from now, formatted for the current locale. Used in
+ * the trial-step "trial ends on X" notice so the user has an explicit
+ * date to put on their calendar instead of a vague "7 days".
+ */
+function trialEndDate(locale: string): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  try {
+    const fmt = new Intl.DateTimeFormat(locale === "ar" ? "ar-AE" : "en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return fmt.format(d);
+  } catch {
+    // Fallback for environments without Intl.DateTimeFormat support
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
 }
 
 function rateDescription(rate: number, t: TFn): string {
@@ -2073,6 +2098,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.dim,
     lineHeight: 21,
+  },
+  trialChargeNoticeV2: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.ink,
+    letterSpacing: 0.3,
+    lineHeight: 16,
+    backgroundColor: "rgba(246,183,60,0.07)",
+    borderWidth: 1,
+    borderColor: colors.goldDim,
+    borderRadius: 8,
+    padding: 10,
   },
   trialPriceV2: {
     fontFamily: font.mono,

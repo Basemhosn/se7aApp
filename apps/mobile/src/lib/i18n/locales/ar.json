@@ -706,6 +706,7 @@
     "trial_kicker": "SE7A · PRO",
     "trial_hero": "جرّب Pro مجاناً لمدة ٧ أيام.",
     "trial_hero_sub": "خطط وجبات، مدرب ذكي، مسحات غير محدودة. إلغاء في أي وقت — بدون رسوم خلال التجربة.",
+    "trial_charge_notice": "تنتهي التجربة {{date}}. سنذكّرك قبل يومين — ألغِ قبل ذلك ولن يتم أي خصم.",
     "trial_benefit_meals_title": "خطط وجبات أسبوعية",
     "trial_benefit_meals_body": "خطة ٧ أيام + قائمة تسوّق تلقائية.",
     "trial_benefit_coach_title": "دردشة المدرب الذكي",
