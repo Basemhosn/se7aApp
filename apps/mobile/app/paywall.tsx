@@ -33,6 +33,7 @@ export default function Paywall() {
   const [selected, setSelected] = useState<PackageKey>("annual");
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [err, setErr] = useState("");
 
@@ -82,7 +83,13 @@ export default function Paywall() {
       );
       return;
     }
+    // Apple confirmed the purchase; now wait for RC → Supabase webhook
+    // to catch up before dismissing. Without this, a user who taps a
+    // Pro feature immediately after purchase can see "Pro required"
+    // during the ~1-3s webhook lag.
+    setActivating(true);
     await optimisticProFromRc();
+    setActivating(false);
     router.back();
   };
 
@@ -107,6 +114,27 @@ export default function Paywall() {
       );
     }
   };
+
+  if (activating) {
+    // Full-screen "activating" overlay between purchase confirmation
+    // and webhook sync. Prevents the user from tapping Pro features
+    // and bouncing off a 402 during the 1-3s reconcile window.
+    return (
+      <Screen>
+        <View style={styles.activatingWrap}>
+          <ActivityIndicator color={colors.gold} size="large" />
+          <Text style={styles.activatingTitle}>
+            {isArabic ? "جارٍ تفعيل Pro…" : "Activating Pro…"}
+          </Text>
+          <Text style={styles.activatingSub}>
+            {isArabic
+              ? "لحظة واحدة بينما نحدّث حسابك."
+              : "Just a moment while we sync your account."}
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -156,6 +184,31 @@ export default function Paywall() {
         </View>
       ) : (
         <>
+          {/* "Already a Pro?" discovery callout — users on a new device
+              or new install hit this screen looking for restore, and
+              the bottom ghost button is easy to miss. Surface it up
+              top so the restore path is one tap away. */}
+          <Pressable
+            onPress={restore}
+            disabled={restoring}
+            style={styles.restoreTop}
+            accessibilityRole="button"
+          >
+            <Text style={styles.restoreTopText}>
+              {isArabic
+                ? "لديك Pro بالفعل؟ "
+                : "Already a Pro? "}
+              <Text style={styles.restoreTopAction}>
+                {restoring
+                  ? isArabic
+                    ? "جارٍ الاسترجاع…"
+                    : "Restoring…"
+                  : isArabic
+                    ? "استرجع"
+                    : "Restore"}
+              </Text>
+            </Text>
+          </Pressable>
           <View style={styles.pkgRow}>
             <PkgCard
               on={selected === "annual"}
@@ -486,6 +539,42 @@ const styles = StyleSheet.create({
     color: colors.dim,
     lineHeight: 19,
     marginTop: 2,
+  },
+  restoreTop: {
+    alignSelf: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  restoreTopText: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.dim,
+    letterSpacing: 0.3,
+  },
+  restoreTopAction: {
+    color: colors.gold,
+    fontFamily: font.displayBold,
+  },
+  activatingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  activatingTitle: {
+    fontFamily: font.displayBold,
+    fontSize: 20,
+    color: colors.ink,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  activatingSub: {
+    fontFamily: font.body,
+    fontSize: 14,
+    color: colors.dim,
+    textAlign: "center",
+    lineHeight: 20,
   },
   pkgRow: { flexDirection: "row", gap: spacing.sm },
   pkgCard: {

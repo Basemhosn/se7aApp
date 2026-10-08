@@ -52,6 +52,11 @@ const DEFAULT_RATE: Record<Goal, number> = {
   bulk: 0.25,
 };
 
+// Step order matters for conversion. Reveal shows the user their
+// personalized plan (peak buy-in moment). Trial offer immediately
+// after that catches them at the top of enthusiasm. Attribution is
+// analytics-only and skippable — it belongs at the end so a decline
+// doesn't delay the Pro pitch.
 const STEPS = [
   "welcome",
   "language",
@@ -64,8 +69,8 @@ const STEPS = [
   "allergies",
   "rate",
   "reveal",
-  "attribution",
   "trial_offer",
+  "attribution",
 ] as const;
 type Step = (typeof STEPS)[number];
 
