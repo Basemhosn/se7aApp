@@ -507,11 +507,11 @@ export default function Onboarding() {
           </Text>
           <Text style={styles.welcomeHero}>
             {returning
-              ? t("onboarding.welcome_hero_returning", {
-                  name: user?.email?.split("@")[0] ?? "",
-                })
-              : user?.email
-                ? t("onboarding.welcome_hero_new", { name: user.email.split("@")[0] })
+              ? name.trim()
+                ? t("onboarding.welcome_hero_returning", { name: name.trim() })
+                : t("onboarding.welcome_hero_returning_no_name")
+              : name.trim()
+                ? t("onboarding.welcome_hero_new", { name: name.trim() })
                 : t("onboarding.welcome_hero_new_no_name")}
           </Text>
           <Text style={styles.welcomeBody}>
