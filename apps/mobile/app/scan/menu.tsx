@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { showRateLimitAlert } from "@/lib/rateLimitAlert";
 import { useEntitlement } from "@/lib/EntitlementContext";
+import { track } from "@/lib/analytics";
 import { markDayDirty } from "@/lib/calendarCache";
 import { pollScan } from "@/lib/pollScan";
 import { colors, font, radius, spacing } from "@/lib/theme";
@@ -119,6 +120,7 @@ export default function MenuScan() {
     );
     setPreviewUri(resized.uri);
     setPhase("analyzing");
+    track("scan_started", { kind: "menu" });
     try {
       // Async menu scan (2026-09-21): POST returns fast with scan_id.
       // Server processes AI in background via waitUntil. Client polls
@@ -160,6 +162,11 @@ export default function MenuScan() {
       setSelected(new Set());
       setPastSelected(new Set());
       setPhase("result");
+      track("scan_completed", {
+        kind: "menu",
+        dishes: parsed.dishes.length,
+        confidence: parsed.confidence,
+      });
       // Fire-and-forget: if the AI guessed a restaurant, look up past
       // dishes so the "you liked here last time" section renders as
       // soon as the review appears.
@@ -174,6 +181,7 @@ export default function MenuScan() {
         return;
       }
       if (e instanceof RateLimitedError) {
+        track("scan_rate_limited", { kind: "menu", limit_kind: e.kind });
         showRateLimitAlert(e, {
           isArabic,
           isPro: ent.is_pro,
@@ -182,7 +190,9 @@ export default function MenuScan() {
         setPhase("idle");
         return;
       }
-      setErr((e as Error).message || t("scan.menu.couldnt_read"));
+      const reason = (e as Error).message || "unknown";
+      track("scan_failed", { kind: "menu", reason });
+      setErr(reason || t("scan.menu.couldnt_read"));
       setPhase("idle");
     }
   };

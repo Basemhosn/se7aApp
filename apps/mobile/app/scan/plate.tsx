@@ -12,6 +12,7 @@ import { BackButton } from "@/components/BackButton";
 import { ConfidencePill } from "@/components/Pill";
 import { MacroStrip } from "@/components/MacroStrip";
 import { api, apiUpload, RateLimitedError, rateLimitMessage } from "@/lib/api";
+import { track } from "@/lib/analytics";
 import { markDayDirty, pushOptimisticLogItems } from "@/lib/calendarCache";
 import {
   attachScanId,
@@ -248,6 +249,7 @@ export default function PlateScan() {
     // run in background. Home renders a card for each pending entry;
     // tapping a "ready" one hops back here with ?resume=<localId>.
     const localId = registerScan(resized.uri);
+    track("scan_started", { kind: "plate" });
     router.replace("/");
     void runScanInBackground(localId, resized.uri);
   };
@@ -280,19 +282,21 @@ export default function PlateScan() {
       });
       // Persist scan_id — this is what makes app-kill survivable.
       attachScanId(localId, body.scan_id);
-      // No local scheduleNotification here: the server sends the
-      // "your scan is ready" push via Expo Push API when the AI
-      // completes. Local notif would race + duplicate.
+      // Server-handoff succeeded. The AI itself still runs async; the
+      // real "scan_completed" event fires when the server-side push
+      // arrives (handled in reconcileScansFromServer / useNotification-
+      // DeepLinks). This one is "upload accepted, in-flight."
+      track("scan_completed", { kind: "plate", stage: "upload_accepted" });
     } catch (e) {
       if (e instanceof RateLimitedError) {
         const { body: msg } = rateLimitMessage(e);
+        track("scan_rate_limited", { kind: "plate", limit_kind: e.kind });
         markFailed(localId, msg);
         return;
       }
-      markFailed(
-        localId,
-        (e as Error).message || t("scan.plate.couldnt_analyze")
-      );
+      const reason = (e as Error).message || "unknown";
+      track("scan_failed", { kind: "plate", reason });
+      markFailed(localId, reason || t("scan.plate.couldnt_analyze"));
     }
   };
 

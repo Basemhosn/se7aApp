@@ -66,6 +66,7 @@ export type EventName =
   | "onboarding_abandoned"
   | "scan_started"
   | "scan_completed"
+  | "scan_failed"
   | "scan_rate_limited"
   | "meal_logged"
   | "manual_meal_logged"

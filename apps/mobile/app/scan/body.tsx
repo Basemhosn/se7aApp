@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { showRateLimitAlert } from "@/lib/rateLimitAlert";
 import { useEntitlement } from "@/lib/EntitlementContext";
+import { track } from "@/lib/analytics";
 import { pollScan } from "@/lib/pollScan";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { BodyProjection, BodyScanResult } from "@/types";
@@ -55,6 +56,7 @@ export default function BodyScan() {
       { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
     );
     setPhase("analyzing");
+    track("scan_started", { kind: "body", pose });
     try {
       // Async body scan (2026-09-21): POST returns fast with scan_id.
       // Server does the vision analysis in background via waitUntil
@@ -72,6 +74,10 @@ export default function BodyScan() {
       );
       const readyOrFailed = await pollScan(start.scan_id, "body", 4 * 60);
       if (readyOrFailed.status === "failed") {
+        track("scan_failed", {
+          kind: "body",
+          reason: readyOrFailed.error_message ?? "server_failed",
+        });
         setErr(readyOrFailed.error_message || t("scan.body.couldnt_analyze"));
         setPhase("idle");
         return;
@@ -82,6 +88,7 @@ export default function BodyScan() {
       setResult(parsed);
       setProjection(parsed.projection ?? null);
       setPhase("result");
+      track("scan_completed", { kind: "body", pose });
     } catch (e) {
       if (e instanceof ProRequiredError) {
         router.push({
@@ -92,6 +99,7 @@ export default function BodyScan() {
         return;
       }
       if (e instanceof RateLimitedError) {
+        track("scan_rate_limited", { kind: "body", limit_kind: e.kind });
         showRateLimitAlert(e, {
           isArabic,
           isPro: ent.is_pro,
@@ -100,7 +108,9 @@ export default function BodyScan() {
         setPhase("idle");
         return;
       }
-      setErr((e as Error).message || t("scan.body.couldnt_analyze"));
+      const reason = (e as Error).message || "unknown";
+      track("scan_failed", { kind: "body", reason });
+      setErr(reason || t("scan.body.couldnt_analyze"));
       setPhase("idle");
     }
   };

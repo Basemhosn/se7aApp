@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PlateItem } from "@/types";
 import { api } from "./api";
+import { track } from "./analytics";
 
 /**
  * Async plate-scan store (v2 2026-09-16).
@@ -126,7 +127,19 @@ export async function reconcileFromServer(): Promise<void> {
             invisibleCosts: remote.parsed.invisible_costs ?? [],
             notes: remote.parsed.notes,
           });
+          // The AI actually finished (not just the upload). This is the
+          // event marketing wants for "scan success rate".
+          track("scan_completed", {
+            kind: "plate",
+            stage: "ai_ready",
+            items: remote.parsed.items?.length ?? 0,
+            confidence: remote.parsed.confidence ?? "medium",
+          });
         } else if (remote.status === "failed") {
+          track("scan_failed", {
+            kind: "plate",
+            reason: remote.error_message ?? "server_failed",
+          });
           markFailed(s.localId, remote.error_message ?? "ai_failed");
         } else if (
           remote.status === "queued" ||
