@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -260,8 +261,16 @@ export default function Coach() {
             })
           )}
           {busy && (
-            <View style={[styles.bubble, styles.bubbleAssistant, styles.typingBubble]}>
-              <TypingDots />
+            <View style={styles.assistantRow}>
+              <View style={styles.coachAvatar}>
+                <Image
+                  source={require("../../assets/icon.png")}
+                  style={styles.coachAvatarImg}
+                />
+              </View>
+              <View style={[styles.bubble, styles.bubbleAssistant, styles.typingBubble]}>
+                <TypingDots />
+              </View>
             </View>
           )}
           {!!err && <Text style={styles.err}>{err}</Text>}
@@ -308,7 +317,7 @@ function Bubble({
   groupWithPrev?: boolean;
 }) {
   const isUser = msg.role === "user";
-  return (
+  const bubble = (
     <View
       style={[
         styles.bubble,
@@ -330,6 +339,26 @@ function Bubble({
           boldStyle={{ fontFamily: font.bodyBold }}
         />
       )}
+    </View>
+  );
+
+  if (isUser) return bubble;
+
+  // Assistant row: SE7A mark on the left of the first message in a
+  // group (not every bubble when the response is split across turns).
+  return (
+    <View style={styles.assistantRow}>
+      {!groupWithPrev ? (
+        <View style={styles.coachAvatar}>
+          <Image
+            source={require("../../assets/icon.png")}
+            style={styles.coachAvatarImg}
+          />
+        </View>
+      ) : (
+        <View style={styles.coachAvatarSpacer} />
+      )}
+      <View style={{ flex: 1 }}>{bubble}</View>
     </View>
   );
 }
@@ -531,6 +560,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  assistantRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  coachAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.panel2,
+    marginBottom: 4,
+  },
+  coachAvatarImg: {
+    width: 28,
+    height: 28,
+    resizeMode: "cover",
+  },
+  coachAvatarSpacer: {
+    width: 28,
   },
   typingBubble: {
     paddingVertical: 14,
