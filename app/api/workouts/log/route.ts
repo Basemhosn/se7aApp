@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
 import { logSessionSchema } from "@/lib/schemas/workout";
 import {
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
   // Fire-and-forget PR celebration. We don't await the push — the user
   // shouldn't wait on a network hop for their save confirmation.
-  celebratePrsIfAny(user.id, parsed.data.exercises).catch(() => {});
+  celebratePrsIfAny(supabase, user.id, parsed.data.exercises).catch(() => {});
 
   return NextResponse.json({ ok: true, session: data });
 }
@@ -77,7 +78,16 @@ interface Exercise {
  * push. Deduped per user per local day so a single-day workout with
  * multiple PRs → one notification listing them all.
  */
-async function celebratePrsIfAny(userId: string, exercises: Exercise[]) {
+async function celebratePrsIfAny(
+  supabase: SupabaseClient,
+  userId: string,
+  exercises: Exercise[]
+) {
+  // User-owned reads (workout_sessions, profiles) go through the
+  // authenticated route client so RLS is still enforced — admin was
+  // never strictly needed here. Service-role admin is only used for
+  // the push_tokens + notifications_sent writes further down, which
+  // RLS deliberately locks out of client access.
   const admin = getAdminClient();
 
   // Best-in-session per exercise.
@@ -99,7 +109,7 @@ async function celebratePrsIfAny(userId: string, exercises: Exercise[]) {
   if (bestThisSession.size === 0) return;
 
   // Pull all prior sessions ex-this to compute pre-existing best per name.
-  const { data: prior } = await admin
+  const { data: prior } = await supabase
     .from("workout_sessions")
     .select("exercises, completed_at")
     .eq("user_id", userId)
@@ -132,7 +142,7 @@ async function celebratePrsIfAny(userId: string, exercises: Exercise[]) {
   }
   if (prsHit.length === 0) return;
 
-  const { data: profile } = await admin
+  const { data: profile } = await supabase
     .from("profiles")
     .select("tz_offset_min, notification_prefs, display_name")
     .eq("user_id", userId)

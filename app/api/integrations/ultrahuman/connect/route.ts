@@ -75,5 +75,7 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, email });
+  // Don't echo the email in the response — client already has it, it
+  // just leaks into network logs / client telemetry otherwise.
+  return NextResponse.json({ ok: true });
 }

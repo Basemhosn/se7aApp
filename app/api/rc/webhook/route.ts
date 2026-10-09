@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { getAdminClient } from "@/lib/supabase/server";
 import { grantPromotionalEntitlement } from "@/lib/rcApi";
 
@@ -56,8 +57,13 @@ export async function POST(request: Request) {
       { status: 503 }
     );
   }
-  const provided = request.headers.get("authorization");
-  if (provided !== expectedAuth) {
+  const provided = request.headers.get("authorization") ?? "";
+  // Constant-time compare — plain !== leaks the secret over the wire
+  // via response-time analysis. Buffers must be the same length for
+  // timingSafeEqual to run, so length-check first then compare.
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expectedAuth);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -294,7 +300,12 @@ async function grantRoleReward(
 ): Promise<{ granted: boolean; reason?: string; user_id: string }> {
   const { referrerUserId, referredUserId, role, beneficiaryUserId } = args;
 
-  const { data: rewardRow, error: insertErr } = await admin
+  // Try to insert the reward row. On a unique-key conflict (23505) a
+  // prior webhook run already created it — fetch that row so we can
+  // see whether the previous grant actually succeeded or stalled.
+  let rewardRowId: string | number | null = null;
+  let alreadyApplied = false;
+  const { data: inserted, error: insertErr } = await admin
     .from("referral_rewards")
     .insert({
       referrer_user_id: referrerUserId,
@@ -307,17 +318,43 @@ async function grantRoleReward(
 
   if (insertErr) {
     if (insertErr.code === "23505") {
+      // Row exists from a prior attempt. If applied_at is already set
+      // the previous run grant succeeded; respect idempotency and skip.
+      // If applied_at is NULL and applied_error is set, the previous
+      // grant failed mid-flight — retry below instead of permanently
+      // leaving the reward stuck in "pending".
+      const { data: existing } = await admin
+        .from("referral_rewards")
+        .select("id, applied_at, applied_error")
+        .eq("referrer_user_id", referrerUserId)
+        .eq("referred_user_id", referredUserId)
+        .eq("role", role)
+        .maybeSingle();
+      if (!existing) {
+        return {
+          granted: false,
+          reason: "conflict_but_row_missing",
+          user_id: beneficiaryUserId,
+        };
+      }
+      if (existing.applied_at) {
+        return {
+          granted: false,
+          reason: "already_granted",
+          user_id: beneficiaryUserId,
+        };
+      }
+      rewardRowId = existing.id;
+      alreadyApplied = false; // retry the grant below
+    } else {
       return {
         granted: false,
-        reason: "already_granted",
+        reason: `insert_failed:${insertErr.message}`,
         user_id: beneficiaryUserId,
       };
     }
-    return {
-      granted: false,
-      reason: `insert_failed:${insertErr.message}`,
-      user_id: beneficiaryUserId,
-    };
+  } else {
+    rewardRowId = inserted.id;
   }
 
   const grantRes = await grantPromotionalEntitlement({
@@ -326,10 +363,12 @@ async function grantRoleReward(
   });
 
   if (!grantRes.ok) {
-    await admin
-      .from("referral_rewards")
-      .update({ applied_error: grantRes.error ?? `http_${grantRes.status}` })
-      .eq("id", rewardRow.id);
+    if (rewardRowId != null) {
+      await admin
+        .from("referral_rewards")
+        .update({ applied_error: grantRes.error ?? `http_${grantRes.status}` })
+        .eq("id", rewardRowId);
+    }
     return {
       granted: false,
       reason: `rc_grant_failed:${grantRes.error ?? grantRes.status}`,
@@ -337,14 +376,19 @@ async function grantRoleReward(
     };
   }
 
-  await admin
-    .from("referral_rewards")
-    .update({
-      applied_at: new Date().toISOString(),
-      applied_via: "rc_promo_grant",
-      applied_error: null,
-    })
-    .eq("id", rewardRow.id);
+  if (rewardRowId != null) {
+    await admin
+      .from("referral_rewards")
+      .update({
+        applied_at: new Date().toISOString(),
+        applied_via: "rc_promo_grant",
+        applied_error: null,
+      })
+      .eq("id", rewardRowId);
+  }
 
+  // Suppress unused-var warning: alreadyApplied is informational, kept
+  // for future telemetry (e.g. tag "retry_succeeded" events).
+  void alreadyApplied;
   return { granted: true, user_id: beneficiaryUserId };
 }

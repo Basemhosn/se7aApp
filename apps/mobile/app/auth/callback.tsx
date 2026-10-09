@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as Sentry from "@sentry/react-native";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/lib/analytics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -70,6 +71,15 @@ export default function AuthCallback() {
         .select("onboarded_at")
         .eq("user_id", user.id)
         .maybeSingle();
+      // Fresh-signup detection: no profile row = user just created
+      // their account via the magic link; row exists but no
+      // onboarded_at = they signed up before but never finished;
+      // onboarded_at present = returning login. Only fire
+      // signup_completed on the first case so analytics distinguishes
+      // "signups/day" from "logins/day".
+      if (!profile) {
+        track("signup_completed", { method: "email" });
+      }
       router.replace(profile?.onboarded_at ? "/" : "/onboarding");
     })();
     return () => {

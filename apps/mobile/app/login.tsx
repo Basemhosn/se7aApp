@@ -9,6 +9,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { Wordmark } from "@/components/Wordmark";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/lib/analytics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -119,6 +120,11 @@ export default function Login() {
         .select("onboarded_at")
         .eq("user_id", user.id)
         .maybeSingle();
+      // See callback.tsx for the fresh-signup rationale. Google path
+      // bypasses the magic-link callback so the event has to fire here.
+      if (!profile) {
+        track("signup_completed", { method: "google" });
+      }
       router.replace(profile?.onboarded_at ? "/" : "/onboarding");
     } catch (e) {
       setMsg((e as Error).message || t("auth.login.google_err"));
