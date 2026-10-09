@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { getAdminClient } from "@/lib/supabase/server";
 import {
   claimNotification,
@@ -72,6 +73,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  try {
+    return await runHourly();
+  } catch (e) {
+    // Explicit capture so a cron failure fires an incident regardless
+    // of Vercel/Sentry integration state. Hourly crons that silently
+    // 500 are the classic "nobody noticed for a week" bug.
+    Sentry.captureException(e, {
+      tags: { route: "cron/notifications-hourly" },
+      level: "error",
+    });
+    return NextResponse.json(
+      { error: "cron_failed", details: String((e as Error)?.message ?? e) },
+      { status: 500 }
+    );
+  }
+}
+
+async function runHourly(): Promise<NextResponse> {
   const admin = getAdminClient();
   const now = new Date();
 

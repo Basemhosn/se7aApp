@@ -179,6 +179,8 @@ async function processScanInBackground(args: {
         latency_ms: latency,
         status: "ready",
         error_message: null,
+        tokens_in: result.usage?.inputTokens ?? null,
+        tokens_out: result.usage?.outputTokens ?? null,
       })
       .eq("id", scanId);
     if (updateErr) {

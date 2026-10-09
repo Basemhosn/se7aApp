@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { getAdminClient } from "@/lib/supabase/server";
 import { syncStravaForUser } from "@/lib/stravaSync";
 import { syncWhoopForUser } from "@/lib/whoopSync";
@@ -56,6 +57,19 @@ export async function GET(request: Request) {
       recoveryInserted += r.recovery_upserted;
       if (r.error) errors.push(`oura:${row.user_id}: ${r.error}`);
     }
+  }
+
+  // Surface persistent per-user sync errors to Sentry so a Whoop/Oura
+  // token-refresh regression or integration-partner outage pages us
+  // instead of silently dropping data. One Sentry event per bad user
+  // (capped at 10 to avoid flooding) rather than one event per cron
+  // run — grouping by provider shows which partner is actually broken.
+  if (errors.length > 0) {
+    Sentry.captureMessage("integrations_sync_errors", {
+      level: "warning",
+      tags: { route: "cron/integrations-sync", error_count: String(errors.length) },
+      extra: { errors: errors.slice(0, 10) },
+    });
   }
 
   return NextResponse.json({

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { identify, resetAnalytics } from "@/lib/analytics";
 
 interface AuthState {
   loading: boolean;
@@ -42,6 +43,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Keep PostHog's active-user identity synced with Supabase auth.
+  // Previously identify() only ran once during onboarding, so a sign-
+  // out → sign-in on the same device left all subsequent events tagged
+  // to the first user (or anonymous after reset). Now re-identifies on
+  // every session change and resets when the user signs out so
+  // post-logout events don't leak into the prior profile.
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (uid) {
+      identify(uid);
+    } else {
+      resetAnalytics();
+    }
+  }, [session?.user?.id]);
 
   const value: AuthState = {
     loading,

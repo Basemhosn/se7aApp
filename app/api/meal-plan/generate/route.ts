@@ -109,6 +109,8 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
   const locale = localeFromRequest(request);
 
   let planObject;
+  let tokensIn: number | null = null;
+  let tokensOut: number | null = null;
   try {
     const result = await generateObject({
       model: anthropic(MODEL_ID),
@@ -126,6 +128,8 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
       maxOutputTokens: 8000,
     });
     planObject = result.object;
+    tokensIn = result.usage?.inputTokens ?? null;
+    tokensOut = result.usage?.outputTokens ?? null;
   } catch (e) {
     return apiError({
       route: "meal-plan/generate",
@@ -142,6 +146,8 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
       week_start: parsed.data.week_start,
       plan: planObject,
       updated_at: new Date().toISOString(),
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
     },
     { onConflict: "user_id,week_start" }
   );

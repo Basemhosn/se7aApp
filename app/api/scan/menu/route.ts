@@ -237,6 +237,8 @@ async function processMenuScanInBackground(args: {
         latency_ms: latency,
         status: "ready",
         error_message: null,
+        tokens_in: result.usage?.inputTokens ?? null,
+        tokens_out: result.usage?.outputTokens ?? null,
       })
       .eq("id", scanId);
     if (updateErr) throw new Error(`persist_failed: ${updateErr.message}`);
