@@ -86,4 +86,14 @@ export type EventName =
   | "language_changed"
   | "profile_edited"
   | "data_exported"
-  | "pdf_exported";
+  | "pdf_exported"
+  // Monetization funnel — must stay in sync with the server-side RC
+  // webhook events (trial_started, purchase_converted, cancelled)
+  // so the trial-to-paid analysis joins cleanly in PostHog.
+  | "paywall_viewed"
+  | "trial_started"
+  | "purchase_initiated"
+  | "purchase_completed"
+  | "purchase_cancelled"
+  | "purchase_failed"
+  | "purchase_restored";

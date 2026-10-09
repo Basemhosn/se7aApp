@@ -14,6 +14,7 @@ import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
 import { BackButton } from "@/components/BackButton";
 import { useEntitlement } from "@/lib/EntitlementContext";
+import { track } from "@/lib/analytics";
 import {
   fetchOffering,
   hasProEntitlement,
@@ -46,7 +47,11 @@ export default function Paywall() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    // Funnel event: user actually saw the paywall. Feature param tells
+    // us which entry point triggered it so we can compute conversion
+    // rate per feature.
+    track("paywall_viewed", { feature: feature ?? "direct" });
+  }, [load, feature]);
 
   const annualPkg =
     offering?.availablePackages.find((p) =>
@@ -71,12 +76,23 @@ export default function Paywall() {
 
   const subscribe = async () => {
     if (!activePkg) return;
+    const plan = selected;
+    const productId = activePkg.product.identifier;
+    track("purchase_initiated", { plan, product_id: productId, feature: feature ?? "direct" });
     setPurchasing(true);
     setErr("");
     const res = await purchasePackage(activePkg);
     setPurchasing(false);
-    if (res.cancelled) return;
+    if (res.cancelled) {
+      track("purchase_cancelled", { plan, product_id: productId });
+      return;
+    }
     if (res.info === null) {
+      track("purchase_failed", {
+        plan,
+        product_id: productId,
+        reason: res.error ?? "unknown",
+      });
       setErr(
         res.error ||
           (isArabic ? "تعذّر الاشتراك — حاول مجدداً." : "Couldn't subscribe — try again.")
@@ -87,6 +103,7 @@ export default function Paywall() {
     // to catch up before dismissing. Without this, a user who taps a
     // Pro feature immediately after purchase can see "Pro required"
     // during the ~1-3s webhook lag.
+    track("purchase_completed", { plan, product_id: productId, feature: feature ?? "direct" });
     setActivating(true);
     await optimisticProFromRc();
     setActivating(false);
@@ -99,6 +116,7 @@ export default function Paywall() {
     const info = await restorePurchases();
     setRestoring(false);
     if (hasProEntitlement(info)) {
+      track("purchase_restored");
       await refresh();
       Alert.alert(
         isArabic ? "تم الاسترجاع" : "Restored",

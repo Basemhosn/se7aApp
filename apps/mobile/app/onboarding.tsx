@@ -241,15 +241,40 @@ export default function Onboarding() {
       offering.availablePackages.find((p) => p.packageType === "ANNUAL") ??
       offering.availablePackages[0];
     if (!pkg) return;
+    const productId = pkg.product.identifier;
+    track("purchase_initiated", {
+      plan: pkg.packageType?.toLowerCase() ?? "annual",
+      product_id: productId,
+      feature: "onboarding_trial",
+    });
     setTrialBusy(true);
     setErr("");
     const res = await purchasePackage(pkg as PurchasesPackage);
     setTrialBusy(false);
-    if (res.cancelled) return; // stay on the trial step
+    if (res.cancelled) {
+      track("purchase_cancelled", { plan: "trial", product_id: productId });
+      return; // stay on the trial step
+    }
     if (res.info === null) {
+      track("purchase_failed", {
+        plan: "trial",
+        product_id: productId,
+        reason: res.error ?? "unknown",
+      });
       setErr(res.error || "Couldn't start trial — try again.");
       return;
     }
+    // Trial activated. Both events fire: trial_started is the funnel
+    // milestone (needed for trial-to-paid %), purchase_completed is
+    // the generic purchase event so the paywall + onboarding paths
+    // report through the same pipe.
+    track("trial_started", { plan: "annual", product_id: productId });
+    track("purchase_completed", {
+      plan: "annual",
+      product_id: productId,
+      feature: "onboarding_trial",
+      trial: true,
+    });
     await optimisticProFromRc();
     await finish();
   };
