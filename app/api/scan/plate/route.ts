@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { waitUntil } from "@vercel/functions";
 import { generateObject } from "ai";
 import { getRouteClient, getAdminClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/apiError";
 import {
   normalizePlateScan,
   plateScanResultSchema,
@@ -100,10 +102,13 @@ export async function POST(request: Request) {
     status: "queued",
   });
   if (insertErr) {
-    return NextResponse.json(
-      { error: "persist_failed", details: insertErr.message },
-      { status: 500 }
-    );
+    return apiError({
+      route: "scan/plate",
+      stage: "scan_row_insert",
+      status: 500,
+      body: { error: "persist_failed", details: insertErr.message },
+      error: insertErr,
+    });
   }
 
   // Fire off the AI work in the background. waitUntil keeps the
@@ -186,9 +191,9 @@ async function processScanInBackground(args: {
   } catch (e) {
     const raw = (e as Error).message || "ai_failed";
     // Translate the AI SDK / Zod error into something the mobile card
-    // can render without terrifying the user. Full raw error still
-    // logged in scans.error_message for server-side debugging via the
-    // Sentry integration.
+    // can render without terrifying the user. Full raw error goes to
+    // Sentry so we can detect model drift (sudden spike in a specific
+    // failure mode) without having to tail Vercel logs.
     const friendly = friendlyScanFailure(raw);
     await admin
       .from("scans")
@@ -198,7 +203,10 @@ async function processScanInBackground(args: {
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);
-    console.error("plate scan failed", { scanId, raw });
+    Sentry.captureException(e, {
+      tags: { route: "scan/plate", stage: "ai_vision" },
+      extra: { scan_id: scanId, friendly, latency_ms: Date.now() - started },
+    });
     // Best-effort failure push so the user isn't stuck on a spinner.
     await notifyScanFailed(admin, userId, scanId, friendly).catch(() => {});
   }

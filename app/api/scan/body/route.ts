@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { waitUntil } from "@vercel/functions";
 import { generateObject } from "ai";
 import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
@@ -244,7 +245,10 @@ async function processBodyScanInBackground(args: {
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);
-    console.error("body scan failed", { scanId, raw });
+    Sentry.captureException(e, {
+      tags: { route: "scan/body", stage: "ai_vision" },
+      extra: { scan_id: scanId, friendly, latency_ms: Date.now() - started },
+    });
     await notifyScanFailed(admin, userId, scanId, friendly).catch(() => {});
   }
 }

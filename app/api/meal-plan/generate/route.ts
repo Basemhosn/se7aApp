@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { getRouteClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/apiError";
 import {
   generatePlanSchema,
   mealPlanResultSchema,
@@ -126,10 +127,13 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
     });
     planObject = result.object;
   } catch (e) {
-    return NextResponse.json(
-      { error: "ai_failed", details: String((e as Error)?.message ?? e) },
-      { status: 502 }
-    );
+    return apiError({
+      route: "meal-plan/generate",
+      stage: "ai_generate",
+      status: 502,
+      body: { error: "ai_failed", details: String((e as Error)?.message ?? e) },
+      error: e,
+    });
   }
 
   const { error: upsertErr } = await supabase.from("meal_plans").upsert(

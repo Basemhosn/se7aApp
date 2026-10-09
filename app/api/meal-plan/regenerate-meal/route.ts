@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { getRouteClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/apiError";
 import {
   plannedMealSchema,
   regenerateMealSchema,
@@ -152,10 +153,13 @@ Return exactly one meal object.
     });
     fresh = result.object as PlannedMeal;
   } catch (e) {
-    return NextResponse.json(
-      { error: "ai_failed", details: String((e as Error)?.message ?? e) },
-      { status: 502 }
-    );
+    return apiError({
+      route: "meal-plan/regenerate-meal",
+      stage: "ai_generate",
+      status: 502,
+      body: { error: "ai_failed", details: String((e as Error)?.message ?? e) },
+      error: e,
+    });
   }
 
   // Preserve the slot even if the model's output happened to pick a

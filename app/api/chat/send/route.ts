@@ -120,6 +120,10 @@ export async function POST(request: Request) {
     });
     return result.toTextStreamResponse();
   } catch (e) {
+    Sentry.captureException(e, {
+      tags: { route: "chat/send", stage: "stream_text" },
+      extra: { user_id: user.id },
+    });
     return NextResponse.json(
       { error: "ai_failed", details: String((e as Error)?.message ?? e) },
       { status: 502 }

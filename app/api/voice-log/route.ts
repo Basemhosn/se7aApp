@@ -7,6 +7,7 @@ import { VOICE_LOG_SYSTEM_PROMPT } from "@/lib/prompts/voiceLog.v1";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { getEntitlement } from "@/lib/entitlement";
 import { languageInstruction, localeFromRequest } from "@/lib/i18n";
+import { apiError } from "@/lib/apiError";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -86,24 +87,30 @@ export async function POST(request: Request) {
     );
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      return NextResponse.json(
-        {
+      return apiError({
+        route: "voice-log",
+        stage: "whisper_http",
+        status: 502,
+        body: {
           error: "transcription_failed",
           status: res.status,
           details: detail.slice(0, 200),
         },
-        { status: 502 }
-      );
+        error: new Error(`whisper_${res.status}: ${detail.slice(0, 200)}`),
+      });
     }
     transcript = (await res.text()).trim();
   } catch (e) {
-    return NextResponse.json(
-      {
+    return apiError({
+      route: "voice-log",
+      stage: "whisper_throw",
+      status: 502,
+      body: {
         error: "transcription_failed",
         details: String((e as Error)?.message ?? e),
       },
-      { status: 502 }
-    );
+      error: e,
+    });
   }
 
   if (transcript.length === 0) {
@@ -133,14 +140,18 @@ export async function POST(request: Request) {
     });
     parsed = result.object;
   } catch (e) {
-    return NextResponse.json(
-      {
+    return apiError({
+      route: "voice-log",
+      stage: "claude_parse",
+      status: 502,
+      body: {
         error: "parse_failed",
         transcript,
         details: String((e as Error)?.message ?? e),
       },
-      { status: 502 }
-    );
+      error: e,
+      extra: { transcript_length: transcript.length },
+    });
   }
 
   return NextResponse.json({

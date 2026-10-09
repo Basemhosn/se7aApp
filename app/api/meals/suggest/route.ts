@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { getRouteClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/apiError";
 import {
   mealSuggestionResultSchema,
   suggestMealsSchema,
@@ -100,9 +101,12 @@ Suggest 3 dishes for ${parsed.data.meal_slot} that fit this budget.
       ...result.object,
     });
   } catch (e) {
-    return NextResponse.json(
-      { error: "ai_failed", details: String((e as Error)?.message ?? e) },
-      { status: 502 }
-    );
+    return apiError({
+      route: "meals/suggest",
+      stage: "ai_generate",
+      status: 502,
+      body: { error: "ai_failed", details: String((e as Error)?.message ?? e) },
+      error: e,
+    });
   }
 }
