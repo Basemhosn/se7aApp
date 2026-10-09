@@ -21,6 +21,7 @@ export const CalorieRing = memo(function CalorieRing({
   eatenHigh,
   size = 240,
   planned = false,
+  mode = "remaining",
 }: {
   target: number;
   eatenLow: number;
@@ -30,6 +31,9 @@ export const CalorieRing = memo(function CalorieRing({
    *  arc, and the center label reads "PLANNED" with the planned total
    *  (eatenLow/High are the planned range) instead of "REMAINING". */
   planned?: boolean;
+  /** User-toggled display mode. "remaining" (default) shows kcal left;
+   *  "eaten" shows kcal consumed so far. Planned mode ignores this. */
+  mode?: "remaining" | "eaten";
 }) {
   const stroke = 14;
   const r = (size - stroke) / 2;
@@ -115,14 +119,22 @@ export const CalorieRing = memo(function CalorieRing({
 
       <View style={styles.center} pointerEvents="none">
         <Text style={styles.kicker}>
-          {planned ? "PLANNED" : over ? "OVER TODAY" : "REMAINING"}
+          {planned
+            ? "PLANNED"
+            : over
+              ? "OVER TODAY"
+              : mode === "eaten"
+                ? "EATEN"
+                : "REMAINING"}
         </Text>
         <Text style={[styles.big, !planned && over && { color: colors.coral }]}>
           {planned
             ? Math.round((eatenLow + eatenHigh) / 2)
             : over
               ? Math.round(eatenLow - target)
-              : remainingMid}
+              : mode === "eaten"
+                ? Math.round((eatenLow + eatenHigh) / 2)
+                : remainingMid}
         </Text>
         <Text style={styles.unit}>kcal</Text>
         <Text style={styles.range}>
@@ -130,7 +142,9 @@ export const CalorieRing = memo(function CalorieRing({
             ? `${Math.round(eatenLow)}–${Math.round(eatenHigh)}`
             : over
               ? `+${Math.round(eatenLow - target)}–${Math.round(eatenHigh - target)}`
-              : `${remainingLow}–${remainingHigh}`}
+              : mode === "eaten"
+                ? `${Math.round(eatenLow)}–${Math.round(eatenHigh)}`
+                : `${remainingLow}–${remainingHigh}`}
         </Text>
       </View>
     </View>

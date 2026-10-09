@@ -52,6 +52,7 @@ import {
   subscribeScans,
 } from "@/lib/scanStore";
 import * as haptics from "@/lib/haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -202,6 +203,25 @@ export default function Home() {
   // non-plate rows (manual, barcode, voice) the array has length 1
   // and the sheet renders the same single-item view as before.
   const [selectedMeal, setSelectedMeal] = useState<MealItemRow[] | null>(null);
+  // Toggles the ring + macro tiles between "remaining" (default — SE7A
+  // tradition, matches honest-ranges "what you have left") and "eaten".
+  // Persisted so the user's preference survives tab switches + relaunches.
+  const [macroMode, setMacroMode] = useState<"remaining" | "eaten">(
+    "remaining"
+  );
+  useEffect(() => {
+    AsyncStorage.getItem("home.macroMode").then((v) => {
+      if (v === "eaten" || v === "remaining") setMacroMode(v);
+    });
+  }, []);
+  const toggleMacroMode = useCallback(() => {
+    setMacroMode((prev) => {
+      const next = prev === "remaining" ? "eaten" : "remaining";
+      AsyncStorage.setItem("home.macroMode", next).catch(() => {});
+      haptics.selection();
+      return next;
+    });
+  }, []);
 
   // Subscribe to the async scan store so the "Recently uploaded" card
   // reflects in-flight scans without needing a screen refresh.
@@ -625,6 +645,8 @@ export default function Home() {
               value: Math.round(midOf(totals?.fat_g)),
               target: profile?.daily_fat_g ?? 0,
             },
+            macroMode,
+            onToggleMode: toggleMacroMode,
           }}
           wellness={{
             fiber: {
@@ -1165,6 +1187,8 @@ interface NutritionData {
   protein: { value: number; target: number };
   carbs: { value: number; target: number };
   fat: { value: number; target: number };
+  macroMode: "remaining" | "eaten";
+  onToggleMode: () => void;
 }
 
 interface WellnessData {
@@ -1265,23 +1289,35 @@ const NutritionPage = memo(function NutritionPage({
   data: NutritionData;
   isArabic: boolean;
 }) {
+  const tileMode = data.macroMode === "eaten" ? "eaten" : "left";
   return (
     <View style={[styles.page, { width: SCREEN_WIDTH }]}>
-      <View style={styles.ringWrap}>
+      <Pressable
+        onPress={data.onToggleMode}
+        style={styles.ringWrap}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isArabic
+            ? "بدّل بين السعرات المتبقية والمستهلكة"
+            : "Toggle between calories remaining and eaten"
+        }
+      >
         <CalorieRing
           target={data.target}
           eatenLow={data.eatenLow}
           eatenHigh={data.eatenHigh}
           size={220}
+          mode={data.macroMode}
         />
-      </View>
-      <View style={styles.tileRow}>
+      </Pressable>
+      <Pressable onPress={data.onToggleMode} style={styles.tileRow}>
         <MacroTile
           label={isArabic ? "بروتين" : "Protein"}
           value={data.protein.value}
           target={data.protein.target}
           unit="g"
           tint={colors.gold}
+          mode={tileMode}
         />
         <MacroTile
           label={isArabic ? "كارب" : "Carbs"}
@@ -1289,6 +1325,7 @@ const NutritionPage = memo(function NutritionPage({
           target={data.carbs.target}
           unit="g"
           tint={colors.mint}
+          mode={tileMode}
         />
         <MacroTile
           label={isArabic ? "دهون" : "Fat"}
@@ -1296,8 +1333,9 @@ const NutritionPage = memo(function NutritionPage({
           target={data.fat.target}
           unit="g"
           tint={colors.coral}
+          mode={tileMode}
         />
-      </View>
+      </Pressable>
     </View>
   );
 });
@@ -1308,21 +1346,29 @@ const MacroTile = memo(function MacroTile({
   target,
   unit,
   tint,
+  mode = "eaten",
 }: {
   label: string;
   value: number;
   target: number;
   unit: string;
   tint: string;
+  /** "eaten" shows value/target with eaten so far; "left" shows the
+   *  remaining amount vs target. Progress bar always reflects eaten. */
+  mode?: "eaten" | "left";
 }) {
   const pct = target > 0 ? Math.round((value / target) * 100) : 0;
+  const displayValue =
+    mode === "left" ? Math.max(0, Math.round(target - value)) : value;
   return (
     <View style={styles.macroTile}>
       <Text style={[styles.macroValue, { color: tint }]}>
-        {value}
+        {displayValue}
         <Text style={styles.macroUnit}>{unit}</Text>
       </Text>
-      <Text style={styles.macroLabel}>{label}</Text>
+      <Text style={styles.macroLabel}>
+        {mode === "left" ? `${label} left` : label}
+      </Text>
       <View style={styles.macroBarBg}>
         <View
           style={[
