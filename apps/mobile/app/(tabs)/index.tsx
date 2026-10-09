@@ -225,6 +225,25 @@ export default function Home() {
     });
   }, []);
 
+  // "Add burned calories to target" toggle. Backed by
+  // profile.add_cardio_to_target so the choice follows the user across
+  // devices and surfaces (coach already reads this flag too). Optimistic
+  // update so the ring moves on tap; server call races in background.
+  const toggleCardioAdd = useCallback(async () => {
+    const next = !profile?.add_cardio_to_target;
+    setProfile((p) => (p ? { ...p, add_cardio_to_target: next } : p));
+    haptics.selection();
+    try {
+      await api("/api/profile/prefs", {
+        method: "POST",
+        body: JSON.stringify({ add_cardio_to_target: next }),
+      });
+    } catch {
+      // Roll back on failure so the ring doesn't disagree with the server.
+      setProfile((p) => (p ? { ...p, add_cardio_to_target: !next } : p));
+    }
+  }, [profile?.add_cardio_to_target]);
+
   // Subscribe to the async scan store so the "Recently uploaded" card
   // reflects in-flight scans without needing a screen refresh.
   useEffect(() => {
@@ -516,14 +535,15 @@ export default function Home() {
     dayStatus?.base_target ??
     profile?.daily_kcal_target ??
     2200;
-  // When the user opts in, the daily ring expands to cover activity
-  // burn — active energy from steps + summed cardio session kcal.
-  // Only meaningful on today; past/future days don't have this data.
-  const cardioBurnKcal =
-    isToday && profile?.add_cardio_to_target
-      ? (cardio?.activity.active_kcal ?? 0) +
-        (cardio?.sessions.reduce((s, x) => s + (x.kcal_burned ?? 0), 0) ?? 0)
-      : 0;
+  // Total burned kcal for today (steps + cardio sessions). Computed
+  // regardless of the add-to-target toggle so the chip can show the
+  // amount even when it's not currently applied to the ring.
+  const burnedKcalToday = isToday
+    ? (cardio?.activity.active_kcal ?? 0) +
+      (cardio?.sessions.reduce((s, x) => s + (x.kcal_burned ?? 0), 0) ?? 0)
+    : 0;
+  // When the user opts in, the daily ring expands to cover that burn.
+  const cardioBurnKcal = profile?.add_cardio_to_target ? burnedKcalToday : 0;
   const kcalTarget = baseKcalTarget + cardioBurnKcal;
   const totals = ledger?.totals;
   const kcalLow = totals?.kcal.low ?? 0;
@@ -650,6 +670,9 @@ export default function Home() {
             macroMode,
             onToggleMode: toggleMacroMode,
             items: totals?.items ?? [],
+            burnedKcal: Math.round(burnedKcalToday),
+            addCardioToTarget: !!profile?.add_cardio_to_target,
+            onToggleCardioAdd: toggleCardioAdd,
           }}
           wellness={{
             fiber: {
@@ -1193,6 +1216,12 @@ interface NutritionData {
   macroMode: "remaining" | "eaten";
   onToggleMode: () => void;
   items: MealItemRow[];
+  // Contextual "eat back burned calories" chip. The chip only renders
+  // when (a) viewing today, (b) the user has burned ≥50 kcal, and
+  // the toggle hooks into profile.add_cardio_to_target server-side.
+  burnedKcal: number;
+  addCardioToTarget: boolean;
+  onToggleCardioAdd: () => void;
 }
 
 interface WellnessData {
@@ -1298,8 +1327,50 @@ const NutritionPage = memo(function NutritionPage({
   // day returns the baseline "good" which is misleading when the
   // user hasn't eaten anything yet.
   const dailyScore = data.items.length > 0 ? scoreDay(data.items) : null;
+  // Chip only renders when there's meaningful burn to talk about. 50
+  // kcal is roughly 1k passive steps — below that it's noise.
+  const showBurnChip = data.burnedKcal >= 50;
   return (
     <View style={[styles.page, { width: SCREEN_WIDTH }]}>
+      {showBurnChip && (
+        <Pressable
+          onPress={data.onToggleCardioAdd}
+          style={[
+            styles.burnChip,
+            data.addCardioToTarget && styles.burnChipOn,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={
+            data.addCardioToTarget
+              ? isArabic
+                ? "تمت إضافة السعرات المحروقة إلى الهدف. اضغط للإزالة"
+                : "Burned calories added to budget. Tap to remove"
+              : isArabic
+                ? "أضف السعرات المحروقة إلى الهدف"
+                : "Add burned calories to your budget"
+          }
+        >
+          <Ionicons
+            name={data.addCardioToTarget ? "flame" : "flame-outline"}
+            size={14}
+            color={data.addCardioToTarget ? colors.mint : colors.gold}
+          />
+          <Text
+            style={[
+              styles.burnChipText,
+              data.addCardioToTarget && { color: colors.mint },
+            ]}
+          >
+            {data.addCardioToTarget
+              ? isArabic
+                ? `+${data.burnedKcal} سعرة محروقة في الهدف`
+                : `+${data.burnedKcal} burned added`
+              : isArabic
+                ? `حرقت ${data.burnedKcal} — أضف للهدف؟`
+                : `Burned ${data.burnedKcal} kcal — add to budget?`}
+          </Text>
+        </Pressable>
+      )}
       <Pressable
         onPress={data.onToggleMode}
         style={styles.ringWrap}
@@ -2906,6 +2977,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: -spacing.sm,
     marginBottom: spacing.sm,
+  },
+  burnChip: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: "rgba(246,183,60,0.08)",
+    marginBottom: spacing.sm,
+  },
+  burnChipOn: {
+    borderColor: colors.mint,
+    backgroundColor: "rgba(80,200,160,0.08)",
+  },
+  burnChipText: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: colors.gold,
+    letterSpacing: 0.3,
   },
   dotsRow: {
     flexDirection: "row",
