@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { streamText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
+import * as Sentry from "@sentry/nextjs";
 import { getRouteClient } from "@/lib/supabase/server";
 import { sendMessageSchema } from "@/lib/schemas/chat";
 import { COACH_SYSTEM_PROMPT_V2 } from "@/lib/prompts/coach.v2";
@@ -94,11 +95,27 @@ export async function POST(request: Request) {
       onFinish: async ({ text }) => {
         const final = text.trim();
         if (!final) return;
-        await supabase.from("chat_messages").insert({
-          user_id: user.id,
-          role: "assistant",
-          content: final,
-        });
+        // CRITICAL: must not swallow this error silently. The response
+        // bytes have already flushed to the client — if this insert
+        // fails, the user sees a complete reply they'll never see again
+        // on refetch. Logging to Sentry so a persistent DB/RLS issue
+        // surfaces instead of looking like coach amnesia.
+        try {
+          const { error } = await supabase.from("chat_messages").insert({
+            user_id: user.id,
+            role: "assistant",
+            content: final,
+          });
+          if (error) throw error;
+        } catch (e) {
+          Sentry.captureException(e, {
+            tags: { route: "chat/send", stage: "persist_assistant_turn" },
+            extra: {
+              user_id: user.id,
+              text_length: final.length,
+            },
+          });
+        }
       },
     });
     return result.toTextStreamResponse();
