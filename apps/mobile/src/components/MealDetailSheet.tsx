@@ -20,6 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import type { MealItemRow } from "@/types";
 import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
+import { scoreDay } from "@/lib/healthScore";
+import { HealthScorePill } from "@/components/HealthScorePill";
 
 /**
  * Bottom-sheet meal detail view. Renders the meal's photo (if any),
@@ -257,6 +259,33 @@ export function MealDetailSheet({
                   {kcalSum.low}–{kcalSum.high}
                 </Text>
               </View>
+
+              {(() => {
+                // Score the whole group (plate scans) or the single
+                // item together — scoreDay sums fields across rows and
+                // runs the same algorithm, so it's correct for both.
+                const health = scoreDay(items!);
+                return (
+                  <View style={styles.scoreRow}>
+                    <HealthScorePill
+                      score={health.score}
+                      label={health.label}
+                      size="md"
+                      isArabic={isArabic}
+                    />
+                    {health.factors.length > 0 && (
+                      <View style={styles.factorList}>
+                        {health.factors.slice(0, 3).map((f, i) => (
+                          <Text key={i} style={styles.factorText}>
+                            {f.delta > 0 ? "+ " : f.delta < 0 ? "− " : "· "}
+                            {isArabic ? f.message_ar : f.message_en}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
 
               <View style={styles.macroRow}>
                 <MacroPill
@@ -497,6 +526,22 @@ const styles = StyleSheet.create({
     color: colors.dim,
     fontFamily: font.mono,
     fontSize: 12,
+  },
+  scoreRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  factorList: {
+    flex: 1,
+    gap: 2,
+  },
+  factorText: {
+    color: colors.dim,
+    fontFamily: font.mono,
+    fontSize: 11,
+    lineHeight: 15,
   },
   macroRow: {
     flexDirection: "row",

@@ -22,6 +22,8 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { CalorieRing } from "@/components/CalorieRing";
+import { HealthScorePill } from "@/components/HealthScorePill";
+import { scoreDay } from "@/lib/healthScore";
 import { QuickLogFab } from "@/components/QuickLogFab";
 import { api } from "@/lib/api";
 import {
@@ -647,6 +649,7 @@ export default function Home() {
             },
             macroMode,
             onToggleMode: toggleMacroMode,
+            items: totals?.items ?? [],
           }}
           wellness={{
             fiber: {
@@ -1189,6 +1192,7 @@ interface NutritionData {
   fat: { value: number; target: number };
   macroMode: "remaining" | "eaten";
   onToggleMode: () => void;
+  items: MealItemRow[];
 }
 
 interface WellnessData {
@@ -1290,6 +1294,10 @@ const NutritionPage = memo(function NutritionPage({
   isArabic: boolean;
 }) {
   const tileMode = data.macroMode === "eaten" ? "eaten" : "left";
+  // Only score the day once we actually have logs — scoring an empty
+  // day returns the baseline "good" which is misleading when the
+  // user hasn't eaten anything yet.
+  const dailyScore = data.items.length > 0 ? scoreDay(data.items) : null;
   return (
     <View style={[styles.page, { width: SCREEN_WIDTH }]}>
       <Pressable
@@ -1310,6 +1318,16 @@ const NutritionPage = memo(function NutritionPage({
           mode={data.macroMode}
         />
       </Pressable>
+      {dailyScore && (
+        <View style={styles.dailyScoreWrap}>
+          <HealthScorePill
+            score={dailyScore.score}
+            label={dailyScore.label}
+            size="md"
+            isArabic={isArabic}
+          />
+        </View>
+      )}
       <Pressable onPress={data.onToggleMode} style={styles.tileRow}>
         <MacroTile
           label={isArabic ? "بروتين" : "Protein"}
@@ -2883,6 +2901,11 @@ const styles = StyleSheet.create({
   ringWrap: {
     alignItems: "center",
     paddingVertical: spacing.sm,
+  },
+  dailyScoreWrap: {
+    alignItems: "center",
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
   },
   dotsRow: {
     flexDirection: "row",
