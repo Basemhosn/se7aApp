@@ -226,6 +226,9 @@ async function processMenuScanInBackground(args: {
     const parsed = normalizeMenuScan(result.object);
     const latency = Date.now() - started;
 
+    // See scan/plate for context — token columns are a best-effort
+    // write isolated from the main update so a missing migration can't
+    // break every scan.
     const { error: updateErr } = await admin
       .from("scans")
       .update({
@@ -234,10 +237,22 @@ async function processMenuScanInBackground(args: {
         latency_ms: latency,
         status: "ready",
         error_message: null,
+      })
+      .eq("id", scanId);
+    const usageUpdate = await admin
+      .from("scans")
+      .update({
         tokens_in: result.usage?.inputTokens ?? null,
         tokens_out: result.usage?.outputTokens ?? null,
       })
       .eq("id", scanId);
+    if (usageUpdate.error) {
+      Sentry.captureMessage("scan_tokens_persist_failed", {
+        level: "warning",
+        tags: { route: "scan/menu", stage: "token_usage_persist" },
+        extra: { scan_id: scanId, error: usageUpdate.error.message },
+      });
+    }
     if (updateErr) throw new Error(`persist_failed: ${updateErr.message}`);
 
     await notifyScanReady(admin, userId, scanId).catch(() => {});
@@ -248,9 +263,7 @@ async function processMenuScanInBackground(args: {
       .from("scans")
       .update({
         status: "failed",
-        // TEMPORARY DIAG — see plate route for context. Revert once
-        // the current failure is identified.
-        error_message: `${friendly}\n\n[raw] ${raw.slice(0, 500)}`,
+        error_message: friendly,
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);

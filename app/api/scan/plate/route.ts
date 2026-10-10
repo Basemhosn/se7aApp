@@ -171,6 +171,10 @@ async function processScanInBackground(args: {
     const parsed = normalizePlateScan(result.object);
     const latency = Date.now() - started;
 
+    // Primary update WITHOUT the token columns — these may not exist
+    // yet if migration 0044 hasn't landed on this database. Keeping
+    // the token write in a separate best-effort statement means a
+    // schema-cache miss doesn't nuke the whole scan result.
     const { error: updateErr } = await admin
       .from("scans")
       .update({
@@ -179,12 +183,26 @@ async function processScanInBackground(args: {
         latency_ms: latency,
         status: "ready",
         error_message: null,
-        tokens_in: result.usage?.inputTokens ?? null,
-        tokens_out: result.usage?.outputTokens ?? null,
       })
       .eq("id", scanId);
     if (updateErr) {
       throw new Error(`persist_failed: ${updateErr.message}`);
+    }
+    // Best-effort token-usage write. Swallow errors so a missing
+    // migration doesn't resurrect the "every scan fails" regression.
+    const usageUpdate = await admin
+      .from("scans")
+      .update({
+        tokens_in: result.usage?.inputTokens ?? null,
+        tokens_out: result.usage?.outputTokens ?? null,
+      })
+      .eq("id", scanId);
+    if (usageUpdate.error) {
+      Sentry.captureMessage("scan_tokens_persist_failed", {
+        level: "warning",
+        tags: { route: "scan/plate", stage: "token_usage_persist" },
+        extra: { scan_id: scanId, error: usageUpdate.error.message },
+      });
     }
 
     await notifyScanReady(admin, userId, scanId).catch(() => {
@@ -201,11 +219,7 @@ async function processScanInBackground(args: {
       .from("scans")
       .update({
         status: "failed",
-        // TEMPORARY DIAG: write the raw error alongside the friendly
-        // one so Basem can read it directly from the Supabase row
-        // (Sentry pipeline needs SENTRY_DSN which may not be set
-        // server-side). Revert to just `friendly` once this is debugged.
-        error_message: `${friendly}\n\n[raw] ${raw.slice(0, 500)}`,
+        error_message: friendly,
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);
