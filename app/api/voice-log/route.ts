@@ -126,11 +126,8 @@ export async function POST(request: Request) {
     const result = await generateObject({
       model: anthropic(PARSE_MODEL),
       schema: voiceLogResultSchema,
+      system: `${VOICE_LOG_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [
-        {
-          role: "system",
-          content: `${VOICE_LOG_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
-        },
         {
           role: "user",
           content: `Transcript:\n"""${transcript}"""\n\nParse this into meal items.`,

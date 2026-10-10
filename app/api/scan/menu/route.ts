@@ -212,11 +212,8 @@ async function processMenuScanInBackground(args: {
     const result = await generateObject({
       model: MODELS.menu_default,
       schema: menuScanResultSchema,
+      system: `${MENU_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [
-        {
-          role: "system",
-          content: `${MENU_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
-        },
         {
           role: "user",
           content: [

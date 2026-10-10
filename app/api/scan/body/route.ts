@@ -190,11 +190,8 @@ async function processBodyScanInBackground(args: {
     const result = await generateObject({
       model: MODELS.body_default,
       schema: bodyScanResultSchema,
+      system: `${BODY_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [
-        {
-          role: "system",
-          content: `${BODY_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
-        },
         {
           role: "user",
           content: [

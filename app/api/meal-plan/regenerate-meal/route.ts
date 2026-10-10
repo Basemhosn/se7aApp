@@ -142,13 +142,8 @@ Return exactly one meal object.
     const result = await generateObject({
       model: anthropic(MODEL_ID),
       schema: plannedMealSchema,
-      messages: [
-        {
-          role: "system",
-          content: `${MEAL_PLAN_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
-        },
-        { role: "user", content: userMsg },
-      ],
+      system: `${MEAL_PLAN_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
+      messages: [{ role: "user", content: userMsg }],
       maxOutputTokens: 1500,
     });
     fresh = result.object as PlannedMeal;

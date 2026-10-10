@@ -115,13 +115,8 @@ ${ramadanBlock ? `\n${ramadanBlock}\n` : ""}
     const result = await generateObject({
       model: anthropic(MODEL_ID),
       schema: mealPlanResultSchema,
-      messages: [
-        {
-          role: "system",
-          content: `${MEAL_PLAN_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
-        },
-        { role: "user", content: userMsg },
-      ],
+      system: `${MEAL_PLAN_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
+      messages: [{ role: "user", content: userMsg }],
       // 8k covers 7 days × 4 meals + shopping list. 16k was Sonnet's
       // buffer against verbose reasoning; Haiku doesn't need it and
       // it slows generation.

@@ -85,13 +85,8 @@ Suggest 3 dishes for ${parsed.data.meal_slot} that fit this budget.
     const result = await generateObject({
       model: anthropic(MODEL_ID),
       schema: mealSuggestionResultSchema,
-      messages: [
-        {
-          role: "system",
-          content: `${MEAL_SUGGEST_SYSTEM_PROMPT}\n\n${langInstruction}`,
-        },
-        { role: "user", content: userMsg },
-      ],
+      system: `${MEAL_SUGGEST_SYSTEM_PROMPT}\n\n${langInstruction}`,
+      messages: [{ role: "user", content: userMsg }],
       maxOutputTokens: 900,
     });
 

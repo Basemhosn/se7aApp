@@ -154,11 +154,11 @@ async function processScanInBackground(args: {
     const result = await generateObject({
       model: MODELS.plate_default,
       schema: plateScanResultSchema,
+      // AI SDK no longer accepts system in the messages array by
+      // default — it throws unless allowSystemInMessages is set.
+      // Pass as top-level `system` instead.
+      system: `${PLATE_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [
-        {
-          role: "system",
-          content: `${PLATE_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
-        },
         {
           role: "user",
           content: [

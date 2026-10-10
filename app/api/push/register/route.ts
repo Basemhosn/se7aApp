@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRouteClient } from "@/lib/supabase/server";
 import { registerPushSchema } from "@/lib/schemas/push";
+import { apiError } from "@/lib/apiError";
 
 export const runtime = "nodejs";
 
@@ -38,10 +39,14 @@ export async function POST(request: Request) {
   );
 
   if (error) {
-    return NextResponse.json(
-      { error: "persist_failed", details: error.message },
-      { status: 500 }
-    );
+    return apiError({
+      route: "push/register",
+      stage: "upsert_push_tokens",
+      status: 500,
+      body: { error: "persist_failed", details: error.message },
+      error,
+      extra: { user_id: user.id, platform: parsed.data.platform },
+    });
   }
 
   return NextResponse.json({ ok: true });
