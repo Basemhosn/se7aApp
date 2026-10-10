@@ -248,7 +248,9 @@ async function processMenuScanInBackground(args: {
       .from("scans")
       .update({
         status: "failed",
-        error_message: friendly,
+        // TEMPORARY DIAG — see plate route for context. Revert once
+        // the current failure is identified.
+        error_message: `${friendly}\n\n[raw] ${raw.slice(0, 500)}`,
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);

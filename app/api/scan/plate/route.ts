@@ -201,7 +201,11 @@ async function processScanInBackground(args: {
       .from("scans")
       .update({
         status: "failed",
-        error_message: friendly,
+        // TEMPORARY DIAG: write the raw error alongside the friendly
+        // one so Basem can read it directly from the Supabase row
+        // (Sentry pipeline needs SENTRY_DSN which may not be set
+        // server-side). Revert to just `friendly` once this is debugged.
+        error_message: `${friendly}\n\n[raw] ${raw.slice(0, 500)}`,
         latency_ms: Date.now() - started,
       })
       .eq("id", scanId);
