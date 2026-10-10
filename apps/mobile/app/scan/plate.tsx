@@ -573,12 +573,12 @@ export default function PlateScan() {
             </View>
           )}
 
-          {!!notes.trim() && (
-            <View style={styles.notesChip}>
-              <Ionicons name="information-circle-outline" size={14} color={colors.gold} />
-              <Text style={styles.notesText}>{notes.trim()}</Text>
-            </View>
-          )}
+          {/* `notes` is the model's internal scale/container reasoning
+              ("Container: 260mm plate, fork reference...") — useful for
+              debugging in raw_response but noisy for users. The
+              user-facing commentary ("ghee likely added", "sodium is
+              probably underestimated") lives in `invisible_costs`
+              which renders separately below. */}
 
           {selected.size > 0 && (
             <View style={styles.macroCard}>
