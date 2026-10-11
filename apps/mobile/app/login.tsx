@@ -13,51 +13,90 @@ import { track } from "@/lib/analytics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
- * Login supports two auth flows:
- *   1. Email magic link (existing) — Supabase sends a one-tap link;
- *      the app opens via se7a://auth/callback?code=... which the
- *      /auth/callback route exchanges for a session.
- *   2. Google OAuth (new) — supabase.auth.signInWithOAuth returns the
- *      Google authorize URL; expo-web-browser opens it in an in-app
- *      Safari sheet, user consents, Google redirects to Supabase's
- *      /auth/v1/callback, Supabase redirects back to se7a://auth/callback
- *      with the code. Same /auth/callback route handles the exchange.
+ * Login supports three flows:
+ *   1. Email + password (primary) — Sign In or Create Account.
+ *      Create Account calls supabase.auth.signUp which emails a
+ *      confirmation link to se7a://auth/callback?code=... The user
+ *      must confirm before signing in.
+ *   2. Google OAuth — see signInWithGoogle below.
+ *   3. Sign in with Apple — TODO (required for App Store 4.8).
  *
- * Both flows require se7a://auth/callback to be listed as an allowed
- * redirect URL in Supabase (Auth → URL Configuration).
+ * All flows funnel through /auth/callback which handles code exchange
+ * and routes to onboarding or home based on profile state.
  */
 
 WebBrowser.maybeCompleteAuthSession();
 
+type Mode = "signin" | "signup";
+
 export default function Login() {
   const { t } = useTranslation();
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [sent, setSent] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  const send = async () => {
+  const anyBusy = busy || googleBusy;
+
+  const submit = async () => {
     const clean = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
       setMsg(t("auth.login.invalid_email"));
       return;
     }
-    setBusy(true);
-    setMsg("");
-    // Use the app's URL scheme so the link opens directly into the app.
-    const redirectTo = Linking.createURL("/auth/callback");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: clean,
-      options: { emailRedirectTo: redirectTo },
-    });
-    setBusy(false);
-    if (error) {
-      setMsg(error.message);
+    if (password.length < 8) {
+      setMsg(t("auth.login.password_too_short"));
       return;
     }
-    setSent(true);
-    setMsg(t("auth.login.sent_msg", { email: clean }));
+    setBusy(true);
+    setMsg("");
+
+    if (mode === "signup") {
+      const emailRedirectTo = Linking.createURL("/auth/callback");
+      const { data, error } = await supabase.auth.signUp({
+        email: clean,
+        password,
+        options: { emailRedirectTo },
+      });
+      setBusy(false);
+      if (error) {
+        setMsg(error.message);
+        return;
+      }
+      // When email confirmation is required, Supabase returns a user
+      // but no session. Show the "check your inbox" message. If
+      // confirmation is disabled, a session is returned immediately
+      // and we route to onboarding.
+      if (data.session) {
+        track("signup_completed", { method: "password" });
+        router.replace("/onboarding");
+        return;
+      }
+      setSuccess(true);
+      setMsg(t("auth.login.signup_sent", { email: clean }));
+      return;
+    }
+
+    // Sign in
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: clean,
+      password,
+    });
+    if (error || !data.user) {
+      setBusy(false);
+      setMsg(error?.message ?? t("auth.login.signin_err"));
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("onboarded_at")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
+    router.replace(profile?.onboarded_at ? "/" : "/onboarding");
+    setBusy(false);
   };
 
   const signInWithGoogle = async () => {
@@ -79,7 +118,6 @@ export default function Login() {
       }
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type !== "success") {
-        // User dismissed the sheet or the flow returned no result.
         if (result.type === "cancel" || result.type === "dismiss") {
           setMsg(t("auth.login.google_cancelled"));
         } else {
@@ -88,14 +126,9 @@ export default function Login() {
         setGoogleBusy(false);
         return;
       }
-      // Success — pull the code from the returned url. Supabase can
-      // put it in either the search string (?code=...) or the URL
-      // fragment (#code=... in the older implicit flow). Try both.
       const code = extractCodeFromReturnUrl(result.url);
       if (!code) {
-        setMsg(
-          `${t("auth.login.google_err")} (no code in redirect)`
-        );
+        setMsg(`${t("auth.login.google_err")} (no code in redirect)`);
         setGoogleBusy(false);
         return;
       }
@@ -105,10 +138,6 @@ export default function Login() {
         setGoogleBusy(false);
         return;
       }
-      // Explicit navigation — the AuthProvider does route on session
-      // change but that's raced by this screen staying mounted, so
-      // we push to callback ourselves. The callback route handles the
-      // onboarded-vs-onboarding branch.
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setMsg(`${t("auth.login.google_err")} (no user after exchange)`);
@@ -120,8 +149,6 @@ export default function Login() {
         .select("onboarded_at")
         .eq("user_id", user.id)
         .maybeSingle();
-      // See callback.tsx for the fresh-signup rationale. Google path
-      // bypasses the magic-link callback so the event has to fire here.
       if (!profile) {
         track("signup_completed", { method: "google" });
       }
@@ -137,7 +164,6 @@ export default function Login() {
       const u = new URL(rawUrl);
       const q = u.searchParams.get("code");
       if (q) return q;
-      // Fragment path: #code=... or #access_token=...&code=...
       const frag = u.hash?.startsWith("#") ? u.hash.slice(1) : u.hash ?? "";
       if (frag) {
         const fragParams = new URLSearchParams(frag);
@@ -150,15 +176,66 @@ export default function Login() {
     }
   }
 
-  const anyBusy = busy || googleBusy;
+  const handleForgot = async () => {
+    const clean = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+      setMsg(t("auth.login.forgot_need_email"));
+      return;
+    }
+    setBusy(true);
+    setMsg("");
+    const redirectTo = Linking.createURL("/auth/callback");
+    const { error } = await supabase.auth.resetPasswordForEmail(clean, {
+      redirectTo,
+    });
+    setBusy(false);
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+    setSuccess(true);
+    setMsg(t("auth.login.forgot_sent", { email: clean }));
+  };
 
   return (
     <Screen>
       <View style={styles.head}>
         <Wordmark size={26} />
       </View>
-      <Text style={styles.h1}>{t("auth.login.h1")}</Text>
-      <Text style={styles.sub}>{t("auth.login.sub")}</Text>
+
+      <View style={styles.tabs}>
+        <Pressable
+          onPress={() => {
+            setMode("signin");
+            setSuccess(false);
+            setMsg("");
+          }}
+          style={[styles.tab, mode === "signin" && styles.tabActive]}
+        >
+          <Text style={[styles.tabText, mode === "signin" && styles.tabTextActive]}>
+            {t("auth.login.tab_signin")}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setMode("signup");
+            setSuccess(false);
+            setMsg("");
+          }}
+          style={[styles.tab, mode === "signup" && styles.tabActive]}
+        >
+          <Text style={[styles.tabText, mode === "signup" && styles.tabTextActive]}>
+            {t("auth.login.tab_signup")}
+          </Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.h1}>
+        {mode === "signin" ? t("auth.login.h1_signin") : t("auth.login.h1_signup")}
+      </Text>
+      <Text style={styles.sub}>
+        {mode === "signin" ? t("auth.login.sub_signin") : t("auth.login.sub_signup")}
+      </Text>
 
       <View style={styles.field}>
         <Text style={styles.label}>{t("auth.login.email_label")}</Text>
@@ -170,16 +247,43 @@ export default function Login() {
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={!sent && !anyBusy}
+          editable={!success && !anyBusy}
           style={styles.input}
         />
       </View>
 
+      <View style={styles.field}>
+        <Text style={styles.label}>{t("auth.login.password_label")}</Text>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder={t("auth.login.password_placeholder")}
+          placeholderTextColor={colors.dim}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!success && !anyBusy}
+          style={styles.input}
+        />
+      </View>
+
+      {mode === "signin" && !success && (
+        <Pressable onPress={handleForgot} disabled={anyBusy}>
+          <Text style={styles.forgot}>{t("auth.login.forgot")}</Text>
+        </Pressable>
+      )}
+
       <Btn
-        label={sent ? t("auth.login.sent") : t("auth.login.send")}
-        onPress={send}
+        label={
+          busy
+            ? t("auth.login.submit_busy")
+            : mode === "signin"
+              ? t("auth.login.submit_signin")
+              : t("auth.login.submit_signup")
+        }
+        onPress={submit}
         loading={busy}
-        disabled={sent || googleBusy}
+        disabled={success || googleBusy}
       />
 
       <View style={styles.divider}>
@@ -190,10 +294,10 @@ export default function Login() {
 
       <Pressable
         onPress={signInWithGoogle}
-        disabled={anyBusy || sent}
+        disabled={anyBusy || success}
         style={({ pressed }) => [
           styles.googleBtn,
-          (anyBusy || sent) && styles.googleBtnDisabled,
+          (anyBusy || success) && styles.googleBtnDisabled,
           pressed && { opacity: 0.85 },
         ]}
       >
@@ -204,7 +308,7 @@ export default function Login() {
       </Pressable>
 
       {!!msg && (
-        <Text style={[styles.note, sent ? styles.ok : styles.err]}>{msg}</Text>
+        <Text style={[styles.note, success ? styles.ok : styles.err]}>{msg}</Text>
       )}
     </Screen>
   );
@@ -212,12 +316,37 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   head: { marginTop: spacing.md, marginBottom: spacing.md },
-  h1: {
-    fontFamily: font.displayBold,
-    fontSize: 32,
+  tabs: {
+    flexDirection: "row",
+    backgroundColor: colors.panel2,
+    borderRadius: radius.md,
+    padding: 4,
+    gap: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    alignItems: "center",
+    borderRadius: radius.md - 2,
+  },
+  tabActive: {
+    backgroundColor: colors.panel,
+  },
+  tabText: {
+    fontFamily: font.bodyBold,
+    fontSize: 13,
+    color: colors.dim,
+    letterSpacing: 0.2,
+  },
+  tabTextActive: {
     color: colors.ink,
   },
-  sub: { color: colors.dim, fontFamily: font.body, fontSize: 15 },
+  h1: {
+    fontFamily: font.displayBold,
+    fontSize: 28,
+    color: colors.ink,
+  },
+  sub: { color: colors.dim, fontFamily: font.body, fontSize: 14 },
   googleBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -271,6 +400,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  forgot: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.gold,
+    textAlign: "right",
+    paddingVertical: spacing.xs,
   },
   note: { fontFamily: font.body, fontSize: 13 },
   ok: { color: colors.mint },

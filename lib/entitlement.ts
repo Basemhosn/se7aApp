@@ -31,6 +31,22 @@ export async function getEntitlement(
   supabase: SupabaseClient,
   userId: string
 ): Promise<EntitlementStatus> {
+  // Apple App Review reviewer bypass. Set APPLE_REVIEW_USER_ID on Vercel
+  // to the Supabase auth.users.id of the reviewer account, and that user
+  // alone gets forced-Pro without needing a real RevenueCat subscription.
+  // UUID is not guessable, env var is server-only — safe to ship.
+  const reviewerId = process.env.APPLE_REVIEW_USER_ID;
+  if (reviewerId && userId === reviewerId) {
+    return {
+      is_pro: true,
+      tier: "pro",
+      status: "active",
+      product_id: "apple_review_override",
+      expires_at: null,
+      will_renew: false,
+    };
+  }
+
   const { data } = await supabase
     .from("v_active_pro")
     .select("*")
