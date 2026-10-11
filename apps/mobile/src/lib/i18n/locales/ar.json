@@ -496,6 +496,7 @@
       "google_busy": "جارٍ فتح Google…",
       "google_err": "تعذّر بدء تسجيل الدخول بجوجل.",
       "google_cancelled": "تم إلغاء تسجيل الدخول بجوجل.",
+      "apple_err": "تعذّر تسجيل الدخول بآبل. حاول مرة أخرى.",
       "or_divider": "أو"
     },
     "callback": {

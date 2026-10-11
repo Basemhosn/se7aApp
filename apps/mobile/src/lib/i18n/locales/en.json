@@ -496,6 +496,7 @@
       "google_busy": "Opening Google…",
       "google_err": "Couldn't start Google sign-in.",
       "google_cancelled": "Google sign-in cancelled.",
+      "apple_err": "Couldn't sign in with Apple. Please try again.",
       "or_divider": "OR"
     },
     "callback": {

@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Btn } from "@/components/Btn";
@@ -36,10 +37,21 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [appleBusy, setAppleBusy] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [msg, setMsg] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const anyBusy = busy || googleBusy;
+  useEffect(() => {
+    // Sign in with Apple is iOS-only, 13+. The native button crashes if
+    // rendered on an unsupported device, so gate on isAvailableAsync.
+    if (Platform.OS !== "ios") return;
+    AppleAuthentication.isAvailableAsync()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
+
+  const anyBusy = busy || googleBusy || appleBusy;
 
   const submit = async () => {
     const clean = email.trim().toLowerCase();
@@ -176,6 +188,53 @@ export default function Login() {
     }
   }
 
+  const signInWithApple = async () => {
+    setAppleBusy(true);
+    setMsg("");
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const idToken = credential.identityToken;
+      if (!idToken) {
+        setMsg(t("auth.login.apple_err"));
+        setAppleBusy(false);
+        return;
+      }
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: idToken,
+      });
+      if (error || !data.user) {
+        setMsg(error?.message ?? t("auth.login.apple_err"));
+        setAppleBusy(false);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("onboarded_at")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      if (!profile) {
+        track("signup_completed", { method: "apple" });
+      }
+      router.replace(profile?.onboarded_at ? "/" : "/onboarding");
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      // ERR_REQUEST_CANCELED fires when the user dismisses the sheet.
+      // Silent-ignore so there's no scary red error on a benign cancel.
+      if (err.code === "ERR_REQUEST_CANCELED") {
+        setMsg("");
+      } else {
+        setMsg(err.message ?? t("auth.login.apple_err"));
+      }
+    }
+    setAppleBusy(false);
+  };
+
   const handleForgot = async () => {
     const clean = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
@@ -292,6 +351,22 @@ export default function Login() {
         <View style={styles.dividerLine} />
       </View>
 
+      {appleAvailable && (
+        <AppleAuthentication.AppleAuthenticationButton
+          buttonType={
+            mode === "signin"
+              ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+              : AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+          }
+          buttonStyle={
+            AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+          }
+          cornerRadius={radius.md}
+          style={styles.appleBtn}
+          onPress={signInWithApple}
+        />
+      )}
+
       <Pressable
         onPress={signInWithGoogle}
         disabled={anyBusy || success}
@@ -358,6 +433,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  appleBtn: {
+    width: "100%",
+    height: 48,
   },
   googleBtnDisabled: {
     opacity: 0.5,
