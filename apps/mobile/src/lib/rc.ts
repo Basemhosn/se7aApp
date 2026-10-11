@@ -16,7 +16,9 @@ export type { CustomerInfo, PurchasesOffering, PurchasesPackage };
  * Purchases directly, so we can swap SDKs or add mocks later.
  *
  * Entitlement identifier: "pro" — configured in the RC dashboard to
- * grant when either se7a_pro_monthly or se7a_pro_annual is active.
+ * grant when either Se7a_pro_monthly or Se7a_pro_annual is active.
+ * (ASC product IDs are capital-S by convention; the paywall's package
+ * lookup is case-insensitive so this stays safe.)
  */
 
 export const PRO_ENTITLEMENT = "pro";
@@ -162,7 +164,7 @@ export async function purchasePackage(
  *
  * Product ID must match the ASC + RC dashboard entry exactly.
  */
-export const REPORT_PRODUCT_ID = "se7a_report_90day";
+export const REPORT_PRODUCT_ID = "Se7a_report_90day";
 
 export async function purchaseReport(): Promise<
   | { cancelled: true }

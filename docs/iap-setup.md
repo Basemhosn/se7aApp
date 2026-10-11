@@ -4,9 +4,9 @@ Three products to create:
 
 | Product ID | Type | Price (base: UAE) |
 |------------|------|---------|
-| `se7a_pro_monthly` | Auto-Renewable Subscription | 19 AED/mo |
-| `se7a_pro_annual` | Auto-Renewable Subscription | 149 AED/yr |
-| `se7a_report_90day` | Consumable (non-subscription) | 19 AED one-time |
+| `Se7a_pro_monthly` | Auto-Renewable Subscription | 29 AED/mo |
+| `Se7a_pro_annual` | Auto-Renewable Subscription | 249 AED/yr |
+| `Se7a_report_90day` | Consumable (non-subscription) | 19 AED one-time |
 
 **RevenueCat entitlement:** `pro` (grants when either `_monthly` or `_annual` is active)
 
@@ -51,7 +51,7 @@ Still inside the Subscription Group:
 
 1. Click **+** under "Subscriptions"
 2. **Reference Name:** `SE7A Pro Monthly`
-3. **Product ID:** `se7a_pro_monthly` ⚠️ **This must match EXACTLY — case sensitive**
+3. **Product ID:** `Se7a_pro_monthly` ⚠️ **This must match EXACTLY — case sensitive**
 4. Click **Create**
 
 Now the detail page opens. Fill in:
@@ -62,12 +62,12 @@ Now the detail page opens. Fill in:
 ### Subscription Prices
 1. Click **+** next to "Subscription Prices"
 2. **Base Country/Region:** **United Arab Emirates**
-3. **Price:** `19 AED`
+3. **Price:** `29 AED`
 4. Click **Next** → Apple shows auto-calculated prices for all other regions. Review, click **Confirm**.
 
 ### Review Information
 *(ASC requires a screenshot showing the paywall where users see this product)*
-1. **Review Notes:** `Paywall shows this as the Monthly option (19 AED/mo). Accessible from Settings → Subscription or when user hits a Pro-gated feature.`
+1. **Review Notes:** `Paywall shows this as the Monthly option (29 AED/mo). Accessible from Settings → Subscription or when user hits a Pro-gated feature.`
 2. **Screenshot:** Upload a screenshot of your paywall screen showing both options. (640×920 or larger for iPhone, PNG/JPEG)
 
 ### Localizations
@@ -91,15 +91,15 @@ Click **Save** top right. Status changes to **Ready to Submit** (ASC will auto-s
 Repeat Step 4 with these values:
 
 - **Reference Name:** `SE7A Pro Annual`
-- **Product ID:** `se7a_pro_annual`
+- **Product ID:** `Se7a_pro_annual`
 - **Subscription Duration:** `1 Year`
-- **Base Price (UAE):** `149 AED`
-- **Review Notes:** `Paywall shows this as the Annual option (149 AED/yr — ~35% savings vs monthly). Default-selected on the paywall.`
+- **Base Price (UAE):** `249 AED`
+- **Review Notes:** `Paywall shows this as the Annual option (249 AED/yr — ~28% savings vs monthly). Default-selected on the paywall.`
 - **Screenshot:** Same paywall screenshot as monthly
 - **English Display Name:** `Annual`
-- **English Description:** `Full access to all Pro features. Save ~35% vs monthly. Billed yearly.`
+- **English Description:** `Full access to all Pro features. Save ~28% vs monthly. Billed yearly.`
 - **Arabic Display Name:** `سنويًا`
-- **Arabic Description:** `وصول كامل إلى جميع ميزات برو. وفّر ~٣٥٪ مقابل الاشتراك الشهري. فوترة سنوية.`
+- **Arabic Description:** `وصول كامل إلى جميع ميزات برو. وفّر ~٢٨٪ مقابل الاشتراك الشهري. فوترة سنوية.`
 
 ## Step 6 — Create the Consumable (90-Day Report)
 
@@ -109,7 +109,7 @@ Consumables live in a different section than subscriptions.
 2. Click **+** next to "In-App Purchases"
 3. **Type:** `Consumable`
 4. **Reference Name:** `SE7A 90-Day Plan Report`
-5. **Product ID:** `se7a_report_90day`
+5. **Product ID:** `Se7a_report_90day`
 6. Click **Create**
 
 Fill in the detail page:
@@ -151,19 +151,19 @@ Create three products. For each:
 
 ### Product 1 — Monthly
 - **Store:** App Store
-- **Identifier:** `se7a_pro_monthly` (must match ASC exactly)
+- **Identifier:** `Se7a_pro_monthly` (must match ASC exactly)
 - **Type:** Auto-Renewable Subscription
 - Save
 
 ### Product 2 — Annual
 - **Store:** App Store
-- **Identifier:** `se7a_pro_annual`
+- **Identifier:** `Se7a_pro_annual`
 - **Type:** Auto-Renewable Subscription
 - Save
 
 ### Product 3 — Report
 - **Store:** App Store
-- **Identifier:** `se7a_report_90day`
+- **Identifier:** `Se7a_report_90day`
 - **Type:** Consumable
 - Save
 
@@ -172,9 +172,9 @@ Create three products. For each:
 1. Left sidebar: **Entitlements**
 2. If an entitlement called `pro` already exists → click it. Else click **+ New** → identifier: `pro`
 3. In the entitlement's **Attached Products** section → click **+** → add:
-   - `se7a_pro_monthly`
-   - `se7a_pro_annual`
-   - **Do NOT add** `se7a_report_90day` — the report is a one-time thing, not a Pro grant
+   - `Se7a_pro_monthly`
+   - `Se7a_pro_annual`
+   - **Do NOT add** `Se7a_report_90day` — the report is a one-time thing, not a Pro grant
 4. Save
 
 ## Step 9 — Create the Offering
@@ -191,12 +191,12 @@ Open the newly created `default` offering → **Packages** section → click **+
 
 ### Package 1 — Monthly
 - **Identifier type:** Pick a predefined one → **$rc_monthly** (RC's reserved monthly identifier — the paywall code looks for `"monthly"` in the identifier)
-- **Product:** `se7a_pro_monthly`
+- **Product:** `Se7a_pro_monthly`
 - Save
 
 ### Package 2 — Annual
 - **Identifier type:** **$rc_annual** (reserved annual identifier — paywall code looks for `"annual"`)
-- **Product:** `se7a_pro_annual`
+- **Product:** `Se7a_pro_annual`
 - Save
 
 **Important:** The paywall code at `apps/mobile/app/paywall.tsx:56-67` finds packages by matching `.identifier.toLowerCase().includes("annual")` or `"monthly"`. The reserved identifiers `$rc_monthly` and `$rc_annual` contain those substrings, so this works. If you use custom identifiers, make sure they contain the word.
@@ -220,8 +220,8 @@ Once ASC products are "Ready to Submit" and RC is wired:
 
 1. On a TestFlight or dev build on your iPhone, open the paywall
 2. You should see:
-   - Monthly: `19 AED` (or your localized price)
-   - Annual: `149 AED` with "~12.4 AED/mo" subtitle
+   - Monthly: `29 AED` (or your localized price)
+   - Annual: `249 AED` with "~20.75 AED/mo" subtitle
 3. Try a sandbox purchase (using a Sandbox Apple ID — set one up at ASC → Users and Access → Sandbox Testers)
 4. Purchase should complete → entitlement `pro` should be active → Coach / Meal Plan / Menu scan should unlock
 

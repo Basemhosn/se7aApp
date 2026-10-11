@@ -470,6 +470,20 @@
       "weeks_body": "At your current goal rate, to reach the top of your target band ({{pct}}%). Assumes loss is mostly fat — real life is messier."
     }
   },
+  "landing": {
+    "card1_h": "Honest ranges",
+    "card1_sub": "Every meal returns a range, not fake precision. Photos can't see the oil — we don't pretend they can.",
+    "card2_h": "Built for your table",
+    "card2_sub": "Knows machboos, shawarma, karak. Menu scans read Arabic and English. Coach knows halal is the default.",
+    "card3_h": "A coach that answers back",
+    "card3_sub": "Ask anything in English or Arabic. The coach factors in your macros, your goals, your training day.",
+    "card4_h": "Ready?",
+    "card4_sub": "Join SE7A and start tracking honestly.",
+    "next": "Next",
+    "skip": "Skip",
+    "create_account": "Create free account",
+    "sign_in": "I already have an account"
+  },
   "auth": {
     "login": {
       "tab_signin": "Sign in",

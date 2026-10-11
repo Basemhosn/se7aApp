@@ -955,7 +955,10 @@ export default function Settings() {
       <Section title={isArabic ? "المنطقة الخطرة" : "Danger zone"} tint={colors.coral}>
         <RowLink
           label={t("common.sign_out")}
-          onPress={signOut}
+          onPress={async () => {
+            await signOut();
+            router.replace("/landing");
+          }}
         />
         <Pressable
           onPress={confirmDelete}

@@ -193,8 +193,8 @@ See `docs/app-review-notes.md` for the full script.
 - **Countries:** Start with UAE, KSA, Kuwait, Bahrain, Qatar, Oman
   (Gulf-first). Expand to remaining MENA + Europe/US after v1 feedback.
 - **Price:** Free download. Pro subscription in-app:
-  - Monthly: 19 AED (~$5)
-  - Annual: 149 AED (~$40, ~35% savings vs monthly)
+  - Monthly: 29 AED (~$8)
+  - Annual: 249 AED (~$68, ~28% savings vs monthly)
   - One-time 90-Day Plan Report: 19 AED
 - See `docs/iap-setup.md` for exact product IDs and ASC setup.
 

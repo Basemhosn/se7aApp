@@ -318,7 +318,7 @@ export default function More() {
           label={isArabic ? "تسجيل الخروج" : "Sign out"}
           onPress={async () => {
             await signOut();
-            router.replace("/login");
+            router.replace("/landing");
           }}
           tint={colors.coral}
           last

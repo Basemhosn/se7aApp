@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -32,7 +32,10 @@ type Mode = "signin" | "signup";
 
 export default function Login() {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<Mode>("signin");
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<Mode>(
+    params.mode === "signup" ? "signup" : "signin"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

@@ -65,8 +65,8 @@ notification type in Settings → Notifications.
 
 ## Pricing / IAP
 
-- **Pro Monthly:** 19 AED (~$5 USD)
-- **Pro Annual:** 149 AED (~$40 USD) — ~35% savings
+- **Pro Monthly:** 29 AED (~$8 USD)
+- **Pro Annual:** 249 AED (~$68 USD) — ~28% savings
 
 IAPs are managed via RevenueCat. Reviewer account is pre-entitled to
 Pro — you do not need to make a purchase to test gated features. To
