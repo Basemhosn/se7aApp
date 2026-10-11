@@ -90,19 +90,19 @@ Ships in English and Arabic (العربية).
 
 ## Support URL
 
-`https://se7a.vercel.app/`
+`https://se7a.app/`
 
 ## Marketing URL
 
-`https://se7a.vercel.app/`
+`https://se7a.app/`
 
 ## Privacy Policy URL
 
-`https://se7a.vercel.app/privacy`
+`https://se7a.app/privacy`
 
 ## Terms of Service URL
 
-`https://se7a.vercel.app/terms`
+`https://se7a.app/terms`
 
 ---
 
@@ -140,23 +140,26 @@ under 16 or with BMI < 17, so 4+ is defensible).
 
 ## App Privacy — data types collected
 
-Apple's Privacy Nutrition Label. Answers:
+Apple's Privacy Nutrition Label answers are documented in detail at
+`docs/privacy-label-spec.md`. Short version:
 
-**Data linked to you:**
-- Email address (account authentication)
-- Health & Fitness — weight, body fat, meal logs, workout logs,
-  water intake
+**Data linked to you (all categories):**
+- Contact Info (email, name)
+- Health & Fitness (weight, body fat, workouts, cardio, sleep, cycle,
+  glucose if integrated)
+- Financial Info (purchase history via RevenueCat)
+- User Content (meal photos, menu photos, voice meal logs, chat with
+  coach, logged meals/workouts/water)
+- Identifiers (user ID, device push token)
+- Purchases (same as Financial Info — ASC asks twice)
+- Usage Data (PostHog product analytics)
+- Diagnostics (Sentry errors + 10% transaction sampling)
 
 **Data not linked to you:**
-- None
+- None (everything is tied to the user_id)
 
-**Data collected but not used for tracking:**
-- All of the above; nothing is used for cross-app tracking.
-
-**Tracking:**
-- No third-party tracking. No advertising SDKs. Sentry is used for
-  crash/error reporting (self-hosted equivalent purposes; not for
-  cross-app identification).
+**Data used for tracking:**
+- None. No advertising SDKs, no IDFA, no cross-app tracking.
 
 ---
 
@@ -165,15 +168,15 @@ Apple's Privacy Nutrition Label. Answers:
 **Sign-in required:** Yes
 
 **Demo account:**
-- Email: `apple-review@se7a.app`
-- Password: N/A — SE7A uses magic-link auth. Have the reviewer email
-  `hello@se7a.app` for a live magic link, OR pre-provision a review
-  account with a fixed OTP code (Supabase allows this via admin
-  panel).
+- Email: `<TBD — set when reviewer account is provisioned>`
+- Password: `<TBD>`
+- Sign-in method: on the Sign In screen, enter the credentials in the
+  default email + password fields. (The app also supports Google OAuth
+  and Sign in with Apple as alternatives.)
 
-**Alternative for reviewers:** email hello@se7a.app before submission
-so the team can create a temporary demo account with a one-time link
-that stays valid throughout the review period.
+The reviewer account is pre-granted Pro entitlement server-side via
+the `APPLE_REVIEW_USER_ID` env override — no purchase needed to test
+Pro-gated features (Coach, Meal Plan, Menu scan, Body scan).
 
 **Notes for the reviewer:**
 See `docs/app-review-notes.md` for the full script.
@@ -188,21 +191,31 @@ See `docs/app-review-notes.md` for the full script.
 ## Availability
 
 - **Countries:** Start with UAE, KSA, Kuwait, Bahrain, Qatar, Oman
-  (Gulf-first). Expand to remaining MENA + Europe/US after beta.
-- **Price:** Free (during beta). No IAP configured yet.
+  (Gulf-first). Expand to remaining MENA + Europe/US after v1 feedback.
+- **Price:** Free download. Pro subscription in-app:
+  - Monthly: 19 AED (~$5)
+  - Annual: 149 AED (~$40, ~35% savings vs monthly)
+  - One-time 90-Day Plan Report: 19 AED
+- See `docs/iap-setup.md` for exact product IDs and ASC setup.
 
 ## Version release notes (first release)
 
 ```
-Welcome to SE7A.
+Welcome to SE7A — honest nutrition and fitness built for the Gulf.
 
-- Scan plates, menus, and physique photos to get honest calorie and
-  macro ranges — no fake precision.
-- 11-question setup builds a workout plan matched to your goal,
-  experience, and equipment.
-- AI coach knows Gulf cuisine and your macros. Ask anything.
-- Auto-sync weight and body fat from Apple Health.
-- Weekly recap notification every Sunday.
-- Full Arabic support with right-to-left layout.
-- Delete everything at any time. Body-composition photos never stored.
+What's inside:
+- Plate scan: snap any meal, get calorie and macro ranges you can
+  actually trust (no fake precision)
+- Menu scan: point the camera at a restaurant menu and see which
+  dishes fit your remaining budget today (Pro)
+- AI Coach: ask anything about food, training, or progress — in
+  English or Arabic (Pro)
+- Personalized meal plans built around your macros, dislikes, and
+  cultural preferences (Pro)
+- Workout programs matched to your goal, experience, and equipment
+- Weight, body-composition, water, sleep, cycle tracking
+- Apple Health auto-sync for weight and workouts
+- Full Arabic support with native right-to-left layout
+- Honest body-fat ranges from a photo — image never stored
+- Delete everything at any time, right from Settings
 ```

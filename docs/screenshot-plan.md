@@ -51,13 +51,16 @@ knows your food.")
 
 ## Capture process
 
-1. Sign in as `demo@se7a.app` (a well-populated account with 3+ weeks
-   of history).
-2. Open iOS Simulator → iPhone 15 Pro Max.
-3. `Command+S` to save each screenshot to Desktop.
-4. Rename: `01-home.png`, `02-plate.png`, `03-menu.png`, `04-coach-ar.png`,
+1. Sign in as the reviewer account (or your own well-populated
+   personal account with 3+ weeks of history). A fresh empty account
+   will look sparse and unconvincing.
+2. Option A — real device: unplug, airplane mode, quit all other
+   apps for a clean status bar, then take screenshots via Side+Volume.
+   Option B — iOS Simulator (iPhone 15 Pro Max): `Cmd+S` saves to
+   Desktop.
+3. Rename: `01-home.png`, `02-plate.png`, `03-menu.png`, `04-coach-ar.png`,
    `05-progress.png`.
-5. Add overlay text using Figma / Sketch / Canva. Template:
+4. Add overlay text using Figma / Sketch / Canva. Template:
    - Gold text (#f6b73c) in Manrope Bold 60pt
    - Positioned in the top ~15% of the frame
    - Actual app screenshot fills the bottom 85%
@@ -79,3 +82,7 @@ knows your food.")
   neutral.
 - Screenshots must NOT include third-party IP (real restaurant menus
   from Applebee's, e.g.). Use SE7A-branded stock or your own kitchen.
+- No pricing text in screenshots unless it matches ASC exactly. Apple
+  rejects "$5/month" overlays if your IAP is actually 19 AED/mo.
+- Keep screenshots under 500 KB each if possible — Apple's uploader
+  struggles with 10+ MB files on flaky Wi-Fi.
