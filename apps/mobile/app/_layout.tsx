@@ -35,7 +35,16 @@ import { handleInviteUrl } from "@/lib/referralInvite";
 try {
   Sentry.init({
     dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-    tracesSampleRate: 0,
+    // Keep tracing light on mobile — session-wide performance capture
+    // on React Native is heavier than on web.
+    tracesSampleRate: 0.1,
+    // Attach stack traces to captureMessage calls (not just exceptions)
+    // so breadcrumb-style logs are still debuggable.
+    attachStacktrace: true,
+    // Native iOS/Android crashes (bridge errors, memory issues, native
+    // module panics) aren't caught by the JS runtime by default. This
+    // flag wires the Sentry native binding to listen for them.
+    enableNative: true,
     enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
   });
 } catch {

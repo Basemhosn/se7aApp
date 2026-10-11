@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRouteClient } from "@/lib/supabase/server";
+import { getAdminClient, getRouteClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -32,6 +32,18 @@ export async function POST(request: Request) {
     const paths = files.map((f) => `${user.id}/${f.name}`);
     await supabase.storage.from(bucket).remove(paths);
   }
+
+  // Purge RevenueCat webhook event history keyed on app_user_id. This
+  // table is service-role only (no cascade FK because app_user_id is
+  // text, not a uuid reference), so without an explicit purge the
+  // user's subscription history stays in our DB after deletion —
+  // violates our "delete everything" promise + PDPL right-to-erasure.
+  // Must run via admin client since the table has no SELECT policy.
+  const admin = getAdminClient();
+  await admin
+    .from("rc_webhook_events")
+    .delete()
+    .eq("app_user_id", user.id);
 
   const { error: rpcErr } = await supabase.rpc("delete_current_user");
   if (rpcErr) {

@@ -12,7 +12,7 @@ export default function Privacy() {
       </nav>
       <main className="prose">
         <h1>Privacy Policy</h1>
-        <div className="updated">LAST UPDATED: JUNE 2026</div>
+        <div className="updated">LAST UPDATED: OCTOBER 2026</div>
 
         <p>
           SE7A (&quot;we&quot;, &quot;us&quot;) is an AI food and fitness application operated from Dubai,
@@ -67,6 +67,53 @@ export default function Privacy() {
           records are accessible only to your authenticated account. Photos you log are kept
           in private storage accessible only via short-lived signed links tied to your account.
         </p>
+
+        <h2>Service providers</h2>
+        <p>
+          To run SE7A reliably we rely on a small, named set of service providers. We disclose
+          each one here so you know exactly who touches your data:
+        </p>
+        <ul>
+          <li>
+            <strong>Supabase</strong> {"—"} authentication and database. Receives your
+            email, user identifier, and the logs you create.
+          </li>
+          <li>
+            <strong>Anthropic (Claude API)</strong> {"—"} AI vision and text analysis.
+            Receives the photo and relevant context for the specific scan or coaching turn.
+            Does not use requests for model training per our API terms.
+          </li>
+          <li>
+            <strong>OpenAI (Whisper API)</strong> {"—"} voice-log transcription.
+            Receives the audio clip only when you tap record on the voice-log screen.
+          </li>
+          <li>
+            <strong>RevenueCat</strong> {"—"} subscription processing. Receives
+            Apple-provided transaction identifiers and your SE7A user identifier so Pro
+            entitlement stays in sync.
+          </li>
+          <li>
+            <strong>PostHog</strong> {"—"} product analytics. Receives your user
+            identifier and event names (e.g. &ldquo;scan_completed&rdquo;,
+            &ldquo;meal_logged&rdquo;). We do not send PostHog your meal content, photos,
+            weight, or chat messages. Session replay is disabled.
+          </li>
+          <li>
+            <strong>Sentry</strong> {"—"} crash and error reporting. Receives
+            stack traces, device info, and your user identifier so we can diagnose
+            production bugs. We do not send Sentry your meal content, photos, or chat
+            transcripts.
+          </li>
+          <li>
+            <strong>Expo / Apple Push Notification Service</strong> {"—"} delivers push
+            notifications to your device. Receives your device&apos;s push token and the
+            notification contents.
+          </li>
+          <li>
+            <strong>Vercel</strong> {"—"} hosts the SE7A API and website. Routes
+            your requests but does not retain your application data.
+          </li>
+        </ul>
 
         <h2>Retention &amp; deletion</h2>
         <p>

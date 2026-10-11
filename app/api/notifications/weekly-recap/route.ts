@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -25,6 +26,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  try {
+    return await runWeeklyRecap();
+  } catch (e) {
+    // Explicit capture — this cron fires once a WEEK, so a silent 500
+    // means a seven-day blackout before anyone notices. Pair with the
+    // Sentry alert rule tagged route:cron/notifications-weekly-recap.
+    Sentry.captureException(e, {
+      tags: { route: "cron/notifications-weekly-recap" },
+      level: "error",
+    });
+    return NextResponse.json(
+      { error: "cron_failed", details: String((e as Error)?.message ?? e) },
+      { status: 500 }
+    );
+  }
+}
+
+async function runWeeklyRecap(): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
