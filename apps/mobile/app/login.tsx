@@ -28,6 +28,13 @@ import { colors, font, radius, spacing } from "@/lib/theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Gate Apple sign-in on the entitlement being provisioned. The code is
+// shipped but the app.json entitlement + Apple Developer portal setup
+// still has to happen before iOS will allow the native call. Flip this
+// to true once the provisioning profile includes applesignin AND the
+// Supabase Apple provider is configured per docs/sign-in-with-apple-setup.md.
+const APPLE_SIGNIN_ENABLED = false;
+
 type Mode = "signin" | "signup";
 
 export default function Login() {
@@ -48,6 +55,7 @@ export default function Login() {
   useEffect(() => {
     // Sign in with Apple is iOS-only, 13+. The native button crashes if
     // rendered on an unsupported device, so gate on isAvailableAsync.
+    if (!APPLE_SIGNIN_ENABLED) return;
     if (Platform.OS !== "ios") return;
     AppleAuthentication.isAvailableAsync()
       .then(setAppleAvailable)
