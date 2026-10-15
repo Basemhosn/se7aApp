@@ -57,23 +57,37 @@ export default function Landing() {
       <View style={styles.bgWash} />
 
       <View style={styles.hero}>
-        {/* Left phone — tilted back, slightly behind */}
+        {/* Left phone — tilted back, slightly behind. Log tab: shows a
+            lived-in meal history so new users see "this is what you'll
+            fill up". */}
         <View style={[styles.phoneSlot, styles.phoneLeft]}>
-          <DeviceFrame source={null} width={SIDE_PHONE_W}>
+          <DeviceFrame
+            source={require("../assets/landing/landing-log.png")}
+            width={SIDE_PHONE_W}
+          >
             <PlaceholderGulf />
           </DeviceFrame>
         </View>
 
-        {/* Right phone — tilted forward, slightly behind */}
+        {/* Right phone — tilted forward, slightly behind. Progress tab:
+            trend chart = "you'll see yourself change". */}
         <View style={[styles.phoneSlot, styles.phoneRight]}>
-          <DeviceFrame source={null} width={SIDE_PHONE_W}>
+          <DeviceFrame
+            source={require("../assets/landing/landing-progress.png")}
+            width={SIDE_PHONE_W}
+          >
             <PlaceholderCoach />
           </DeviceFrame>
         </View>
 
-        {/* Center phone — upright, front */}
+        {/* Center phone — upright, front. Home dashboard = the hero
+            moment of clarity, matches /screens/home.png in the web
+            marketing hero. */}
         <View style={[styles.phoneSlot, styles.phoneCenter]}>
-          <DeviceFrame source={null} width={CENTER_PHONE_W}>
+          <DeviceFrame
+            source={require("../assets/landing/landing-home.png")}
+            width={CENTER_PHONE_W}
+          >
             <PlaceholderRanges />
           </DeviceFrame>
         </View>
