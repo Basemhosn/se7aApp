@@ -471,6 +471,8 @@
     }
   },
   "landing": {
+    "hero_h": "Your food, decoded by AI.",
+    "hero_sub": "Snap meals, scan menus, chat with a coach that knows your macros. Built for the Gulf, in English and Arabic.",
     "card1_h": "Honest ranges",
     "card1_sub": "Every meal returns a range, not fake precision. Photos can't see the oil — we don't pretend they can.",
     "card2_h": "Built for your table",
