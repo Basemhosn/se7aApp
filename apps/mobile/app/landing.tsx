@@ -43,8 +43,8 @@ const LANDING = {
   chipCoral: "#f08f72",
 };
 
-const CENTER_PHONE_W = Math.min(SCREEN_W * 0.5, 220);
-const SIDE_PHONE_W = Math.min(SCREEN_W * 0.42, 180);
+const CENTER_PHONE_W = Math.min(SCREEN_W * 0.46, 200);
+const SIDE_PHONE_W = Math.min(SCREEN_W * 0.36, 155);
 
 export default function Landing() {
   const { t } = useTranslation();
@@ -92,19 +92,19 @@ export default function Landing() {
           </DeviceFrame>
         </View>
 
-        {/* Floating callout chips — positioned absolutely over the
-            phone stack. Values are the "wow" moments we want eyes
-            drawn to. */}
+        {/* Floating callout chips — positioned absolutely around the
+            phone stack. Keep them in the GAPS between phones and the
+            screen edges so no chip ever occludes screenshot content. */}
         <View style={[styles.chip, styles.chipTopLeft]}>
           <Text style={styles.chipLabel}>540 kcal</Text>
         </View>
         <View style={[styles.chip, styles.chipTopRight, { backgroundColor: LANDING.chipGreen }]}>
           <Text style={[styles.chipLabel, { color: LANDING.ink }]}>honest ranges</Text>
         </View>
-        <View style={[styles.chip, styles.chipMidRight, { backgroundColor: LANDING.chipCoral }]}>
+        <View style={[styles.chip, styles.chipBotLeft, { backgroundColor: LANDING.chipCoral }]}>
           <Text style={[styles.chipLabel, { color: LANDING.ink }]}>Gulf-aware</Text>
         </View>
-        <View style={[styles.chip, styles.chipBottom, { backgroundColor: LANDING.gold }]}>
+        <View style={[styles.chip, styles.chipBotRight, { backgroundColor: LANDING.gold }]}>
           <Text style={[styles.chipLabel, { color: LANDING.ink }]}>AI coach</Text>
         </View>
       </View>
@@ -238,14 +238,14 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   phoneLeft: {
-    left: -SIDE_PHONE_W * 0.15,
+    left: SCREEN_W * 0.02,
     zIndex: 1,
-    transform: [{ rotate: "-10deg" }, { translateY: 24 }],
+    transform: [{ rotate: "-8deg" }, { translateY: 32 }],
   },
   phoneRight: {
-    right: -SIDE_PHONE_W * 0.15,
+    right: SCREEN_W * 0.02,
     zIndex: 2,
-    transform: [{ rotate: "10deg" }, { translateY: 24 }],
+    transform: [{ rotate: "8deg" }, { translateY: 32 }],
   },
   chip: {
     position: "absolute",
@@ -260,21 +260,23 @@ const styles = StyleSheet.create({
     elevation: 4,
     zIndex: 5,
   },
+  // Chips float in the corner-regions outside the central phone stack
+  // so they never overlap screenshot content, only the cream background.
   chipTopLeft: {
-    top: -12,
-    left: SCREEN_W * 0.06,
+    top: -4,
+    left: SCREEN_W * 0.04,
   },
   chipTopRight: {
-    top: 8,
-    right: SCREEN_W * 0.08,
+    top: -4,
+    right: SCREEN_W * 0.04,
   },
-  chipMidRight: {
-    bottom: SCREEN_H * 0.14,
-    right: SCREEN_W * 0.02,
+  chipBotLeft: {
+    bottom: 8,
+    left: SCREEN_W * 0.04,
   },
-  chipBottom: {
-    bottom: -8,
-    alignSelf: "center",
+  chipBotRight: {
+    bottom: 8,
+    right: SCREEN_W * 0.04,
   },
   chipLabel: {
     fontFamily: font.bodyBold,
