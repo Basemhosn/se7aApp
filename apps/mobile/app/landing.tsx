@@ -5,6 +5,8 @@ import {
   Text,
   View,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Btn } from "@/components/Btn";
@@ -48,15 +50,21 @@ const SIDE_PHONE_W = Math.min(SCREEN_W * 0.36, 155);
 
 export default function Landing() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  // Status-bar height sometimes under-reports when StatusBar is hidden
+  // by the parent Stack; fall back to a reasonable iPhone notch inset.
+  const topInset = Math.max(insets.top, 44);
 
   return (
     <View style={styles.root}>
+      {/* Override root's light status bar — cream bg needs dark text. */}
+      <StatusBar style="dark" />
       {/* Soft background wash — a radial-ish lighter patch behind the
           phones so the stacked group feels anchored on a stage rather
           than floating on a flat color. */}
       <View style={styles.bgWash} />
 
-      <View style={styles.hero}>
+      <View style={[styles.hero, { marginTop: topInset + spacing.sm }]}>
         {/* Left phone — tilted back, slightly behind. Log tab: shows a
             lived-in meal history so new users see "this is what you'll
             fill up". */}
@@ -226,7 +234,6 @@ const styles = StyleSheet.create({
   },
   hero: {
     height: SCREEN_H * 0.5,
-    marginTop: SCREEN_H * 0.04,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
