@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, goal, rest_day_kcal_delta, days_per_week, ramadan_prefs, allergies, excluded_ingredients"
+      "daily_kcal_target, daily_protein_g, daily_carb_g, daily_fat_g, goal, rest_day_kcal_delta, days_per_week, ramadan_prefs, allergies, excluded_ingredients, onboarding_meta"
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -68,6 +68,16 @@ export async function POST(request: Request) {
     Array.isArray(profile.excluded_ingredients)
       ? (profile.excluded_ingredients as string[])
       : [];
+  // Read the structured preferences the onboarding "dietary preferences"
+  // step collects. Both are optional — users who skip onboarding v2 or
+  // predate the step will have null here, which short-circuits the
+  // prompt lines below cleanly.
+  const meta = (profile.onboarding_meta as {
+    halal_pref?: "halal" | "no_preference";
+    diet_styles?: string[];
+  } | null) ?? null;
+  const halal = meta?.halal_pref === "halal";
+  const dietStyles = Array.isArray(meta?.diet_styles) ? meta?.diet_styles : [];
   const ramadan = ramadanDaysInWeek(
     parsed.data.week_start,
     profile.ramadan_prefs as Partial<RamadanPrefs> | null
@@ -98,6 +108,8 @@ Goal: ${profile.goal ?? "unknown"}
 Rest-day delta: ${profile.rest_day_kcal_delta ?? 0} kcal (apply on non-training days)
 Training days per week: ${profile.days_per_week ?? "unknown"}
 Dietary restrictions: ${restrictions.length ? restrictions.join(", ") : "none"}
+${halal ? "⚠️ HALAL ONLY — no pork, no non-halal meat, no alcohol in any form (cooking wine, mirin, etc.)." : ""}
+${dietStyles && dietStyles.length ? `Diet style preference: ${dietStyles.join(", ")}. Bias meal choices to match (e.g. keto = <50g net carbs/day; vegetarian = no meat/fish; mediterranean = olive oil + fish + legumes-forward).` : ""}
 ${allergies.length ? `⚠️ ALLERGIES (HARD NO — never include, even trace amounts): ${allergies.join(", ")}` : ""}
 ${excluded.length ? `Excluded ingredients (user preference — do not use): ${excluded.join(", ")}` : ""}
 

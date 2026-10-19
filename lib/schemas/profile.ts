@@ -54,6 +54,23 @@ export const onboardingSchema = z
       .object({
         halal_pref: z.enum(["halal", "no_preference"]).optional(),
         ramadan_opt_in: z.boolean().optional(),
+        // Multi-select — a user can be "mediterranean + high-protein"
+        // simultaneously, so no single enum. Capped at 4 to prevent
+        // nonsense combinations that bias meal suggestions into noise.
+        diet_styles: z
+          .array(
+            z.enum([
+              "keto",
+              "low_carb",
+              "mediterranean",
+              "high_protein",
+              "vegetarian",
+              "vegan",
+              "pescatarian",
+            ])
+          )
+          .max(4)
+          .optional(),
         attribution_source: z
           .enum([
             "app_store",

@@ -75,6 +75,49 @@ const STEPS = [
 type Step = (typeof STEPS)[number];
 
 type HalalPref = "halal" | "no_preference";
+type DietStyle =
+  | "keto"
+  | "low_carb"
+  | "mediterranean"
+  | "high_protein"
+  | "vegetarian"
+  | "vegan"
+  | "pescatarian";
+const DIET_STYLE_OPTIONS: DietStyle[] = [
+  "keto",
+  "low_carb",
+  "mediterranean",
+  "high_protein",
+  "vegetarian",
+  "vegan",
+  "pescatarian",
+];
+// FDA Big-9 allergens (minus "sesame" which was added 2023). i18n key
+// per entry so the Arabic rendering stays idiomatic.
+const ALLERGY_PRESETS: { key: string; label: string }[] = [
+  { key: "al_dairy", label: "Dairy" },
+  { key: "al_eggs", label: "Eggs" },
+  { key: "al_fish", label: "Fish" },
+  { key: "al_shellfish", label: "Shellfish" },
+  { key: "al_tree_nuts", label: "Tree nuts" },
+  { key: "al_peanuts", label: "Peanuts" },
+  { key: "al_wheat", label: "Wheat / Gluten" },
+  { key: "al_soy", label: "Soy" },
+  { key: "al_sesame", label: "Sesame" },
+];
+// Food categories commonly skipped for preference (not allergy).
+const EXCLUDED_PRESETS: { key: string; label: string }[] = [
+  { key: "ex_red_meat", label: "Red meat" },
+  { key: "ex_pork", label: "Pork" },
+  { key: "ex_chicken", label: "Chicken" },
+  { key: "ex_seafood", label: "Seafood" },
+  { key: "ex_dairy", label: "Dairy" },
+  { key: "ex_eggs", label: "Eggs" },
+  { key: "ex_gluten", label: "Gluten" },
+  { key: "ex_added_sugar", label: "Added sugar" },
+  { key: "ex_spicy", label: "Spicy food" },
+  { key: "ex_cilantro", label: "Cilantro" },
+];
 type AttributionSource =
   | "app_store"
   | "instagram"
@@ -111,10 +154,15 @@ export default function Onboarding() {
 
   // Onboarding v2 metadata — persisted to profiles.onboarding_meta jsonb.
   const [halalPref, setHalalPref] = useState<HalalPref | null>(null);
+  const [dietStyles, setDietStyles] = useState<DietStyle[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
   const [allergyDraft, setAllergyDraft] = useState("");
   const [excludedDraft, setExcludedDraft] = useState("");
+  // Reveal the free-text "other" inputs on tap so the default UX stays
+  // chip-first (no keyboard pop unless the user asks for it).
+  const [allergyOtherOpen, setAllergyOtherOpen] = useState(false);
+  const [excludedOtherOpen, setExcludedOtherOpen] = useState(false);
   const [ramadanOptIn, setRamadanOptIn] = useState(false);
   const [attribution, setAttribution] = useState<AttributionSource | null>(
     null
@@ -322,12 +370,16 @@ export default function Onboarding() {
             allergies: allergies.length > 0 ? allergies : undefined,
             excluded_ingredients:
               excluded.length > 0 ? excluded : undefined,
-            onboarding_meta: halalPref
-              ? {
-                  halal_pref: halalPref,
-                  ramadan_opt_in: ramadanOptIn,
-                }
-              : undefined,
+            onboarding_meta:
+              halalPref || dietStyles.length > 0
+                ? {
+                    ...(halalPref ? { halal_pref: halalPref } : {}),
+                    ramadan_opt_in: ramadanOptIn,
+                    ...(dietStyles.length > 0
+                      ? { diet_styles: dietStyles }
+                      : {}),
+                  }
+                : undefined,
           }),
         });
         setWarnings(profileRes.warnings ?? []);
@@ -357,6 +409,7 @@ export default function Onboarding() {
               onboarding_meta: {
                 halal_pref: halalPref ?? undefined,
                 ramadan_opt_in: ramadanOptIn,
+                diet_styles: dietStyles.length > 0 ? dietStyles : undefined,
                 attribution_source: attribution,
               },
             })
@@ -673,6 +726,37 @@ export default function Onboarding() {
           selected={halalPref === "no_preference"}
           onPress={() => setHalalPref("no_preference")}
         />
+
+        <View style={{ height: spacing.md }} />
+        <Text style={styles.label}>
+          {t("onboarding.halal.diet_style_label")}
+        </Text>
+        <Text style={styles.helperText}>
+          {t("onboarding.halal.diet_style_hint")}
+        </Text>
+        <View style={styles.chipRow}>
+          {DIET_STYLE_OPTIONS.map((ds) => {
+            const on = dietStyles.includes(ds);
+            return (
+              <Pressable
+                key={ds}
+                onPress={() => {
+                  if (on) {
+                    setDietStyles(dietStyles.filter((x) => x !== ds));
+                  } else if (dietStyles.length < 4) {
+                    setDietStyles([...dietStyles, ds]);
+                  }
+                }}
+                style={[styles.chip, on && styles.chipOn]}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                  {t(`onboarding.halal.ds_${ds}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Pressable
           onPress={() => setRamadanOptIn((v) => !v)}
           style={[
@@ -699,26 +783,38 @@ export default function Onboarding() {
   }
 
   if (step === "allergies") {
-    const addAllergy = () => {
-      const v = allergyDraft.trim();
+    const toggle = (list: string[], setList: (v: string[]) => void, v: string) => {
+      const lower = v.toLowerCase();
+      if (list.some((x) => x.toLowerCase() === lower)) {
+        setList(list.filter((x) => x.toLowerCase() !== lower));
+      } else {
+        setList([...list, v]);
+      }
+    };
+    const commitDraft = (
+      draft: string,
+      setDraft: (v: string) => void,
+      list: string[],
+      setList: (v: string[]) => void
+    ) => {
+      const v = draft.trim();
       if (!v) return;
-      if (allergies.some((a) => a.toLowerCase() === v.toLowerCase())) {
-        setAllergyDraft("");
+      if (list.some((x) => x.toLowerCase() === v.toLowerCase())) {
+        setDraft("");
         return;
       }
-      setAllergies([...allergies, v]);
-      setAllergyDraft("");
+      setList([...list, v]);
+      setDraft("");
     };
-    const addExcluded = () => {
-      const v = excludedDraft.trim();
-      if (!v) return;
-      if (excluded.some((a) => a.toLowerCase() === v.toLowerCase())) {
-        setExcludedDraft("");
-        return;
-      }
-      setExcluded([...excluded, v]);
-      setExcludedDraft("");
-    };
+    // Preset labels come translated; the stored value is the English
+    // label so the backend meal-plan prompt reads naturally regardless
+    // of the user's UI language.
+    const customAllergies = allergies.filter(
+      (a) => !ALLERGY_PRESETS.some((p) => p.label.toLowerCase() === a.toLowerCase())
+    );
+    const customExcluded = excluded.filter(
+      (a) => !EXCLUDED_PRESETS.some((p) => p.label.toLowerCase() === a.toLowerCase())
+    );
     return (
       <OnboardingShell
         progress={stepIndex / (STEPS.length - 1)}
@@ -732,84 +828,165 @@ export default function Onboarding() {
           title={t("onboarding.allergies.title")}
           subtitle={t("onboarding.allergies.sub")}
         />
+
+        {/* ─── Allergies ──────────────────────────────────────────── */}
         <Text style={styles.label}>{t("onboarding.allergies.allergy_label")}</Text>
+        <Text style={styles.helperText}>
+          {t("onboarding.allergies.allergy_hint")}
+        </Text>
         <View style={styles.chipRow}>
-          {allergies.map((a) => (
+          {ALLERGY_PRESETS.map((p) => {
+            const on = allergies.some((a) => a.toLowerCase() === p.label.toLowerCase());
+            return (
+              <Pressable
+                key={p.key}
+                onPress={() => toggle(allergies, setAllergies, p.label)}
+                style={[styles.chip, on && styles.chipOn]}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                  {t(`onboarding.allergies.${p.key}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
+          {customAllergies.map((a) => (
             <Pressable
               key={a}
-              onPress={() =>
-                setAllergies(allergies.filter((x) => x !== a))
-              }
+              onPress={() => setAllergies(allergies.filter((x) => x !== a))}
               style={styles.tagPill}
             >
               <Text style={styles.tagPillText}>{a}</Text>
               <Ionicons name="close" size={12} color={colors.gold} />
             </Pressable>
           ))}
+          {!allergyOtherOpen && (
+            <Pressable
+              onPress={() => setAllergyOtherOpen(true)}
+              style={styles.chip}
+            >
+              <Text style={styles.chipText}>
+                {t("onboarding.allergies.add_other")}
+              </Text>
+            </Pressable>
+          )}
         </View>
-        <View style={styles.tagInputWrap}>
-          <TextInput
-            value={allergyDraft}
-            onChangeText={(v) => {
-              if (v.endsWith(",")) {
-                setAllergyDraft(v.slice(0, -1));
-                setTimeout(addAllergy, 0);
-              } else {
-                setAllergyDraft(v);
+        {allergyOtherOpen && (
+          <View style={styles.tagInputWrap}>
+            <TextInput
+              value={allergyDraft}
+              onChangeText={(v) => {
+                if (v.endsWith(",")) {
+                  setAllergyDraft(v.slice(0, -1));
+                  setTimeout(
+                    () => commitDraft(v.slice(0, -1), setAllergyDraft, allergies, setAllergies),
+                    0
+                  );
+                } else {
+                  setAllergyDraft(v);
+                }
+              }}
+              onSubmitEditing={() =>
+                commitDraft(allergyDraft, setAllergyDraft, allergies, setAllergies)
               }
-            }}
-            onSubmitEditing={addAllergy}
-            placeholder={t("onboarding.allergies.allergy_placeholder")}
-            placeholderTextColor={colors.dim}
-            returnKeyType="done"
-            autoCapitalize="none"
-            style={styles.tagInput}
-          />
-          <Pressable onPress={addAllergy} hitSlop={6} style={styles.tagAddBtn}>
-            <Ionicons name="add" size={16} color={colors.gold} />
-          </Pressable>
-        </View>
+              placeholder={t("onboarding.allergies.other_placeholder")}
+              placeholderTextColor={colors.dim}
+              returnKeyType="done"
+              autoCapitalize="none"
+              autoFocus
+              style={styles.tagInput}
+            />
+            <Pressable
+              onPress={() =>
+                commitDraft(allergyDraft, setAllergyDraft, allergies, setAllergies)
+              }
+              hitSlop={6}
+              style={styles.tagAddBtn}
+            >
+              <Ionicons name="add" size={16} color={colors.gold} />
+            </Pressable>
+          </View>
+        )}
 
+        {/* ─── Excluded ───────────────────────────────────────────── */}
         <View style={{ height: spacing.md }} />
         <Text style={styles.label}>
           {t("onboarding.allergies.excluded_label")}
         </Text>
+        <Text style={styles.helperText}>
+          {t("onboarding.allergies.excluded_hint")}
+        </Text>
         <View style={styles.chipRow}>
-          {excluded.map((a) => (
+          {EXCLUDED_PRESETS.map((p) => {
+            const on = excluded.some((a) => a.toLowerCase() === p.label.toLowerCase());
+            return (
+              <Pressable
+                key={p.key}
+                onPress={() => toggle(excluded, setExcluded, p.label)}
+                style={[styles.chip, on && styles.chipOn]}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                  {t(`onboarding.allergies.${p.key}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
+          {customExcluded.map((a) => (
             <Pressable
               key={a}
-              onPress={() =>
-                setExcluded(excluded.filter((x) => x !== a))
-              }
+              onPress={() => setExcluded(excluded.filter((x) => x !== a))}
               style={styles.tagPill}
             >
               <Text style={styles.tagPillText}>{a}</Text>
               <Ionicons name="close" size={12} color={colors.gold} />
             </Pressable>
           ))}
+          {!excludedOtherOpen && (
+            <Pressable
+              onPress={() => setExcludedOtherOpen(true)}
+              style={styles.chip}
+            >
+              <Text style={styles.chipText}>
+                {t("onboarding.allergies.add_other")}
+              </Text>
+            </Pressable>
+          )}
         </View>
-        <View style={styles.tagInputWrap}>
-          <TextInput
-            value={excludedDraft}
-            onChangeText={(v) => {
-              if (v.endsWith(",")) {
-                setExcludedDraft(v.slice(0, -1));
-                setTimeout(addExcluded, 0);
-              } else {
-                setExcludedDraft(v);
+        {excludedOtherOpen && (
+          <View style={styles.tagInputWrap}>
+            <TextInput
+              value={excludedDraft}
+              onChangeText={(v) => {
+                if (v.endsWith(",")) {
+                  setExcludedDraft(v.slice(0, -1));
+                  setTimeout(
+                    () => commitDraft(v.slice(0, -1), setExcludedDraft, excluded, setExcluded),
+                    0
+                  );
+                } else {
+                  setExcludedDraft(v);
+                }
+              }}
+              onSubmitEditing={() =>
+                commitDraft(excludedDraft, setExcludedDraft, excluded, setExcluded)
               }
-            }}
-            onSubmitEditing={addExcluded}
-            placeholder={t("onboarding.allergies.excluded_placeholder")}
-            placeholderTextColor={colors.dim}
-            returnKeyType="done"
-            autoCapitalize="none"
-            style={styles.tagInput}
-          />
-          <Pressable onPress={addExcluded} hitSlop={6} style={styles.tagAddBtn}>
-            <Ionicons name="add" size={16} color={colors.gold} />
-          </Pressable>
-        </View>
+              placeholder={t("onboarding.allergies.other_placeholder")}
+              placeholderTextColor={colors.dim}
+              returnKeyType="done"
+              autoCapitalize="none"
+              autoFocus
+              style={styles.tagInput}
+            />
+            <Pressable
+              onPress={() =>
+                commitDraft(excludedDraft, setExcludedDraft, excluded, setExcluded)
+              }
+              hitSlop={6}
+              style={styles.tagAddBtn}
+            >
+              <Ionicons name="add" size={16} color={colors.gold} />
+            </Pressable>
+          </View>
+        )}
       </OnboardingShell>
     );
   }
@@ -1649,6 +1826,12 @@ const styles = StyleSheet.create({
     color: colors.dim,
     letterSpacing: 1.2,
     marginBottom: 4,
+  },
+  helperText: {
+    fontFamily: font.body,
+    fontSize: 12,
+    color: colors.dim,
+    marginBottom: spacing.xs,
   },
   input: {
     backgroundColor: colors.panel2,
