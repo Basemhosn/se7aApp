@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import { getRouteClient } from "@/lib/supabase/server";
 import { voiceLogResultSchema } from "@/lib/schemas/voiceLog";
 import { VOICE_LOG_SYSTEM_PROMPT } from "@/lib/prompts/voiceLog.v1";
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
   let parsed;
   try {
     const result = await generateObject({
-      model: anthropic(PARSE_MODEL),
+      model: pickModel(PARSE_MODEL),
       schema: voiceLogResultSchema,
       system: `${VOICE_LOG_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [

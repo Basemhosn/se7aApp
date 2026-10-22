@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import { getRouteClient } from "@/lib/supabase/server";
 import { apiError } from "@/lib/apiError";
 import {
@@ -140,7 +140,7 @@ Return exactly one meal object.
   let fresh: PlannedMeal;
   try {
     const result = await generateObject({
-      model: anthropic(MODEL_ID),
+      model: pickModel(MODEL_ID),
       schema: plannedMealSchema,
       system: `${MEAL_PLAN_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [{ role: "user", content: userMsg }],

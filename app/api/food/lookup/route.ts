@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import { getRouteClient } from "@/lib/supabase/server";
 import {
   foodLookupInputSchema,
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   let result: FoodLookupResult;
   try {
     const generated = await generateObject({
-      model: anthropic(MODEL_ID),
+      model: pickModel(MODEL_ID),
       schema: foodLookupResultSchema,
       system: `${FOOD_LOOKUP_SYSTEM_PROMPT}\n\n${langInstruction}`,
       messages: [{ role: "user", content: `Look up: ${queryOriginal}` }],

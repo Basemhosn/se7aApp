@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { streamText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import * as Sentry from "@sentry/nextjs";
 import { getRouteClient } from "@/lib/supabase/server";
 import { sendMessageSchema } from "@/lib/schemas/chat";
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
   // surface a human-readable failure even once bytes have flushed.
   try {
     const result = streamText({
-      model: anthropic(MODEL_ID),
+      model: pickModel(MODEL_ID),
       system: `${COACH_SYSTEM_PROMPT_V2}\n\n${langInstruction}\n\n${contextRes.block}`,
       messages,
       maxOutputTokens: 800,

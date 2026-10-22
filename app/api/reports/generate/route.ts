@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import { getRouteClient } from "@/lib/supabase/server";
 import {
   generatePlanInputSchema,
@@ -207,7 +207,7 @@ week ranges).
         // persist. Same total tokens; smaller grammar per call.
         const [foundation, meals, training, roadmap] = await Promise.all([
           generateObject({
-            model: anthropic(MODEL_ID),
+            model: pickModel(MODEL_ID),
             schema: reportFoundationSchema,
             system,
             messages: [
@@ -219,7 +219,7 @@ week ranges).
             maxOutputTokens: 10000,
           }),
           generateObject({
-            model: anthropic(MODEL_ID),
+            model: pickModel(MODEL_ID),
             schema: mealsOnlySchema,
             system,
             messages: [
@@ -231,7 +231,7 @@ week ranges).
             maxOutputTokens: 8000,
           }),
           generateObject({
-            model: anthropic(MODEL_ID),
+            model: pickModel(MODEL_ID),
             schema: trainingOnlySchema,
             system,
             messages: [
@@ -243,7 +243,7 @@ week ranges).
             maxOutputTokens: 12000,
           }),
           generateObject({
-            model: anthropic(MODEL_ID),
+            model: pickModel(MODEL_ID),
             schema: roadmapOnlySchema,
             system,
             messages: [

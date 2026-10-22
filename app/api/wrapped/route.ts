@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import { Redis } from "@upstash/redis";
 import { getRouteClient } from "@/lib/supabase/server";
 import { addDaysIso as addDays, isoDay } from "@/lib/dateKeys";
@@ -457,7 +457,7 @@ next-week action. No emojis. No hashtags. Return only the line itself.
 `.trim();
 
   const { text } = await generateText({
-    model: anthropic(ROAST_MODEL),
+    model: pickModel(ROAST_MODEL),
     prompt,
     maxOutputTokens: 200,
   });

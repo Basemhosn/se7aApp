@@ -1,11 +1,23 @@
 /**
- * SE7A model picker.
+ * SE7A model picker — unified entrypoint for every LLM call in the app.
  *
- * Calls Anthropic directly via @ai-sdk/anthropic. The privacy policy
- * names Anthropic as the user-facing AI processor — if a non-Anthropic
- * fallback is ever added, /privacy must be updated first.
+ * Routing behavior:
+ * - When AI_GATEWAY_API_KEY env is set (or when running on Vercel with
+ *   OIDC-based gateway auth), model requests go through Vercel AI
+ *   Gateway. That gives us:
+ *     - unified billing + rate limits
+ *     - automatic observability (which prompt took longest, cost most)
+ *     - the ability to swap or fallback models at the dashboard level
+ *       (no code redeploy)
+ * - When the gateway key isn't present, we fall back to the direct
+ *   Anthropic provider using @ai-sdk/anthropic + ANTHROPIC_API_KEY.
+ *   This keeps local dev working without a gateway account.
+ *
+ * Caller stays identical in both modes: `model: pickModel("claude-...")`.
  */
 import { anthropic } from "@ai-sdk/anthropic";
+import { gateway } from "ai";
+import type { LanguageModel } from "ai";
 
 const SONNET = "claude-sonnet-4-6";
 
@@ -21,12 +33,29 @@ export const MODEL_IDS = {
 } as const;
 
 /**
- * Bound LanguageModel instances for AI SDK calls.
+ * Return a bound LanguageModel ready to pass to generateObject / generateText.
+ * Pass the raw provider model ID (e.g. "claude-sonnet-4-6"); the helper
+ * decides whether to route through the gateway or hit Anthropic direct.
+ *
+ * All callers in app/api/** should use this instead of `anthropic(...)`
+ * so adding a new provider is a one-file change rather than a repo-wide
+ * find-and-replace.
+ */
+export function pickModel(id: string): LanguageModel {
+  if (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL) {
+    return gateway(`anthropic/${id}`);
+  }
+  return anthropic(id);
+}
+
+/**
+ * Pre-bound LanguageModel instances for the scan routes. Convenience
+ * wrappers around pickModel so each route doesn't repeat the string ID.
  */
 export const MODELS = {
-  plate_default: anthropic(MODEL_IDS.plate_default),
-  menu_default: anthropic(MODEL_IDS.menu_default),
-  body_default: anthropic(MODEL_IDS.body_default),
+  plate_default: pickModel(MODEL_IDS.plate_default),
+  menu_default: pickModel(MODEL_IDS.menu_default),
+  body_default: pickModel(MODEL_IDS.body_default),
 };
 
 /**

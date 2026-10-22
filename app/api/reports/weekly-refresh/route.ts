@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { pickModel } from "@/lib/ai";
 import { getRouteClient } from "@/lib/supabase/server";
 import {
   weeklySummarySchema,
@@ -172,7 +172,7 @@ Produce a 4-part summary now.
   let summary: WeeklySummary;
   try {
     const generated = await generateObject({
-      model: anthropic(MODEL_ID),
+      model: pickModel(MODEL_ID),
       schema: weeklySummarySchema,
       system: `${WEEKLY_SUMMARY_PROMPT}\n\n${langInstruction}`,
       messages: [{ role: "user", content: context }],
