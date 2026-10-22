@@ -15,11 +15,10 @@ what you need to test the app in ~5 minutes.
 SE7A primarily uses passwordless magic-link + Google OAuth. For App
 Review we've enabled a password-based demo account:
 
-1. On the Sign In screen, tap **"Have a password? Sign in"** below the
-   Google button (this reveals a password field).
+1. On the Sign In screen, use the email + password fields (default tab).
 2. Enter:
-   - **Email:** `apple-review@se7a.app`
-   - **Password:** `<REPLACE WITH THE PASSWORD YOU CREATED IN SUPABASE>`
+   - **Email:** `se7atest@gmail.com`
+   - **Password:** `ReviewSE7a-2026!xP9`
 3. Tap **Sign in**.
 
 The account is pre-granted Pro status server-side (bypass tied to the
