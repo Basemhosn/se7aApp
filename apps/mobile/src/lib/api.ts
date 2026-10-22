@@ -137,7 +137,17 @@ async function parseOrThrow<T>(res: Response, route: string): Promise<T> {
         raw: body,
       });
     }
-    throw new ApiError(res.status, err, body);
+    // Surface server-provided `details` in the thrown message when
+    // present. Mobile UI shows this verbatim via (e as Error).message,
+    // so a bare "ai_failed" becomes "ai_failed: Anthropic 529 overloaded"
+    // or whatever the server observed — much more actionable than the
+    // bare error code for diagnosing one-off AI/schema failures.
+    const detailStr =
+      body && typeof body === "object" && "details" in body
+        ? String((body as { details: unknown }).details)
+        : null;
+    const message = detailStr ? `${err}: ${detailStr}` : err;
+    throw new ApiError(res.status, message, body);
   }
   return body as T;
 }
