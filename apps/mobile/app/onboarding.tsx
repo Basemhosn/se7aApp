@@ -74,7 +74,6 @@ const STEPS = [
 ] as const;
 type Step = (typeof STEPS)[number];
 
-type HalalPref = "halal" | "no_preference";
 type DietStyle =
   | "keto"
   | "low_carb"
@@ -153,7 +152,6 @@ export default function Onboarding() {
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
 
   // Onboarding v2 metadata — persisted to profiles.onboarding_meta jsonb.
-  const [halalPref, setHalalPref] = useState<HalalPref | null>(null);
   const [dietStyles, setDietStyles] = useState<DietStyle[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
@@ -236,7 +234,7 @@ export default function Onboarding() {
       case "size": return Number(height) > 0 && Number(weight) > 0;
       case "activity": return !!activity;
       case "goal": return !!goal;
-      case "halal_ramadan": return !!halalPref;
+      case "halal_ramadan": return true; // all fields optional
       case "allergies": return true; // skippable
       case "rate": return !Number.isNaN(rate);
       case "reveal": return true; // no workout program picker anymore
@@ -371,9 +369,8 @@ export default function Onboarding() {
             excluded_ingredients:
               excluded.length > 0 ? excluded : undefined,
             onboarding_meta:
-              halalPref || dietStyles.length > 0
+              dietStyles.length > 0 || ramadanOptIn
                 ? {
-                    ...(halalPref ? { halal_pref: halalPref } : {}),
                     ramadan_opt_in: ramadanOptIn,
                     ...(dietStyles.length > 0
                       ? { diet_styles: dietStyles }
@@ -407,7 +404,6 @@ export default function Onboarding() {
             .from("profiles")
             .update({
               onboarding_meta: {
-                halal_pref: halalPref ?? undefined,
                 ramadan_opt_in: ramadanOptIn,
                 diet_styles: dietStyles.length > 0 ? dietStyles : undefined,
                 attribution_source: attribution,
@@ -425,9 +421,13 @@ export default function Onboarding() {
         activity,
         returning,
       });
-      // First-time users go straight into a plate scan for the AHA
-      // moment; returning users go back to Home.
-      router.replace(returning ? "/" : "/scan/plate");
+      // Everyone lands on Home. Previously first-time users were
+      // dropped into /scan/plate directly for the AHA moment, but it
+      // made the finish feel like we skipped past "here's your new
+      // dashboard" and users didn't recognize they were done
+      // onboarding — Home with the big calorie ring + scan FAB is the
+      // better landing.
+      router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("onboarding.couldnt_save_plan"));
       setBusy(false);
@@ -712,22 +712,6 @@ export default function Onboarding() {
           title={t("onboarding.halal.title")}
           subtitle={t("onboarding.halal.sub")}
         />
-        <SelectCard
-          icon="restaurant-outline"
-          label={t("onboarding.halal.halal")}
-          sublabel={t("onboarding.halal.halal_sub")}
-          selected={halalPref === "halal"}
-          onPress={() => setHalalPref("halal")}
-        />
-        <SelectCard
-          icon="checkmark-circle-outline"
-          label={t("onboarding.halal.no_pref")}
-          sublabel={t("onboarding.halal.no_pref_sub")}
-          selected={halalPref === "no_preference"}
-          onPress={() => setHalalPref("no_preference")}
-        />
-
-        <View style={{ height: spacing.md }} />
         <Text style={styles.label}>
           {t("onboarding.halal.diet_style_label")}
         </Text>
