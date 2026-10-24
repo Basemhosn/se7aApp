@@ -42,7 +42,14 @@ export const MODEL_IDS = {
  * find-and-replace.
  */
 export function pickModel(id: string): LanguageModel {
-  if (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL) {
+  // Strict opt-in: only route through the gateway when AI_GATEWAY_API_KEY
+  // is explicitly set. Previously this also triggered on process.env.VERCEL
+  // (always "1" on Vercel runtime), which caused EVERY AI call to attempt
+  // the gateway path before the gateway was enabled on the project — the
+  // result was blanket 401s and ai_failed across every route. Explicit opt-
+  // in means a staged rollout: enable in Vercel dashboard → set env var →
+  // routes flip over, with the direct Anthropic path as a safe default.
+  if (process.env.AI_GATEWAY_API_KEY) {
     return gateway(`anthropic/${id}`);
   }
   return anthropic(id);
