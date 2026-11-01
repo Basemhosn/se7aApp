@@ -9,7 +9,13 @@ import {
   normalizeMenuScan,
 } from "@/lib/schemas/menu";
 import { MENU_SYSTEM_PROMPT, menuUserPrompt } from "@/lib/prompts/menu.v1";
-import { MENU_FALLBACK_BUDGET, MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
+import {
+  MENU_FALLBACK_BUDGET,
+  MODEL_IDS,
+  MODELS,
+  PROMPT_VERSION,
+  scanFallbackProviderOptions,
+} from "@/lib/ai";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { requirePro } from "@/lib/entitlement";
 import {
@@ -211,6 +217,7 @@ async function processMenuScanInBackground(args: {
   try {
     const result = await generateObject({
       model: MODELS.menu_default,
+      providerOptions: scanFallbackProviderOptions(),
       schema: menuScanResultSchema,
       system: `${MENU_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [

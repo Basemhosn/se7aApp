@@ -9,7 +9,12 @@ import {
   plateScanResultSchema,
 } from "@/lib/schemas/scan";
 import { PLATE_SYSTEM_PROMPT, PLATE_USER_PROMPT } from "@/lib/prompts/plate.v1";
-import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
+import {
+  MODEL_IDS,
+  MODELS,
+  PROMPT_VERSION,
+  scanFallbackProviderOptions,
+} from "@/lib/ai";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
 import { getEntitlement } from "@/lib/entitlement";
 import {
@@ -153,6 +158,7 @@ async function processScanInBackground(args: {
   try {
     const result = await generateObject({
       model: MODELS.plate_default,
+      providerOptions: scanFallbackProviderOptions(),
       schema: plateScanResultSchema,
       // AI SDK no longer accepts system in the messages array by
       // default — it throws unless allowSystemInMessages is set.

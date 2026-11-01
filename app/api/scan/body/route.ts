@@ -8,7 +8,12 @@ import {
   normalizeBodyScan,
 } from "@/lib/schemas/body";
 import { BODY_SYSTEM_PROMPT, bodyUserPrompt } from "@/lib/prompts/body.v1";
-import { MODEL_IDS, MODELS, PROMPT_VERSION } from "@/lib/ai";
+import {
+  MODEL_IDS,
+  MODELS,
+  PROMPT_VERSION,
+  scanFallbackProviderOptions,
+} from "@/lib/ai";
 import { project, type BodyProjection } from "@/lib/body";
 import type { Goal, Sex } from "@/lib/macros";
 import { checkScanLimits, rateLimitedResponse } from "@/lib/ratelimit";
@@ -189,6 +194,7 @@ async function processBodyScanInBackground(args: {
   try {
     const result = await generateObject({
       model: MODELS.body_default,
+      providerOptions: scanFallbackProviderOptions(),
       schema: bodyScanResultSchema,
       system: `${BODY_SYSTEM_PROMPT}\n\n${languageInstruction(locale)}`,
       messages: [

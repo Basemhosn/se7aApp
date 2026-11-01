@@ -33,6 +33,17 @@ export const MODEL_IDS = {
 } as const;
 
 /**
+ * Direct @ai-sdk/anthropic uses hyphenated IDs ("claude-sonnet-4-6") but
+ * Vercel AI Gateway's catalog publishes Anthropic models with a dotted
+ * major.minor ("claude-sonnet-4.6"). Translate the trailing "-\d-\d"
+ * segment so the gateway path hits a real model instead of 404'ing.
+ * Single-number versions like "claude-opus-5" pass through unchanged.
+ */
+function anthropicGatewayId(hyphenId: string): string {
+  return hyphenId.replace(/-(\d+)-(\d+)$/, "-$1.$2");
+}
+
+/**
  * Return a bound LanguageModel ready to pass to generateObject / generateText.
  * Pass the raw provider model ID (e.g. "claude-sonnet-4-6"); the helper
  * decides whether to route through the gateway or hit Anthropic direct.
@@ -50,7 +61,7 @@ export function pickModel(id: string): LanguageModel {
   // in means a staged rollout: enable in Vercel dashboard → set env var →
   // routes flip over, with the direct Anthropic path as a safe default.
   if (process.env.AI_GATEWAY_API_KEY) {
-    return gateway(`anthropic/${id}`);
+    return gateway(`anthropic/${anthropicGatewayId(id)}`);
   }
   return anthropic(id);
 }
@@ -74,6 +85,30 @@ export const PROMPT_VERSION = {
   menu: "menu.v3_portion",
   body: "body.v1",
 } as const;
+
+/**
+ * Provider-fallback chain for scan routes, applied by the AI Gateway.
+ *
+ * Primary model (set via `model:`) is tried first. If every eligible
+ * provider for the primary fails (529 overloaded, 5xx, timeout, etc.),
+ * the gateway walks `models` in order. All entries are vision-capable
+ * and support structured output per /v1/models at time of writing.
+ * Cheap tiers on purpose — the fallbacks run when Anthropic is down,
+ * not as the default, and both are ~10× cheaper than Sonnet so the
+ * fallback path never costs more than the primary.
+ *
+ * Returns `undefined` when the gateway isn't opted into so direct
+ * Anthropic calls (local dev, pre-rollout) don't carry gateway options
+ * the provider doesn't understand.
+ */
+export function scanFallbackProviderOptions() {
+  if (!process.env.AI_GATEWAY_API_KEY) return undefined;
+  return {
+    gateway: {
+      models: ["openai/gpt-5-mini", "google/gemini-2.5-flash"],
+    },
+  };
+}
 
 /**
  * The menu scanner hands the model the user's remaining daily budget as
