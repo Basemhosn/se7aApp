@@ -10,6 +10,7 @@ import { Btn } from "@/components/Btn";
 import { Wordmark } from "@/components/Wordmark";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
+import { routeAfterAuth } from "@/lib/postAuthRoute";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -93,12 +94,7 @@ export default function Login() {
       setMsg(error?.message ?? t("auth.login.signin_err"));
       return;
     }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("onboarded_at")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
-    router.replace(profile?.onboarded_at ? "/" : "/onboarding");
+    await routeAfterAuth(data.user.id, router);
     setBusy(false);
   };
 
@@ -149,13 +145,13 @@ export default function Login() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("onboarded_at")
+        .select("user_id")
         .eq("user_id", user.id)
         .maybeSingle();
       if (!profile) {
         track("signup_completed", { method: "google" });
       }
-      router.replace(profile?.onboarded_at ? "/" : "/onboarding");
+      await routeAfterAuth(user.id, router);
     } catch (e) {
       setMsg((e as Error).message || t("auth.login.google_err"));
     }

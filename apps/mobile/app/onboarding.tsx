@@ -421,13 +421,11 @@ export default function Onboarding() {
         activity,
         returning,
       });
-      // Everyone lands on Home. Previously first-time users were
-      // dropped into /scan/plate directly for the AHA moment, but it
-      // made the finish feel like we skipped past "here's your new
-      // dashboard" and users didn't recognize they were done
-      // onboarding — Home with the big calorie ring + scan FAB is the
-      // better landing.
-      router.replace("/");
+      // New users route to the one-time tutorial first (shipped build
+      // 95+). The tutorial screen writes tutorial_seen_at = now() on
+      // finish/skip and then router.replace("/") — so a returning
+      // user who already completed it never sees this screen again.
+      router.replace("/tutorial" as never);
     } catch (e) {
       setErr((e as Error).message || t("onboarding.couldnt_save_plan"));
       setBusy(false);

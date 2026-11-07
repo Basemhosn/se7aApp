@@ -6,6 +6,7 @@ import * as Linking from "expo-linking";
 import * as Sentry from "@sentry/react-native";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
+import { routeAfterAuth } from "@/lib/postAuthRoute";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -68,19 +69,19 @@ export default function AuthCallback() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("onboarded_at")
+        .select("user_id")
         .eq("user_id", user.id)
         .maybeSingle();
       // Fresh-signup detection: no profile row = user just created
-      // their account via the magic link; row exists but no
-      // onboarded_at = they signed up before but never finished;
-      // onboarded_at present = returning login. Only fire
-      // signup_completed on the first case so analytics distinguishes
-      // "signups/day" from "logins/day".
+      // their account via the magic link. Only fire signup_completed
+      // on that first case so analytics distinguishes "signups/day"
+      // from "logins/day". The actual onboarding / tutorial routing
+      // decision lives in routeAfterAuth so adding a new gating step
+      // is a one-file change.
       if (!profile) {
         track("signup_completed", { method: "email" });
       }
-      router.replace(profile?.onboarded_at ? "/" : "/onboarding");
+      await routeAfterAuth(user.id, router);
     })();
     return () => {
       cancelled = true;

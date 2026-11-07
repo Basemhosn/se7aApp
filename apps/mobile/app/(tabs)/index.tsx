@@ -375,6 +375,15 @@ export default function Home() {
       router.replace("/onboarding");
       return;
     }
+    // Defensive: if the user interrupted the first-run tutorial (crashed
+    // mid-slide, killed the app before "Get started") they re-enter at
+    // Home — route them back to the tutorial once rather than letting
+    // them skip it permanently. Once tutorial_seen_at is written they
+    // land here normally on every subsequent open.
+    if (profileData && !profileData.tutorial_seen_at) {
+      router.replace("/tutorial" as never);
+      return;
+    }
     setProfile(profileData as Profile);
     // Merge any still-pending optimistic items into the fresh server
     // response so a just-logged meal doesn't vanish if the server
