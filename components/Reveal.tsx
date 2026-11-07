@@ -52,7 +52,14 @@ export function Reveal({
           }
         }
       },
-      { threshold: 0.15, rootMargin: "0px 0px -80px 0px" }
+      // threshold: 0 fires on the first visible pixel. Previously 0.15,
+      // which broke on mobile for tall sections (e.g. FeatureShowcase at
+      // ~5000px) — 15% of a 5000px block = 750px, so the user had to
+      // scroll a full viewport into it before it faded in, which read
+      // as "empty black screen" between sections. The rootMargin still
+      // delays the trigger until the element top crosses 80px above the
+      // viewport bottom, so there's no flicker on fast scrolls.
+      { threshold: 0, rootMargin: "0px 0px -80px 0px" }
     );
     io.observe(node);
     return () => io.disconnect();
