@@ -40,9 +40,10 @@ This is what users see on the Google sign-in page.
 - **App name:** `SE7A`
 - **User support email:** your email (`basem.aboulhosn@gmail.com`
   works)
-- **App logo:** upload the SE7A icon (120×120 PNG, from your brand kit
-  at `~/Downloads/se7a-icons/` — pick a square version with a solid
-  background, not transparent)
+- **App logo:** upload the SE7A icon (120×120 PNG). Use
+  `~/Downloads/se7a-logo-extracted/se7a-logo/ios/AppIcon-1024.png` —
+  Google will downscale it. Solid dark background, matches what users
+  see on their home screen.
 
 ### App domain
 - **Application home page:** `https://se7a.app`
@@ -101,6 +102,28 @@ slash.)
 A dialog pops up with your **Client ID** and **Client Secret**.
 **Copy both now** — you'll paste them into Supabase in Step 4.
 
+This is the **Web client**. SE7A also needs an **iOS client** for the
+native Google Sign-In SDK (see Step 3b).
+
+---
+
+## Step 3b — Create the iOS OAuth client (for the native SDK)
+
+This separate client lets the mobile app bypass `ASWebAuthenticationSession`
+entirely, which removes the iOS *"SE7A Wants to Use supabase.co to Sign In"*
+system dialog.
+
+1. Same **Credentials** page → **+ Create Credentials** → **OAuth client ID**
+2. **Application type:** **iOS**
+3. **Name:** `SE7A iOS`
+4. **Bundle ID:** `app.se7a.mobile`
+5. Click **Create**
+
+Note the **iOS Client ID** (format: `NNNNN-xxxxx.apps.googleusercontent.com`)
+and the **iOS URL scheme** (format: `com.googleusercontent.apps.NNNNN-xxxxx`
+— it's the client ID reversed and prefixed). Both go into the
+environment variables in Step 5.
+
 ---
 
 ## Step 4 — Paste into Supabase
@@ -117,19 +140,59 @@ A dialog pops up with your **Client ID** and **Client Secret**.
 The Supabase shared client is now bypassed — users will see your
 branded SE7A consent screen.
 
+### Also add the iOS Client ID to Supabase's allow-list
+
+Supabase verifies the Google ID token the mobile SDK returns against the
+Google client that issued it. For Supabase to accept tokens issued by
+our iOS client, add that client's ID to the allow-list:
+
+1. Same Google provider page in Supabase dashboard
+2. Scroll to **Authorized Client IDs** (or similar wording — Supabase UI varies)
+3. Paste the **iOS Client ID** from Step 3b
+4. Save
+
 ---
 
-## Step 5 — Verify end-to-end
+## Step 5 — Add environment variables for the mobile app
 
-1. On a TestFlight or dev build of SE7A, open the Sign In screen
-2. Tap **Continue with Google**
-3. The in-app browser opens the Google consent page
-4. **You should now see:**
-   - "SE7A" at the top (not "Supabase")
-   - Your logo
-   - "SE7A wants access to your Google account"
-   - "Continue to **SE7A**" (not "Continue to supabase.co")
-5. Tap Allow → OAuth completes → user is logged into SE7A
+The native SDK + Expo plugin read three env vars at build time. Add them
+to the mobile project's `.env` (or EAS secrets if building in the cloud).
+For `--local` builds, a `.env` file in `apps/mobile/` is picked up.
+
+```
+# Public — baked into the JS bundle, safe to ship
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=NNNNN-xxxxx.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=NNNNN-yyyyy.apps.googleusercontent.com
+
+# Build-time only — used by apps/mobile/app.config.js to register the
+# iOS URL scheme on Info.plist. NOT prefixed with EXPO_PUBLIC_ because
+# it doesn't need to be in the JS bundle, only present at prebuild time.
+GOOGLE_IOS_REVERSED_CLIENT_ID=com.googleusercontent.apps.NNNNN-yyyyy
+```
+
+When these env vars are absent, the login screen falls back to the
+WebBrowser OAuth path (what shipped in build 94) — so sign-in still
+works but the iOS "Wants to Use supabase.co" dialog returns. That means
+the iOS client setup + env vars + a fresh build are all required to
+actually see the clean flow.
+
+---
+
+## Step 6 — Verify end-to-end
+
+1. Cut a fresh iOS build (the native SDK + plugin need a new native
+   build — JS reload is not enough): `cd apps/mobile && npx eas build
+   --platform ios --profile production --local`
+2. Upload the .ipa via Transporter
+3. Install from TestFlight and open the Sign In screen
+4. Tap **Continue with Google**
+5. **You should now see (both screens clean):**
+   - **No** iOS "SE7A Wants to Use supabase.co to Sign In" system dialog
+     — the native SDK bypasses `ASWebAuthenticationSession` entirely
+   - Google's native account picker opens directly, showing
+     "Sign in to **SE7A**" (or your app name) — not the Supabase
+     project subdomain
+6. Pick an account → session created → user is logged into SE7A
 
 ---
 
@@ -168,4 +231,7 @@ Warning disappears.
 | Users still see "Supabase" | Supabase still using default client | Confirm "Use custom OAuth credentials" is toggled ON |
 | "redirect_uri_mismatch" error | Mismatch between Google's authorized URIs and what Supabase sends | Double-check the URI matches `https://PROJECT.supabase.co/auth/v1/callback` exactly |
 | "This app is blocked" | OAuth consent screen is in Testing + you're not a test user | Add yourself as test user OR publish the app |
+| Native Google sheet doesn't open, falls back to WebBrowser flow | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` or `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` missing at build time | Set both env vars + re-run `eas build --local`. The JS bundle bakes these in at build; adding them post-build has no effect. |
+| `DEVELOPER_ERROR` / `12500` in Sentry | The iOS Client ID's bundle ID doesn't match `app.se7a.mobile`, or the plist's REVERSED_CLIENT_ID is wrong | Re-create the iOS OAuth client with bundle ID `app.se7a.mobile` exactly, update `GOOGLE_IOS_REVERSED_CLIENT_ID`, rebuild |
+| `invalid_token` from `signInWithIdToken` | The iOS Client ID isn't in Supabase's Authorized Client IDs list | Paste the iOS Client ID into Supabase → Authentication → Providers → Google → Authorized Client IDs |
 | iOS reviewer sees warning banner | App is in "Testing" status in Google Cloud | Publish to Production in OAuth consent screen settings |

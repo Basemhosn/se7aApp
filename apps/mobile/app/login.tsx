@@ -11,6 +11,10 @@ import { Wordmark } from "@/components/Wordmark";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
 import { routeAfterAuth } from "@/lib/postAuthRoute";
+import {
+  isGoogleSignInConfigured,
+  signInWithGoogleNative,
+} from "@/lib/googleSignIn";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -101,8 +105,55 @@ export default function Login() {
   const signInWithGoogle = async () => {
     setGoogleBusy(true);
     setMsg("");
-    const redirectTo = Linking.createURL("/auth/callback");
     try {
+      // Preferred path: native Google Sign-In SDK. Avoids the iOS
+      // "SE7A Wants to Use supabase.co to Sign In" system dialog and
+      // shows SE7A branding directly in Google's account picker. Only
+      // available when the two client IDs are set via env; otherwise
+      // fall back to the WebBrowser OAuth path below.
+      if (isGoogleSignInConfigured()) {
+        const res = await signInWithGoogleNative();
+        if (res.kind === "cancelled") {
+          setMsg(t("auth.login.google_cancelled"));
+          setGoogleBusy(false);
+          return;
+        }
+        if (res.kind === "error") {
+          setMsg(`${t("auth.login.google_err")}: ${res.message}`);
+          setGoogleBusy(false);
+          return;
+        }
+        const { data: exData, error: exErr } =
+          await supabase.auth.signInWithIdToken({
+            provider: "google",
+            token: res.idToken,
+          });
+        if (exErr || !exData.user) {
+          setMsg(
+            `${t("auth.login.google_err")}: ${exErr?.message ?? "no user"}`
+          );
+          setGoogleBusy(false);
+          return;
+        }
+        // Fresh-signup detection: no profile row means Supabase just
+        // provisioned the user. Mirrors the WebBrowser path's logic.
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .eq("user_id", exData.user.id)
+          .maybeSingle();
+        if (!profile) {
+          track("signup_completed", { method: "google" });
+        }
+        await routeAfterAuth(exData.user.id, router);
+        setGoogleBusy(false);
+        return;
+      }
+
+      // Fallback: WebBrowser OAuth. Used when native Google Sign-In
+      // isn't configured yet (missing env vars, local dev before the
+      // Google Cloud iOS OAuth client is set up).
+      const redirectTo = Linking.createURL("/auth/callback");
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {

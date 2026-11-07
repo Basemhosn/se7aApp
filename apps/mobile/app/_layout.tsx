@@ -28,6 +28,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { hydrateLocaleFromStorage } from "@/lib/i18n";
 import { initAnalytics, track } from "@/lib/analytics";
 import { handleInviteUrl } from "@/lib/referralInvite";
+import { configureGoogleSignIn } from "@/lib/googleSignIn";
 
 // Sentry.init runs at module-load time. Any throw here (invalid DSN,
 // missing native side, transient linker issue) crashes the whole bundle
@@ -69,6 +70,11 @@ function RootLayout() {
   useEffect(() => {
     hydrateLocaleFromStorage();
     initAnalytics();
+    // Configure the native Google Sign-In SDK once at boot. No-op when
+    // the required EXPO_PUBLIC_GOOGLE_*_CLIENT_ID env vars aren't set —
+    // login.tsx falls back to the WebBrowser OAuth path in that case
+    // so sign-in keeps working while the Google Cloud setup lands.
+    configureGoogleSignIn();
     track("app_opened");
     // Referral invite intake — both paths route to the same handler:
     //   • cold-start via universal link / custom scheme
