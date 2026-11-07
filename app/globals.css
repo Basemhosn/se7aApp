@@ -38,7 +38,7 @@ body::before {
 /* All main content sits above the grain layer. */
 .shell, .nav-wrap { position: relative; z-index: 1; }
 
-.display { font-family: 'Syne', sans-serif; }
+.display { font-family: 'Fraunces', serif; }
 .mono { font-family: 'IBM Plex Mono', monospace; }
 
 .shell { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
@@ -74,10 +74,11 @@ body::before {
   animation: rise 0.6s ease both;
 }
 .hero h1 {
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: clamp(40px, 7vw, 76px); line-height: 1.02; letter-spacing: -0.025em;
+  font-family: 'Fraunces', serif; font-weight: 800;
+  font-size: clamp(40px, 7vw, 76px); line-height: 1.02; letter-spacing: -0.015em;
   max-width: 13ch;
   animation: rise 0.6s 0.08s ease both;
+  font-variation-settings: "opsz" 144;
 }
 .hero h1 .gold { color: var(--gold); }
 .hero-sub {
@@ -99,7 +100,7 @@ body::before {
 }
 .waitlist input:focus { border-color: var(--gold-dim); }
 .btn {
-  font-family: 'Syne', sans-serif; font-weight: 700; letter-spacing: 0.03em;
+  font-family: 'Fraunces', serif; font-weight: 700; letter-spacing: 0.03em;
   background: var(--gold); color: #0b0d0b; border: none; cursor: pointer;
   border-radius: 12px; padding: 15px 26px; font-size: 15px;
   transition: transform 0.12s, box-shadow 0.12s;
@@ -118,7 +119,7 @@ body::before {
 }
 @media (max-width: 760px) { .moment { grid-template-columns: 1fr; } }
 .moment h2 {
-  font-family: 'Syne', sans-serif; font-size: clamp(24px, 3.4vw, 34px);
+  font-family: 'Fraunces', serif; font-size: clamp(24px, 3.4vw, 34px);
   font-weight: 700; letter-spacing: -0.02em; line-height: 1.12;
 }
 .moment p { margin-top: 16px; color: var(--dim); line-height: 1.65; font-size: 15px; }
@@ -150,7 +151,7 @@ body::before {
 }
 .feature:hover { border-color: var(--gold-dim); transform: translateY(-3px); }
 .feature .num { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--gold); letter-spacing: 0.12em; }
-.feature h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin: 10px 0 8px; }
+.feature h3 { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 700; margin: 10px 0 8px; }
 .feature p { color: var(--dim); font-size: 14px; line-height: 1.6; }
 
 /* ---------- feature rows (screenshot + copy) ---------- */
@@ -172,7 +173,7 @@ body::before {
   margin-bottom: 18px;
 }
 .feature-copy h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
   margin-bottom: 20px;
 }
@@ -230,7 +231,7 @@ body::before {
   margin: 16px 0 24px;
 }
 .plan-band-copy h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(30px, 4.4vw, 48px); line-height: 1.08; letter-spacing: -0.02em;
   margin-bottom: 20px;
 }
@@ -273,7 +274,7 @@ body::before {
 }
 .stat { text-align: center; }
 .stat-value {
-  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-family: 'Fraunces', serif; font-weight: 800;
   font-size: clamp(26px, 3.4vw, 38px); line-height: 1;
   color: var(--gold); letter-spacing: -0.02em;
 }
@@ -298,7 +299,7 @@ body::before {
   margin-bottom: 18px;
 }
 .ritual-copy h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 40px); line-height: 1.1; letter-spacing: -0.02em;
   margin-bottom: 20px;
 }
@@ -317,7 +318,7 @@ body::before {
   color: var(--gold); letter-spacing: 0.18em;
 }
 .ritual-title {
-  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 19px;
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px;
   color: var(--ink); margin-top: 6px;
 }
 .ritual-sub { color: var(--dim); font-size: 14px; line-height: 1.55; margin-top: 6px; }
@@ -329,7 +330,7 @@ body::before {
   text-align: left;
 }
 .final-h {
-  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-family: 'Fraunces', serif; font-weight: 800;
   font-size: clamp(36px, 6vw, 60px); line-height: 1.05; letter-spacing: -0.025em;
   margin-top: 22px;
 }
@@ -346,7 +347,7 @@ body::before {
 }
 .how-header { max-width: 60ch; margin-bottom: 48px; }
 .how-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
 }
 .how-header h2 .gold { color: var(--gold); }
@@ -356,7 +357,7 @@ body::before {
 @media (max-width: 780px) { .how-steps { grid-template-columns: 1fr; gap: 32px; } }
 .how-step { position: relative; padding-left: 0; }
 .how-num {
-  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-family: 'Fraunces', serif; font-weight: 800;
   font-size: clamp(38px, 5vw, 56px); color: var(--gold); line-height: 1;
   letter-spacing: -0.03em; opacity: 0.9;
 }
@@ -365,7 +366,7 @@ body::before {
   margin: 18px 0 20px; opacity: 0.5;
 }
 .how-step h3 {
-  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px;
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 22px;
   letter-spacing: -0.015em; margin-bottom: 12px;
 }
 .how-step p {
@@ -379,7 +380,7 @@ body::before {
 }
 .cmp-header { max-width: 60ch; margin-bottom: 40px; }
 .cmp-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
 }
 .cmp-header h2 .gold { color: var(--gold); }
@@ -429,7 +430,7 @@ body::before {
 }
 .pricing-header { max-width: 60ch; margin-bottom: 40px; }
 .pricing-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
 }
 .pricing-header h2 .gold { color: var(--gold); }
@@ -465,7 +466,7 @@ body::before {
   margin-bottom: 6px;
 }
 .price-value {
-  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-family: 'Fraunces', serif; font-weight: 800;
   font-size: 46px; letter-spacing: -0.03em; line-height: 1;
   color: var(--ink);
 }
@@ -505,7 +506,7 @@ body::before {
 }
 @media (max-width: 720px) { .price-report { grid-template-columns: 1fr; } }
 .price-report h3 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: 22px; margin: 10px 0 10px;
 }
 .price-report p { color: var(--dim); font-size: 14px; line-height: 1.6; }
@@ -521,7 +522,7 @@ body::before {
 }
 .faq-header { max-width: 60ch; margin-bottom: 32px; }
 .faq-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
 }
 .faq-list {
@@ -542,7 +543,7 @@ body::before {
   display: flex; align-items: center; justify-content: space-between;
   gap: 20px;
   background: transparent; border: 0; cursor: pointer;
-  color: var(--ink); font-family: 'Syne', sans-serif;
+  color: var(--ink); font-family: 'Fraunces', serif;
   font-size: 16px; font-weight: 600; text-align: left;
   transition: color 0.2s ease;
 }
@@ -602,9 +603,9 @@ footer a:hover { color: var(--gold); }
 
 /* ---------- privacy page ---------- */
 .prose { max-width: 720px; padding: 48px 0 96px; }
-.prose h1 { font-family: 'Syne', sans-serif; font-size: 34px; font-weight: 800; margin-bottom: 8px; }
+.prose h1 { font-family: 'Fraunces', serif; font-size: 34px; font-weight: 800; margin-bottom: 8px; }
 .prose .updated { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--dim); margin-bottom: 36px; }
-.prose h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin: 34px 0 10px; }
+.prose h2 { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; margin: 34px 0 10px; }
 .prose p, .prose li { color: var(--dim); line-height: 1.7; font-size: 15px; }
 .prose strong { color: var(--ink); }
 .prose ul { padding-left: 20px; margin-top: 8px; }
@@ -797,7 +798,7 @@ footer a:hover { color: var(--gold); }
   margin-bottom: 4px;
 }
 .floating-title {
-  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px;
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 15px;
   color: var(--ink);
 }
 .floating-sub {
@@ -869,7 +870,7 @@ footer a:hover { color: var(--gold); }
 }
 @media (max-width: 780px) { .coach-band { grid-template-columns: 1fr; padding: 56px 0; gap: 32px; } }
 .coach-copy h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.02em;
   margin-bottom: 20px;
 }
@@ -908,7 +909,7 @@ footer a:hover { color: var(--gold); }
 }
 .gulf-header { max-width: 60ch; margin-bottom: 48px; }
 .gulf-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 42px); line-height: 1.08; letter-spacing: -0.02em;
 }
 .gulf-pillars {
@@ -931,7 +932,7 @@ footer a:hover { color: var(--gold); }
   color: var(--gold); letter-spacing: 0.2em;
 }
 .pillar-title {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: 20px; letter-spacing: -0.01em; margin-top: 4px;
 }
 .pillar-sub { color: var(--dim); font-size: 13px; line-height: 1.55; margin-top: 6px; }
@@ -943,7 +944,7 @@ footer a:hover { color: var(--gold); }
 }
 .diff-header { max-width: 68ch; margin-bottom: 48px; }
 .diff-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(30px, 4.4vw, 46px); line-height: 1.08; letter-spacing: -0.02em;
 }
 .diff-header h2 .gold { color: var(--gold); }
@@ -973,7 +974,7 @@ footer a:hover { color: var(--gold); }
   margin-bottom: 14px;
 }
 .diff-card h3 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: 22px; letter-spacing: -0.015em; line-height: 1.15;
   margin-bottom: 12px;
 }
@@ -993,7 +994,7 @@ footer a:hover { color: var(--gold); }
 .showcase-header { max-width: 60ch; margin-bottom: 56px; text-align: center; margin-left: auto; margin-right: auto; }
 .showcase-header .feature-num { text-align: center; }
 .showcase-header h2 {
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: 'Fraunces', serif; font-weight: 700;
   font-size: clamp(28px, 4vw, 40px); line-height: 1.1; letter-spacing: -0.02em;
   margin-bottom: 12px;
 }
@@ -1062,7 +1063,7 @@ footer a:hover { color: var(--gold); }
   color: var(--dim); letter-spacing: 0.16em;
 }
 .app-badge-store {
-  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 17px;
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 17px;
   color: var(--ink);
 }
 
@@ -1105,7 +1106,7 @@ footer a:hover { color: var(--gold); }
 }
 .macro-card-hi { border-color: var(--gold-dim); background: linear-gradient(180deg, rgba(246,183,60,.06), var(--panel)); }
 .macro-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
-.macro-value { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; line-height: 1; }
+.macro-value { font-family: 'Fraunces', serif; font-size: 30px; font-weight: 800; line-height: 1; }
 .macro-card-hi .macro-value { color: var(--gold); }
 .macro-unit { font-size: 13px; color: var(--dim); margin-left: 6px; font-weight: 500; }
 
@@ -1149,7 +1150,7 @@ footer a:hover { color: var(--gold); }
 .ledger-title { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
 .ledger-primary { margin: 10px 0 4px; }
 .ledger-range { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.ledger-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; }
+.ledger-num { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 800; }
 .ledger-num.over { color: var(--coral); }
 .ledger-num.close { color: var(--gold); }
 .ledger-dash { color: var(--dim); }
@@ -1189,7 +1190,7 @@ footer a:hover { color: var(--gold); }
 .cta-card p { font-size: 13.5px; line-height: 1.6; }
 .cta-arrow {
   position: absolute; right: 20px; bottom: 18px;
-  font-family: 'Syne', sans-serif; font-size: 22px; color: var(--gold);
+  font-family: 'Fraunces', serif; font-size: 22px; color: var(--gold);
 }
 .cta-menu .cta-arrow { color: var(--mint); }
 .cta-body .cta-arrow { color: var(--coral); }
@@ -1222,7 +1223,7 @@ footer a:hover { color: var(--gold); }
 }
 .body-headline-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
 .body-headline-range { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.body-num { font-family: 'Syne', sans-serif; font-size: 36px; font-weight: 800; color: var(--gold); line-height: 1; }
+.body-num { font-family: 'Fraunces', serif; font-size: 36px; font-weight: 800; color: var(--gold); line-height: 1; }
 .body-unit { font-size: 14px; color: var(--dim); margin-left: 4px; font-weight: 500; }
 .body-muscle { color: var(--dim); font-size: 14px; margin-top: 12px; }
 .body-muscle strong { color: var(--ink); text-transform: capitalize; }
@@ -1296,7 +1297,7 @@ footer a:hover { color: var(--gold); }
 }
 .scan-busy-label {
   display: flex; flex-direction: column; align-items: center;
-  margin-top: 16px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px;
+  margin-top: 16px; font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px;
 }
 
 .spinner {
@@ -1364,7 +1365,7 @@ footer a:hover { color: var(--gold); }
 }
 .btn-ghost {
   background: transparent; border: 1px solid var(--line); color: var(--ink);
-  border-radius: 10px; padding: 12px 18px; font-family: 'Syne', sans-serif;
+  border-radius: 10px; padding: 12px 18px; font-family: 'Fraunces', serif;
   font-weight: 700; cursor: pointer; transition: border-color 0.15s;
 }
 .btn-ghost:hover { border-color: var(--coral); }
