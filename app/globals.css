@@ -64,9 +64,6 @@ body::before {
   transition: padding 0.28s ease;
 }
 .nav-wrap-scrolled .nav { padding: 16px 0; }
-.wordmark { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.02em; }
-.wordmark .seven { color: var(--gold); }
-.wordmark .arabic { font-size: 13px; color: var(--dim); font-weight: 500; margin-left: 10px; }
 .nav-tag { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.14em; color: var(--dim); }
 
 /* ---------- hero ---------- */
