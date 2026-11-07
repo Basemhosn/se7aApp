@@ -156,8 +156,8 @@ our iOS client, add that client's ID to the allow-list:
 ## Step 5 — Add environment variables for the mobile app
 
 The native SDK + Expo plugin read three env vars at build time. Add them
-to the mobile project's `.env` (or EAS secrets if building in the cloud).
-For `--local` builds, a `.env` file in `apps/mobile/` is picked up.
+to the mobile project's `.env.local` (or EAS secrets if building in the cloud).
+For `--local` builds, a `.env.local` file in `apps/mobile/` is picked up.
 
 ```
 # Public — baked into the JS bundle, safe to ship
