@@ -95,11 +95,19 @@ with BMI < 17 and redirects them to a physician.
 
 ## AI providers (data flow)
 
-- **Anthropic Claude** — vision for scans + text for coach/meal plans
-- **OpenAI Whisper** — voice-to-text for voice logging only
-- All AI calls route through our Vercel server; mobile never calls
-  providers directly
-- Enterprise contracts prohibit training on user data
+- **All AI calls route through our Vercel server via the Vercel AI
+  Gateway.** Mobile never calls providers directly.
+- **Primary — Anthropic Claude:** vision for scans + text for
+  coach/meal plans.
+- **Scan vision fallback — OpenAI (GPT-5-mini):** used only when
+  Anthropic is temporarily unavailable; receives the same scan photo
+  and context as the primary would have.
+- **Scan vision second fallback — Google (Gemini 2.5 Flash):** used
+  only when both Anthropic and OpenAI are unavailable.
+- **Voice logging — OpenAI (Whisper):** voice-to-text transcription
+  only, triggered by the user tapping record.
+- All providers' enterprise API terms prohibit training on our
+  users' requests.
 
 See https://se7a.app/privacy for complete data handling disclosure.
 
