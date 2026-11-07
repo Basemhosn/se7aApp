@@ -43,15 +43,15 @@ export default function Privacy() {
 
         <h2>AI processing</h2>
         <p>
-          Photos and relevant profile context are sent server-side to AI providers via the
-          Vercel AI Gateway to generate plans, read menus, and estimate nutrition. Our primary
-          provider is <strong>Anthropic</strong> (Claude). If Anthropic is temporarily
-          unavailable, requests fail over to <strong>OpenAI</strong> (GPT-5-mini) or{" "}
-          <strong>Google</strong> (Gemini 2.5 Flash) so the feature stays reliable. All AI
-          providers are contractually prohibited from training on our users&apos; requests
-          per their enterprise API terms. Nutrition and fitness outputs are{" "}
-          <strong>estimates, not medical advice</strong> {"\u2014"} consult a qualified
-          professional before significant changes to diet or exercise.
+          Photos and relevant profile context are sent server-side to AI providers to
+          generate plans, read menus, and estimate nutrition. Our primary provider is{" "}
+          <strong>Anthropic</strong>. If the primary provider is temporarily unavailable,
+          requests fail over to <strong>OpenAI</strong> or <strong>Google</strong> so
+          the feature stays reliable. All AI providers are contractually prohibited from
+          training on our users&apos; requests per their enterprise API terms. Nutrition
+          and fitness outputs are <strong>estimates, not medical advice</strong>{" "}
+          {"\u2014"} consult a qualified professional before significant changes to diet or
+          exercise.
         </p>
 
         <h2>What we don&apos;t do</h2>
@@ -83,30 +83,24 @@ export default function Privacy() {
             email, user identifier, and the logs you create.
           </li>
           <li>
-            <strong>Vercel AI Gateway</strong> {"—"} routes our AI requests to the
-            provider serving each call. Operates under a zero-data-retention policy:
-            requests pass through without being stored.
+            <strong>Anthropic</strong> {"—"} primary AI provider for vision and text
+            analysis. Receives the photo and relevant context for the specific scan or
+            coaching turn. Does not use requests for model training per our API terms.
           </li>
           <li>
-            <strong>Anthropic (Claude API)</strong> {"—"} primary AI provider for vision
-            and text analysis. Receives the photo and relevant context for the specific
-            scan or coaching turn. Does not use requests for model training per our API
+            <strong>OpenAI</strong> {"—"} used in two cases: voice-log transcription
+            (receives the audio clip only when you tap record on the voice-log screen),
+            and as a scan vision fallback when the primary provider is temporarily
+            unavailable (receives the same scan photo and context that would have gone
+            to the primary). Does not use API requests for model training per OpenAI&apos;s
+            API data policy.
+          </li>
+          <li>
+            <strong>Google</strong> {"—"} secondary scan vision fallback used when both
+            the primary provider and OpenAI are temporarily unavailable. Receives the
+            same scan photo and context that would have gone to the primary provider.
+            Does not use paid API requests for model training per Google&apos;s API
             terms.
-          </li>
-          <li>
-            <strong>OpenAI</strong> {"—"} used in two cases: Whisper API for voice-log
-            transcription (receives the audio clip only when you tap record on the
-            voice-log screen), and GPT-5-mini as a scan vision fallback when Anthropic is
-            temporarily unavailable (receives the same scan photo and context that
-            would have gone to Anthropic). Does not use API requests for model training
-            per OpenAI&apos;s API data policy.
-          </li>
-          <li>
-            <strong>Google (Gemini API)</strong> {"—"} Gemini 2.5 Flash is a secondary
-            scan vision fallback used when both Anthropic and OpenAI are temporarily
-            unavailable. Receives the same scan photo and context that would have gone
-            to the primary provider. Does not use paid API requests for model training
-            per Google&apos;s API terms.
           </li>
           <li>
             <strong>RevenueCat</strong> {"—"} subscription processing. Receives
@@ -131,8 +125,9 @@ export default function Privacy() {
             notification contents.
           </li>
           <li>
-            <strong>Vercel</strong> {"—"} hosts the SE7A API and website. Routes
-            your requests but does not retain your application data.
+            <strong>Vercel</strong> {"—"} hosts the SE7A API and website, and routes
+            AI requests between our server and the AI providers above under a
+            zero-data-retention policy. Does not retain your application data.
           </li>
         </ul>
 
