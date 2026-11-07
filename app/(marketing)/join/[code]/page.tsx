@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import JoinForm from "./JoinForm";
+import { Wordmark } from "@/components/Wordmark";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +32,7 @@ export default async function JoinPage({
     <div className="shell">
       <nav className="nav">
         <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
       </nav>
       <main className="hero" style={{ maxWidth: 620, margin: "0 auto" }}>

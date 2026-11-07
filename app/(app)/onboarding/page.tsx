@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import OnboardingForm from "./OnboardingForm";
+import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = { title: "Onboarding — SE7A" };
 export const dynamic = "force-dynamic";
@@ -23,9 +24,7 @@ export default async function OnboardingPage() {
     <div className="shell">
       <nav className="nav">
         <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
       </nav>
       <main className="auth-shell">

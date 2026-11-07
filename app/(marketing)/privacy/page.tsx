@@ -1,3 +1,5 @@
+import { Wordmark } from "@/components/Wordmark";
+
 export const metadata = { title: "Privacy Policy — SE7A" };
 
 export default function Privacy() {
@@ -5,9 +7,7 @@ export default function Privacy() {
     <div className="shell">
       <nav className="nav">
         <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
       </nav>
       <main className="prose">

@@ -1,3 +1,5 @@
+import { Wordmark } from "@/components/Wordmark";
+
 export const metadata = { title: "Terms of Service — SE7A" };
 
 export default function Terms() {
@@ -5,9 +7,7 @@ export default function Terms() {
     <div className="shell">
       <nav className="nav">
         <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
       </nav>
       <main className="prose">

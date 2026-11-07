@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import { signOut } from "../../actions";
 import MenuScanFlow from "./MenuScanFlow";
+import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = { title: "Scan a menu — SE7A" };
 export const dynamic = "force-dynamic";
@@ -24,9 +25,7 @@ export default async function ScanMenuPage() {
     <div className="shell">
       <nav className="nav">
         <a href="/dashboard" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
         <form action={signOut}>
           <button

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Wordmark } from "@/components/Wordmark";
 import Waitlist from "@/components/Waitlist";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { Reveal } from "@/components/Reveal";
@@ -26,10 +27,7 @@ export default function Home() {
       <StickyNav>
         <div className="shell">
           <nav className="nav">
-            <div className="wordmark">
-              SE<span className="seven">7</span>A
-              <span className="arabic">{"صحة"}</span>
-            </div>
+            <Wordmark variant="hero" />
             <div className="nav-tag">EAT SMART {"·"} TRACK SMART</div>
           </nav>
         </div>

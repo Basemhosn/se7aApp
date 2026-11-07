@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import LoginForm from "./LoginForm";
+import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = { title: "Sign in — SE7A" };
 export const dynamic = "force-dynamic";
@@ -14,9 +15,7 @@ export default async function LoginPage() {
     <div className="shell">
       <nav className="nav">
         <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
       </nav>
       <main className="auth-shell">

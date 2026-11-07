@@ -4,6 +4,7 @@ import { computeRemaining, getDayTotals } from "@/lib/ledger";
 import { signOut } from "../actions";
 import WeightLogForm from "./WeightLogForm";
 import DeleteAccount from "./DeleteAccount";
+import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = { title: "Dashboard — SE7A" };
 export const dynamic = "force-dynamic";
@@ -44,9 +45,7 @@ export default async function DashboardPage() {
     <div className="shell">
       <nav className="nav">
         <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="wordmark">
-            SE<span className="seven">7</span>A
-          </div>
+          <Wordmark />
         </a>
         <form action={signOut}>
           <button
