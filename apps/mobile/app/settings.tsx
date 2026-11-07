@@ -1593,6 +1593,41 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
             </Text>
           </Pressable>
           <Pressable
+            onPress={async () => {
+              if (!user?.id) return;
+              setBusy(true);
+              try {
+                // Force + resyncHistory drops every throttle and the
+                // one-shot 90-day backfill flag, so the past-day step
+                // counts repopulate when a user granted Steps
+                // permission after the initial silent sync.
+                await syncHealthNow(user.id, {
+                  force: true,
+                  resyncHistory: true,
+                });
+                Alert.alert(
+                  isArabic ? "تم" : "Done",
+                  isArabic
+                    ? "تمت إعادة مزامنة آخر ٩٠ يوماً من بيانات الصحة."
+                    : "Re-synced the past 90 days of Health data."
+                );
+              } catch (e) {
+                Alert.alert(
+                  isArabic ? "خطأ" : "Error",
+                  (e as Error).message ?? "unknown"
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+            disabled={busy}
+            hitSlop={6}
+          >
+            <Text style={styles.healthGhostBtn}>
+              {busy ? "…" : isArabic ? "أعد المزامنة" : "Resync"}
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={openSystemSettings}
             disabled={busy}
             hitSlop={6}

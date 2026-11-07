@@ -68,8 +68,13 @@ export async function GET(request: Request) {
       kcal_burned: Math.round(totals.kcal_burned),
     },
     activity: {
-      steps: activityRes.data?.steps ?? 0,
-      active_kcal: activityRes.data?.active_kcal ?? 0,
+      // Null when there's no daily_activity row for this day — the
+      // mobile UI distinguishes "no data synced yet" (shows "—") from
+      // "row exists with 0" (shows "0"). Returning 0 by default erased
+      // that distinction and made every un-backfilled past day look
+      // like the user walked zero steps.
+      steps: activityRes.data?.steps ?? null,
+      active_kcal: activityRes.data?.active_kcal ?? null,
     },
   });
 }

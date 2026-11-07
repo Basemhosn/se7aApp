@@ -152,8 +152,11 @@ interface CardioTodayResponse {
     kcal_burned: number;
   };
   activity: {
-    steps: number;
-    active_kcal: number;
+    // Nullable since 2026-11 — API returns null when there's no
+    // daily_activity row for the requested day, so the UI can show
+    // "—" for un-backfilled past days instead of a misleading "0".
+    steps: number | null;
+    active_kcal: number | null;
   };
 }
 
@@ -698,21 +701,47 @@ export default function Home() {
             },
             sleep: isToday ? sleep : null,
           }}
-          activity={{
+          activity={(() => {
             // Steps + burned kcal are now fetched for past days too
             // (cardio endpoint accepts ?day=). Water is still today-only
             // — no historical water logging surface yet.
-            steps: cardio?.activity.steps ?? null,
-            burnedKcal:
-              (cardio?.activity.active_kcal ?? 0) +
-              (cardio?.sessions.reduce(
+            const activeKcal = cardio?.activity.active_kcal ?? null;
+            const sessionsKcal =
+              cardio?.sessions.reduce(
                 (s, x) => s + (x.kcal_burned ?? 0),
                 0
-              ) ?? 0),
-            waterMl: isToday ? water?.total_ml ?? 0 : 0,
-            waterTarget: water?.target_ml ?? 2500,
-            onAddWater: () => addWater(250),
-          }}
+              ) ?? 0;
+            // Preserve null through to the UI when there's truly no data
+            // (no daily_activity row AND no logged sessions). Shows "—"
+            // instead of "0" so a day you haven't synced yet doesn't
+            // look identical to a day you walked zero steps.
+            const burnedKcal =
+              activeKcal == null && sessionsKcal === 0
+                ? null
+                : (activeKcal ?? 0) + sessionsKcal;
+            return {
+              steps: cardio?.activity.steps ?? null,
+              burnedKcal,
+              waterMl: isToday ? water?.total_ml ?? 0 : 0,
+              waterTarget: water?.target_ml ?? 2500,
+              onAddWater: () => addWater(250),
+              isToday,
+              onResyncHealth: () => {
+                if (!user?.id) return;
+                void (async () => {
+                  try {
+                    await syncHealthNow(user.id, {
+                      force: true,
+                      resyncHistory: true,
+                    });
+                    void load();
+                  } catch {
+                    /* silent — syncHealthNow already swallows */
+                  }
+                })();
+              },
+            };
+          })()}
           isArabic={isArabic}
         />
 
@@ -1246,6 +1275,13 @@ interface ActivityData {
   waterMl: number;
   waterTarget: number;
   onAddWater: () => void;
+  // When both steps and burnedKcal are null/empty on today, the
+  // ActivityPage renders a "Resync Apple Health" CTA in the empty
+  // space below the water card. Pass a handler that re-runs the
+  // 90-day health backfill; the Home refresh loop will pick up the
+  // new data on the next tick.
+  isToday: boolean;
+  onResyncHealth: () => void;
 }
 
 const MetricPager = memo(function MetricPager({
@@ -1563,8 +1599,8 @@ const WellnessPage = memo(function WellnessPage({
           </Text>
           <Text style={styles.placeholderNote}>
             {isArabic
-              ? "قم بتوصيل الصحة لرؤية النوم والتعافي هنا."
-              : "Connect Health to see sleep + recovery here."}
+              ? "تأتي بيانات النوم من Oura أو Whoop. أضف تكاملاً من الإعدادات."
+              : "Sleep data comes from Oura or Whoop. Add an integration in Settings → Integrations."}
           </Text>
         </View>
       )}
@@ -1633,6 +1669,30 @@ const ActivityPage = memo(function ActivityPage({
           <View style={[styles.waterBarFill, { width: `${waterPct}%` }]} />
         </View>
       </View>
+      {/*
+       * Inline resync CTA — shows only on today, and only when both
+       * steps and burned are unsynced (null / zero). Backfill-by-day
+       * in useHealthSync.syncActivityHistoryOnce is a one-shot per
+       * install, so if it ran before the user granted Steps permission
+       * (or returned empty), this CTA is their explicit path to retry.
+       * Mirrors the Settings "Resync" button for discoverability.
+       */}
+      {data.isToday && !data.steps && !data.burnedKcal ? (
+        <Pressable
+          style={styles.resyncInline}
+          onPress={data.onResyncHealth}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isArabic ? "أعد مزامنة الصحة" : "Resync Apple Health"
+          }
+          hitSlop={8}
+        >
+          <Ionicons name="refresh" size={14} color={colors.gold} />
+          <Text style={styles.resyncInlineText}>
+            {isArabic ? "أعد مزامنة الصحة" : "Resync Apple Health"}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 });
@@ -3182,6 +3242,25 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: colors.mint,
     borderRadius: 3,
+  },
+  resyncInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.lg,
+    alignSelf: "center",
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+  },
+  resyncInlineText: {
+    color: colors.gold,
+    fontFamily: font.monoBold,
+    fontSize: 12,
+    letterSpacing: 0.4,
   },
   // Meals
   mealsWrap: {

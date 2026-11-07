@@ -129,7 +129,7 @@ export async function syncTodayHealthNow(_userId: string): Promise<void> {
  */
 export async function syncHealthNow(
   userId: string,
-  opts: { force?: boolean } = {}
+  opts: { force?: boolean; resyncHistory?: boolean } = {}
 ): Promise<void> {
   const source: Source = Platform.OS === "ios" ? "healthkit" : "health_connect";
   if (Platform.OS !== "ios" && Platform.OS !== "android") return;
@@ -140,6 +140,18 @@ export async function syncHealthNow(
         AsyncStorage.removeItem(LAST_SYNC_KEY),
         AsyncStorage.removeItem(LAST_WORKOUT_SYNC_KEY),
         AsyncStorage.removeItem(LAST_SLEEP_SYNC_KEY),
+      ]);
+    }
+    if (opts.resyncHistory) {
+      // Also drop the one-shot history-backfill flags so the 90-day
+      // activity + weight backfills re-run. Covers the common case
+      // where the user granted Steps / Weight permission AFTER the
+      // first sync attempt (which returned 0 and marked DONE anyway
+      // in old builds) — their past days were stuck empty until this
+      // button was added.
+      await Promise.all([
+        AsyncStorage.removeItem(ACTIVITY_HISTORY_DONE_KEY),
+        AsyncStorage.removeItem(WEIGHT_HISTORY_DONE_KEY),
       ]);
     }
     await Promise.all([
