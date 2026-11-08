@@ -13,7 +13,14 @@
 export default ({ config }) => {
   const plugins = [...(config.plugins ?? [])];
 
-  const googleIosReversedClientId = process.env.GOOGLE_IOS_REVERSED_CLIENT_ID;
+  // Trim defensively — a trailing space in the Codemagic env var would
+  // get baked into Info.plist's CFBundleURLSchemes and fail App Store
+  // validation 90158 ("URL schemes need to begin with an alphabetic
+  // character, and be comprised of alphanumeric characters, the period,
+  // the hyphen or the plus sign only"). Stripping here prevents a
+  // rebuild cycle if the env var picks up invisible whitespace.
+  const googleIosReversedClientId =
+    process.env.GOOGLE_IOS_REVERSED_CLIENT_ID?.trim();
   if (googleIosReversedClientId) {
     plugins.push([
       "@react-native-google-signin/google-signin",
