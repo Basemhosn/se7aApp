@@ -35,6 +35,10 @@ export interface Profile {
   add_cardio_to_target: boolean | null;
   onboarded_at: string | null;
   tutorial_seen_at: string | null;
+  // Storage path (not URL) to the user's uploaded avatar in the
+  // profile-pics bucket. Null when the user hasn't uploaded. Client
+  // creates a signed URL for render via supabase.storage.createSignedUrl.
+  avatar_url: string | null;
 }
 
 export interface MacroRange {

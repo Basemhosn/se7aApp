@@ -402,10 +402,7 @@ export default function Home() {
     if (pending.length > 0) {
       // Dedup by scan_id FIRST (plate/menu scans carry one through from
       // calendarCache). Name-matching is a fallback for sources that
-      // don't have a scan_id (voice-log, manual meal, barcode). Using
-      // scan_id when available fixes the "same dish logged twice in
-      // one scan" edge case where name-only matching would collapse the
-      // optimistic row onto only one of the server rows.
+      // don't have a scan_id (voice-log, manual meal, barcode).
       const serverScanIds = new Set(
         ledgerRes.totals.items
           .map((it) => it.scan_id)
@@ -418,10 +415,34 @@ export default function Home() {
         if (p.scan_id && serverScanIds.has(p.scan_id)) return false;
         return !serverNames.has(p.name.toLowerCase());
       });
+      // Preserve the optimistic preview URI when the server has
+      // matched by scan_id but came back WITHOUT a photo_url. Happens
+      // when the storage upload silently failed on the scan route
+      // (image_stored: false on the scan response) — without this
+      // patch, the row would show no thumbnail forever. The local
+      // file:// URI still works as a fallback until the user reopens
+      // the app and the cache is gone.
+      const optimisticPhotosByScanId = new Map<string, string>();
+      for (const p of pending) {
+        if (p.scan_id && p.photo_url) {
+          optimisticPhotosByScanId.set(p.scan_id, p.photo_url);
+        }
+      }
+      const ledgerWithFallbackPhotos = {
+        ...ledgerRes,
+        totals: {
+          ...ledgerRes.totals,
+          items: ledgerRes.totals.items.map((it) => {
+            if (it.photo_url || !it.scan_id) return it;
+            const fallback = optimisticPhotosByScanId.get(it.scan_id);
+            return fallback ? { ...it, photo_url: fallback } : it;
+          }),
+        },
+      };
       setLedger(
         stillPending.length > 0
-          ? mergePendingIntoLedger(ledgerRes, stillPending)
-          : ledgerRes
+          ? mergePendingIntoLedger(ledgerWithFallbackPhotos, stillPending)
+          : ledgerWithFallbackPhotos
       );
       if (stillPending.length === 0) {
         clearOptimisticLogItems();

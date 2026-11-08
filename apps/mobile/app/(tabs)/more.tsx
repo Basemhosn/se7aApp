@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  ActionSheetIOS,
+  Alert,
+  Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +13,8 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -52,6 +58,11 @@ export default function More() {
   const [streak, setStreak] = useState<StreakResponse | null>(null);
   const [weightDelta, setWeightDelta] = useState<number | null>(null);
   const [cycleEnabled, setCycleEnabled] = useState(false);
+  // Avatar signed URL — refreshed each profile load since Supabase
+  // signed URLs expire. Null before the user has uploaded or while
+  // the signed URL is still being generated.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [reportMeta, setReportMeta] = useState<{
     week_index: number;
     total_weeks: number;
@@ -97,7 +108,154 @@ export default function More() {
     }
     setCycleEnabled(!!cycleRes?.prefs.enabled);
     setReportMeta(reportRes.report);
+    // Refresh the avatar signed URL in parallel. Null if the user
+    // hasn't uploaded yet; silently falls back to the initial-letter
+    // badge in render. Signed URLs expire (1 hour TTL), which is why
+    // this runs on every Home focus rather than caching.
+    const path = (profileData as { avatar_url?: string | null } | null)
+      ?.avatar_url;
+    if (path) {
+      try {
+        const { data } = await supabase.storage
+          .from("profile-pics")
+          .createSignedUrl(path, 3600);
+        setAvatarUrl(data?.signedUrl ?? null);
+      } catch {
+        setAvatarUrl(null);
+      }
+    } else {
+      setAvatarUrl(null);
+    }
   }, [user]);
+
+  const pickAndUploadAvatar = useCallback(
+    async (source: "camera" | "library") => {
+      if (!user?.id || avatarBusy) return;
+      // Request permissions first; iOS throws silently if we skip.
+      const perm =
+        source === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          isArabic ? "الصلاحية مرفوضة" : "Permission denied",
+          isArabic
+            ? "فعّل الوصول للكاميرا أو الصور من الإعدادات."
+            : "Enable camera or photo library access in Settings."
+        );
+        return;
+      }
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              quality: 0.9,
+              allowsEditing: true,
+              aspect: [1, 1],
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              quality: 0.9,
+              allowsEditing: true,
+              aspect: [1, 1],
+            });
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setAvatarBusy(true);
+      try {
+        // Resize + compress to keep avatar uploads under the 2 MB bucket
+        // cap. 400×400 is plenty for the 84px display circle at @3x.
+        const resized = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 400 } }],
+          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        const path = `${user.id}/avatar.jpg`;
+        const blob = await fetch(resized.uri).then((r) => r.blob());
+        const { error: uploadErr } = await supabase.storage
+          .from("profile-pics")
+          .upload(path, blob, {
+            contentType: "image/jpeg",
+            upsert: true,
+          });
+        if (uploadErr) throw uploadErr;
+        await supabase
+          .from("profiles")
+          .update({ avatar_url: path })
+          .eq("user_id", user.id);
+        const { data } = await supabase.storage
+          .from("profile-pics")
+          .createSignedUrl(path, 3600);
+        if (data?.signedUrl) setAvatarUrl(data.signedUrl);
+      } catch (e) {
+        Alert.alert(
+          isArabic ? "فشل الرفع" : "Upload failed",
+          (e as Error).message ?? "unknown"
+        );
+      } finally {
+        setAvatarBusy(false);
+      }
+    },
+    [user?.id, isArabic, avatarBusy]
+  );
+
+  const promptAvatarSource = useCallback(() => {
+    if (avatarBusy) return;
+    const options = [
+      isArabic ? "التقط صورة" : "Take photo",
+      isArabic ? "اختر من المكتبة" : "Choose from library",
+      ...(avatarUrl ? [isArabic ? "احذف الصورة" : "Remove photo"] : []),
+      isArabic ? "إلغاء" : "Cancel",
+    ];
+    const cancelIdx = options.length - 1;
+    const destructiveIdx = avatarUrl ? options.length - 2 : undefined;
+    const handleChoice = async (idx: number) => {
+      if (idx === 0) void pickAndUploadAvatar("camera");
+      else if (idx === 1) void pickAndUploadAvatar("library");
+      else if (idx === destructiveIdx && user?.id) {
+        try {
+          await supabase.storage
+            .from("profile-pics")
+            .remove([`${user.id}/avatar.jpg`]);
+          await supabase
+            .from("profiles")
+            .update({ avatar_url: null })
+            .eq("user_id", user.id);
+          setAvatarUrl(null);
+        } catch {
+          /* silent — user can retry */
+        }
+      }
+    };
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: cancelIdx,
+          destructiveButtonIndex: destructiveIdx,
+        },
+        handleChoice
+      );
+    } else {
+      // Android fallback: 2-button Alert (camera / library). Remove is
+      // less discoverable but a long-press gesture would complicate the
+      // iOS-first flow; punt to a follow-up.
+      Alert.alert(
+        isArabic ? "تغيير الصورة" : "Change photo",
+        undefined,
+        [
+          {
+            text: isArabic ? "التقط صورة" : "Take photo",
+            onPress: () => void pickAndUploadAvatar("camera"),
+          },
+          {
+            text: isArabic ? "اختر من المكتبة" : "Choose from library",
+            onPress: () => void pickAndUploadAvatar("library"),
+          },
+          { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+        ]
+      );
+    }
+  }, [avatarUrl, avatarBusy, isArabic, pickAndUploadAvatar, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -126,9 +284,31 @@ export default function More() {
               {isArabic ? "أيام السلسلة" : "STREAK · DAYS"}
             </Text>
           </View>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarInitial}>{initial}</Text>
-          </View>
+          <Pressable
+            onPress={promptAvatarSource}
+            disabled={avatarBusy}
+            style={styles.avatarLarge}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isArabic ? "تغيير صورة الملف الشخصي" : "Change profile picture"
+            }
+          >
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarInitial}>{initial}</Text>
+            )}
+            {/* Small pencil badge signals this is tappable + editable.
+             * Hidden mid-upload so the busy opacity is the only feedback. */}
+            {!avatarBusy ? (
+              <View style={styles.avatarEditBadge}>
+                <Ionicons name="pencil" size={10} color={colors.bg} />
+              </View>
+            ) : null}
+          </Pressable>
           <View style={styles.stat}>
             <Text
               style={[
@@ -407,11 +587,29 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitial: {
     fontFamily: font.displayBold,
     fontSize: 32,
     color: colors.gold,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.gold,
+    borderWidth: 2,
+    borderColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
   },
   name: {
     fontFamily: font.displayBold,
