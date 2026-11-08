@@ -935,11 +935,21 @@ export default function Home() {
         items={selectedMeal}
         onClose={() => setSelectedMeal(null)}
         onDelete={async (ids) => {
+          // Optimistic items get NEGATIVE synthetic IDs from
+          // mergePendingIntoLedger (nextId--, starting at -1). Hitting
+          // the server with those returns "invalid_id" because the
+          // DELETE endpoint expects positive meal_items.id values.
+          // Split: only call the API for server-side IDs, let the
+          // clearOptimisticLogItems call below handle the optimistic
+          // ones in-memory. Fixes the "invalid id" error the user hit
+          // when deleting a meal they'd just added before the server
+          // ledger caught up.
+          const serverIds = ids.filter((id) => id > 0);
           // Multi-item plate-scan groups delete all rows at once.
           // Fire sequentially rather than in parallel so RLS or
           // transient failure on one surfaces clearly instead of
           // leaving a half-deleted group.
-          for (const id of ids) {
+          for (const id of serverIds) {
             await api(`/api/ledger/item/${id}`, { method: "DELETE" });
           }
           markDayDirty();
@@ -947,7 +957,8 @@ export default function Home() {
           // the user deleted a meal that was still in the optimistic
           // buffer (just logged, not yet server-synced), the next
           // useFocusEffect merge would re-add it to the ring. Dropping
-          // the buffer here keeps delete authoritative.
+          // the buffer here keeps delete authoritative — also covers
+          // the case where EVERY id was optimistic (serverIds empty).
           clearOptimisticLogItems();
           await load();
         }}

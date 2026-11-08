@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as haptics from "@/lib/haptics";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -495,7 +495,7 @@ export default function PlateScan() {
     }
   };
 
-  const reset = () => {
+  const reset = useCallback(() => {
     if (resumeLocalId) {
       removeScan(resumeLocalId);
       setResumeLocalId(null);
@@ -508,7 +508,27 @@ export default function PlateScan() {
     setInvisible([]);
     setSelected(new Set());
     setErr("");
-  };
+  }, [resumeLocalId]);
+
+  // Expo-router keeps tab screens mounted across tab switches, so
+  // without this hook the stale state from a previous scan session
+  // (review phase, previous items, previous previewUri) persists when
+  // the user taps the Scan tab fresh. useFocusEffect fires on every
+  // tab focus — if there's no resume / scan_id deep-link param and
+  // we're not mid-flow (uploading/analyzing/saving), force a clean
+  // idle state. The deep-link effect at the top of this file then
+  // runs separately when a param IS present and hydrates from the
+  // local scan store. Net: tab focus always lands on either idle
+  // camera OR the specifically-requested scan review, never leftover.
+  useFocusEffect(
+    useCallback(() => {
+      const hasDeepLink = !!(params.resume || params.scan_id);
+      if (!hasDeepLink && phase !== "analyzing" && phase !== "saving") {
+        reset();
+      }
+      return undefined;
+    }, [params.resume, params.scan_id, phase, reset])
+  );
 
   const footer =
     phase === "review" || phase === "saving" ? (
