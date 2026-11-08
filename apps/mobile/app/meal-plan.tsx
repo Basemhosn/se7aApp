@@ -264,11 +264,13 @@ export default function MealPlan() {
         </View>
       )}
 
-      {loading ? (
-        <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
-          <ActivityIndicator color={colors.gold} />
-        </View>
-      ) : !plan ? (
+      {/* Skip the blank-spinner-while-loading state. If we have a plan
+       * cached from a previous week nav, keep showing it. If we don't,
+       * we fall straight to the Empty card — it shows the "Create
+       * meal plan" CTA so the user always has something to interact
+       * with instead of a 300-500ms blank. Once the real plan loads
+       * it replaces the Empty card in place. */}
+      {!plan ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconWrap}>
             <Ionicons name="calendar" size={40} color={colors.gold} />

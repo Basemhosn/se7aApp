@@ -201,71 +201,90 @@ export default function InviteScreen() {
         </Section>
       )}
 
-      {referral && (
-        <View style={{ marginTop: spacing.md }}>
-          <View style={styles.inviteBody}>
-            <Text style={styles.inviteHeadline}>
-              {isArabic
-                ? "شهر Pro مجاني لكل صديق يشترك"
-                : "1 free month of Pro for every friend who upgrades"}
-            </Text>
-            <Text style={styles.inviteSubcopy}>
-              {isArabic
-                ? "شهر مجاني لك وشهر مجاني لهم. يُطبَّق تلقائياً بعد اشتراكهم. لا حدّ للأشهر التي تكسبها."
-                : "A free month for you and a free month for them. Auto-applied after they subscribe. No cap on how many months you can stack."}
-            </Text>
+      {/* Render the invite card immediately with placeholder counts +
+       * disabled share/copy buttons. Counts flip to real numbers once
+       * useReferral resolves (~100-300ms); the share/copy pressables
+       * un-disable when referral.link populates. User sees the full
+       * structure instantly instead of a 200-400ms blank window. */}
+      <View style={{ marginTop: spacing.md }}>
+        <View style={styles.inviteBody}>
+          <Text style={styles.inviteHeadline}>
+            {isArabic
+              ? "شهر Pro مجاني لكل صديق يشترك"
+              : "1 free month of Pro for every friend who upgrades"}
+          </Text>
+          <Text style={styles.inviteSubcopy}>
+            {isArabic
+              ? "شهر مجاني لك وشهر مجاني لهم. يُطبَّق تلقائياً بعد اشتراكهم. لا حدّ للأشهر التي تكسبها."
+              : "A free month for you and a free month for them. Auto-applied after they subscribe. No cap on how many months you can stack."}
+          </Text>
 
-            <View style={styles.inviteStats}>
-              <View style={styles.inviteStatCol}>
-                <Text style={styles.inviteStatValue}>
-                  {referral.referred_count}
-                </Text>
-                <Text style={styles.inviteStatLabel}>
-                  {isArabic ? "انضموا" : "Joined"}
-                </Text>
-              </View>
-              <View style={styles.inviteStatDivider} />
-              <View style={styles.inviteStatCol}>
-                <Text style={styles.inviteStatValue}>
-                  {Math.floor((referral.rewards_earned_days ?? 0) / 30)}
-                </Text>
-                <Text style={styles.inviteStatLabel}>
-                  {isArabic ? "أشهر مكتسبة" : "Months earned"}
-                </Text>
-              </View>
-              {referral.rewards_pending > 0 && (
-                <>
-                  <View style={styles.inviteStatDivider} />
-                  <View style={styles.inviteStatCol}>
-                    <Text style={styles.inviteStatValue}>
-                      {referral.rewards_pending}
-                    </Text>
-                    <Text style={styles.inviteStatLabel}>
-                      {isArabic ? "قيد المعالجة" : "Pending"}
-                    </Text>
-                  </View>
-                </>
-              )}
+          <View style={styles.inviteStats}>
+            <View style={styles.inviteStatCol}>
+              <Text style={styles.inviteStatValue}>
+                {referral?.referred_count ?? 0}
+              </Text>
+              <Text style={styles.inviteStatLabel}>
+                {isArabic ? "انضموا" : "Joined"}
+              </Text>
             </View>
+            <View style={styles.inviteStatDivider} />
+            <View style={styles.inviteStatCol}>
+              <Text style={styles.inviteStatValue}>
+                {Math.floor((referral?.rewards_earned_days ?? 0) / 30)}
+              </Text>
+              <Text style={styles.inviteStatLabel}>
+                {isArabic ? "أشهر مكتسبة" : "Months earned"}
+              </Text>
+            </View>
+            {referral && referral.rewards_pending > 0 && (
+              <>
+                <View style={styles.inviteStatDivider} />
+                <View style={styles.inviteStatCol}>
+                  <Text style={styles.inviteStatValue}>
+                    {referral.rewards_pending}
+                  </Text>
+                  <Text style={styles.inviteStatLabel}>
+                    {isArabic ? "قيد المعالجة" : "Pending"}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
 
-            <Text style={styles.inviteLink}>{referral.link}</Text>
-            <View style={styles.inviteRow}>
-              <Pressable onPress={shareLink} style={styles.invitePrimary}>
-                <Ionicons name="share-outline" size={16} color={colors.bg} />
-                <Text style={styles.invitePrimaryLabel}>
-                  {isArabic ? "شارك الرابط" : "Share link"}
-                </Text>
-              </Pressable>
-              <Pressable onPress={copyLink} style={styles.inviteSecondary}>
-                <Ionicons name="copy-outline" size={16} color={colors.ink} />
-                <Text style={styles.inviteSecondaryLabel}>
-                  {isArabic ? "انسخ" : "Copy"}
-                </Text>
-              </Pressable>
-            </View>
+          <Text style={styles.inviteLink}>
+            {referral?.link ?? (isArabic ? "جارٍ التحميل…" : "Loading…")}
+          </Text>
+          <View style={styles.inviteRow}>
+            <Pressable
+              onPress={shareLink}
+              style={[
+                styles.invitePrimary,
+                !referral?.link && { opacity: 0.5 },
+              ]}
+              disabled={!referral?.link}
+            >
+              <Ionicons name="share-outline" size={16} color={colors.bg} />
+              <Text style={styles.invitePrimaryLabel}>
+                {isArabic ? "شارك الرابط" : "Share link"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={copyLink}
+              style={[
+                styles.inviteSecondary,
+                !referral?.link && { opacity: 0.5 },
+              ]}
+              disabled={!referral?.link}
+            >
+              <Ionicons name="copy-outline" size={16} color={colors.ink} />
+              <Text style={styles.inviteSecondaryLabel}>
+                {isArabic ? "انسخ" : "Copy"}
+              </Text>
+            </Pressable>
           </View>
         </View>
-      )}
+      </View>
     </Screen>
   );
 }

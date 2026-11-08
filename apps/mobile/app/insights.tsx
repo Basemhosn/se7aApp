@@ -215,12 +215,11 @@ export default function Insights() {
             : t("insights.loading")}
         </Text>
 
-        {loading ? (
-          <ActivityIndicator
-            color={colors.gold}
-            style={{ marginVertical: spacing.xl }}
-          />
-        ) : !data || totalAlive === 0 ? (
+        {/* Skip the explicit loading spinner — render the empty state
+         * immediately while data loads. Once the patterns arrive they
+         * replace the empty block in place. User sees the full screen
+         * structure instantly instead of a blank ~200-400ms window. */}
+        {!data || totalAlive === 0 ? (
           <View style={styles.empty}>
             {/* telescope reads as "looking for something" — the old
                 hourglass icon was ambiguous with "loading". */}

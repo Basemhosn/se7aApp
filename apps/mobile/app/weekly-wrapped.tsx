@@ -103,17 +103,12 @@ export default function WeeklyWrapped() {
     await Share.share({ message: lines.join("\n") });
   };
 
-  if (loading) {
-    return (
-      <Screen>
-        <BackButton />
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.gold} />
-        </View>
-      </Screen>
-    );
-  }
-
+  // Previously this early-returned a full-screen spinner that hid
+  // even the back button. Now the "empty / not enough data" branch
+  // below also handles the loading state (data is null in both
+  // cases) — user sees chrome + a brief subtle message rather than
+  // a blank screen. Once data arrives and has_any_data is true, the
+  // real wrapped content renders in place.
   if (!data || !data.has_any_data) {
     return (
       <Screen>

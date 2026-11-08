@@ -447,17 +447,13 @@ function BodySubtab({
       <WeeklyEnergyCard isArabic={isArabic} />
       <ExpenditureChangesCard isArabic={isArabic} />
 
-      {/* Weight trend chart */}
+      {/* Weight trend chart — render the TrendChart always; it handles
+       * empty points with its own "not enough data yet" state. Avoids
+       * a visible loading spinner on every Progress tab visit while
+       * the 7 parallel fetches round-trip. */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("progress.weight_trend")}</Text>
-        {loading ? (
-          <ActivityIndicator
-            color={colors.gold}
-            style={{ marginVertical: spacing.lg }}
-          />
-        ) : (
-          <TrendChart points={trend?.points ?? []} />
-        )}
+        <TrendChart points={trend?.points ?? []} />
       </View>
 
       {/* Projection */}
