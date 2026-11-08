@@ -35,13 +35,38 @@ interface RamadanPrefsShape {
 export default function RamadanScreen() {
   const { i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
-  const [status, setStatus] = useState<RamadanStatus | null>(null);
+  // Start with a sensible default so the screen renders instantly —
+  // Mode row, City row, Country row, reminder toggles all appear
+  // immediately. active=false hides Fajr/Maghrib until the server
+  // confirms Ramadan is current. Server fetch updates values in place.
+  const [status, setStatus] = useState<RamadanStatus>({
+    active: false,
+    hijri_year: null,
+    day_num: null,
+    total_days: null,
+    days_left: null,
+    today: null,
+    next_ramadan_start: null,
+    prefs: {
+      auto_detect: true,
+      enabled_override: null,
+      fajr_time: "05:00",
+      maghrib_time: "18:30",
+      suhoor_reminder: true,
+      iftar_reminder: true,
+    },
+    times_source: "manual",
+    city: null,
+    country: null,
+  });
   const [savingCity, setSavingCity] = useState(false);
 
   const reload = useCallback(() => {
     api<RamadanStatus>("/api/ramadan/status")
       .then(setStatus)
-      .catch(() => setStatus(null));
+      .catch(() => {
+        /* keep defaults on fetch failure */
+      });
   }, []);
 
   useEffect(() => {
@@ -109,9 +134,7 @@ export default function RamadanScreen() {
 
   const patch = useCallback(
     async (p: Partial<RamadanPrefsShape>) => {
-      setStatus((prev) =>
-        prev ? { ...prev, prefs: { ...prev.prefs, ...p } } : prev
-      );
+      setStatus((prev) => ({ ...prev, prefs: { ...prev.prefs, ...p } }));
       try {
         const res = await api<RamadanStatus>("/api/ramadan/status", {
           method: "POST",
@@ -125,22 +148,6 @@ export default function RamadanScreen() {
     },
     []
   );
-
-  if (!status) {
-    return (
-      <Screen>
-        <View style={settingsStyles.head}>
-          <BackButton />
-        </View>
-        <Text style={settingsStyles.title}>
-          {isArabic ? "رمضان" : "Ramadan"}
-        </Text>
-        <View style={{ padding: spacing.md }}>
-          <Text style={styles.rowValue}>{isArabic ? "…" : "Loading…"}</Text>
-        </View>
-      </Screen>
-    );
-  }
 
   const modeText = status.prefs.auto_detect
     ? isArabic

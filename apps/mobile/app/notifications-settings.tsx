@@ -25,24 +25,33 @@ interface NotificationPrefs {
 export default function NotificationsSettingsScreen() {
   const { i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
-  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+  // Start with an empty prefs object instead of null — every toggle
+  // uses the `!== false` pattern which treats undefined as true (the
+  // opt-out default). This lets the screen render instantly with
+  // sensible defaults; the server fetch then upgrades individual
+  // values in place. Previously we gated the whole screen on `null`
+  // which introduced a visible 200-400ms delay between tapping
+  // "Notifications" and seeing any rows.
+  const [prefs, setPrefs] = useState<NotificationPrefs>({});
 
   useEffect(() => {
     api<{ notification_prefs: NotificationPrefs }>("/api/profile/prefs")
       .then((r) => setPrefs(r.notification_prefs ?? {}))
-      .catch(() => setPrefs({}));
+      .catch(() => {
+        /* keep defaults on fetch failure */
+      });
   }, []);
 
   const togglePref = useCallback(
     async (key: keyof NotificationPrefs, value: boolean) => {
-      setPrefs((prev) => ({ ...(prev ?? {}), [key]: value }));
+      setPrefs((prev) => ({ ...prev, [key]: value }));
       try {
         await api("/api/profile/prefs", {
           method: "POST",
           body: JSON.stringify({ notification_prefs: { [key]: value } }),
         });
       } catch {
-        setPrefs((prev) => ({ ...(prev ?? {}), [key]: !value }));
+        setPrefs((prev) => ({ ...prev, [key]: !value }));
       }
     },
     []
@@ -56,8 +65,7 @@ export default function NotificationsSettingsScreen() {
       <Text style={settingsStyles.title}>
         {isArabic ? "الإشعارات" : "Notifications"}
       </Text>
-      {prefs && (
-        <View style={settingsStyles.card}>
+      <View style={settingsStyles.card}>
           <PrefRow
             label={isArabic ? "خطر انكسار السلسلة" : "Streak at risk"}
             hint={isArabic ? "٨ مساءً إذا لم تسجل شيء" : "8 pm if you haven't logged"}
@@ -96,7 +104,6 @@ export default function NotificationsSettingsScreen() {
             last
           />
         </View>
-      )}
     </Screen>
   );
 }

@@ -31,12 +31,23 @@ interface CyclePrefsShape {
 export default function CycleSettingsScreen() {
   const { i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
-  const [prefs, setPrefs] = useState<CyclePrefsShape | null>(null);
+  // Render immediately with a disabled default so the screen doesn't
+  // block on the API round-trip. Server fetch upgrades values in
+  // place without flashing. Defaults match server-side defaults in
+  // /api/cycle/status so the user doesn't see a brief inconsistency.
+  const [prefs, setPrefs] = useState<CyclePrefsShape>({
+    enabled: false,
+    avg_cycle_length_days: 28,
+    avg_period_length_days: 5,
+    share_with_coach: false,
+  });
 
   const load = useCallback(() => {
     api<{ prefs: CyclePrefsShape }>("/api/cycle/status")
       .then((r) => setPrefs(r.prefs))
-      .catch(() => setPrefs(null));
+      .catch(() => {
+        /* keep defaults on fetch failure */
+      });
   }, []);
 
   useEffect(() => {
@@ -45,7 +56,7 @@ export default function CycleSettingsScreen() {
 
   const patch = useCallback(
     async (p: Partial<CyclePrefsShape>) => {
-      setPrefs((prev) => (prev ? { ...prev, ...p } : prev));
+      setPrefs((prev) => ({ ...prev, ...p }));
       try {
         const res = await api<{ prefs: CyclePrefsShape }>(
           "/api/cycle/status",
@@ -67,12 +78,7 @@ export default function CycleSettingsScreen() {
       <Text style={settingsStyles.title}>
         {isArabic ? "الدورة الشهرية" : "Cycle tracking"}
       </Text>
-      {!prefs ? (
-        <View style={{ padding: spacing.md }}>
-          <Text style={styles.rowValue}>{isArabic ? "…" : "Loading…"}</Text>
-        </View>
-      ) : (
-        <View style={settingsStyles.card}>
+      <View style={settingsStyles.card}>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>
@@ -134,7 +140,6 @@ export default function CycleSettingsScreen() {
             </>
           )}
         </View>
-      )}
     </Screen>
   );
 }
