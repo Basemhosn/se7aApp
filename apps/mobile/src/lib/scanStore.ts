@@ -239,9 +239,36 @@ export function markFailed(localId: string, message: string): void {
 
 /** Remove a scan from the store (call after the user saves it or dismisses). */
 export function removeScan(localId: string): void {
+  // Capture the scanId so hydrate paths can't re-pull this saved scan
+  // from the server. Previously, after saving a scan, the user could
+  // tap a stale pending card / notification / URL that still carried
+  // the scan_id, and the server fetch would re-hydrate the same review
+  // UI — making it look like item N was "coming back" when they went
+  // to scan item N+1. Keeping the set bounded (last 100 entries) so
+  // long sessions don't grow memory indefinitely.
+  const entry = scans.find((s) => s.localId === localId);
+  if (entry?.scanId) {
+    consumedScanIds.add(entry.scanId);
+    if (consumedScanIds.size > 100) {
+      const oldest = consumedScanIds.values().next().value;
+      if (oldest) consumedScanIds.delete(oldest);
+    }
+  }
   scans = scans.filter((s) => s.localId !== localId);
   emit();
   void persist();
+}
+
+/**
+ * ScanIds that have been saved (or explicitly dismissed) this session.
+ * The scan review screen checks this before hydrating a scan_id from
+ * URL params or the server — a consumed scan is treated as "already
+ * handled" and the screen stays idle / shows the camera instead.
+ */
+const consumedScanIds = new Set<string>();
+
+export function isScanConsumed(scanId: string): boolean {
+  return consumedScanIds.has(scanId);
 }
 
 export function getScans(): PendingScan[] {

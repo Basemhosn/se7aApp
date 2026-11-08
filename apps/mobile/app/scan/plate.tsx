@@ -18,6 +18,7 @@ import {
   attachScanId,
   getScan,
   getScans,
+  isScanConsumed,
   markFailed,
   reconcileFromServer,
   registerScan,
@@ -70,10 +71,18 @@ export default function PlateScan() {
     const scanIdParam = params.scan_id;
     if (!resumeId && !scanIdParam) return;
 
+    // If this scan was already saved (or explicitly dismissed), refuse
+    // to re-hydrate — a stale URL param or push tap for a consumed
+    // scan was reloading its review every time the user opened the
+    // scan screen, making it look like old items "came back" when
+    // trying to scan new ones.
+    if (scanIdParam && isScanConsumed(scanIdParam)) return;
+
     let stored = resumeId ? getScan(resumeId) : undefined;
     if (!stored && scanIdParam) {
       stored = getScans().find((s) => s.scanId === scanIdParam);
     }
+    if (stored?.scanId && isScanConsumed(stored.scanId)) return;
     const hydrate = () => {
       const s = stored;
       if (!s || s.status !== "ready" || !s.items || !s.scanId) return;
