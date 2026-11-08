@@ -26,18 +26,17 @@ export async function routeAfterAuth(userId: string, router: Router) {
   try {
     const { data } = await supabase
       .from("profiles")
-      .select("onboarded_at, tutorial_seen_at")
+      .select("onboarded_at")
       .eq("user_id", userId)
       .maybeSingle();
     if (!data?.onboarded_at) {
       router.replace("/onboarding");
-    } else if (!data.tutorial_seen_at) {
-      // expo-router regenerates its typed-route union from the
-      // filesystem, so "/tutorial" won't be in the Href union until
-      // the next `expo start`/`expo build`. Cast lets this type-check
-      // today; drop the cast after the next type regen.
-      router.replace("/tutorial" as never);
     } else {
+      // The previous tutorial-screen gate was removed — new users now
+      // see the Home-tab getting-started checklist instead of a
+      // blocking slide screen. Dismissal + completion live in
+      // profiles.checklist_dismissed_at and the per-item queries in
+      // /api/onboarding/checklist, not in routing.
       router.replace("/");
     }
   } catch {

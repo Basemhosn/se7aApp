@@ -421,11 +421,12 @@ export default function Onboarding() {
         activity,
         returning,
       });
-      // New users route to the one-time tutorial first (shipped build
-      // 95+). The tutorial screen writes tutorial_seen_at = now() on
-      // finish/skip and then router.replace("/") — so a returning
-      // user who already completed it never sees this screen again.
-      router.replace("/tutorial" as never);
+      // New users land directly on Home. The Home tab renders a
+      // getting-started checklist (OnboardingChecklist component) as
+      // the activation guide — replaces the previous 4-slide tutorial
+      // screen so users don't hit a blocking modal before seeing the
+      // actual app.
+      router.replace("/");
     } catch (e) {
       setErr((e as Error).message || t("onboarding.couldnt_save_plan"));
       setBusy(false);

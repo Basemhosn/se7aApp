@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { CalorieRing } from "@/components/CalorieRing";
 import { Wordmark } from "@/components/Wordmark";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { HealthScorePill } from "@/components/HealthScorePill";
 import { scoreDay } from "@/lib/healthScore";
 import { QuickLogFab } from "@/components/QuickLogFab";
@@ -377,15 +378,6 @@ export default function Home() {
     ]);
     if (profileData && !profileData.onboarded_at) {
       router.replace("/onboarding");
-      return;
-    }
-    // Defensive: if the user interrupted the first-run tutorial (crashed
-    // mid-slide, killed the app before "Get started") they re-enter at
-    // Home — route them back to the tutorial once rather than letting
-    // them skip it permanently. Once tutorial_seen_at is written they
-    // land here normally on every subsequent open.
-    if (profileData && !profileData.tutorial_seen_at) {
-      router.replace("/tutorial" as never);
       return;
     }
     setProfile(profileData as Profile);
@@ -745,6 +737,8 @@ export default function Home() {
           })()}
           isArabic={isArabic}
         />
+
+        {isToday ? <OnboardingChecklist isArabic={isArabic} /> : null}
 
         {isToday && pendingScans.length > 0 ? (
           <PendingScansSection scans={pendingScans} t={t} />
