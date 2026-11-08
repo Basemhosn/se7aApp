@@ -9,6 +9,7 @@ import {
   Image,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -35,6 +36,7 @@ import {
 } from "@/lib/calendarCache";
 import { useRamadan, useRamadanScheduling } from "@/lib/useRamadan";
 import { supabase } from "@/lib/supabase";
+import * as HK from "@/lib/healthkit";
 import { useAuth } from "@/auth/AuthContext";
 import { useEntitlement } from "@/lib/EntitlementContext";
 import { usePushRegistration } from "@/lib/usePushRegistration";
@@ -193,6 +195,15 @@ export default function Home() {
   const [fasting, setFasting] = useState<FastingActiveResponse | null>(null);
   const [streak, setStreak] = useState<StreakResponse | null>(null);
   const [cardio, setCardio] = useState<CardioTodayResponse | null>(null);
+  // Live HealthKit read for today. The server-side `daily_activity`
+  // table only updates when useHealthSync fires (once per session + on
+  // pull-to-refresh), so it lags Apple Health's live number by minutes
+  // to hours. Reading HK directly here means today's steps + burned
+  // match Health.app exactly without waiting for a sync round-trip.
+  const [liveToday, setLiveToday] = useState<{
+    steps: number;
+    activeKcal: number;
+  } | null>(null);
   const [sleep, setSleep] = useState<SleepTodayResponse | null>(null);
   const [reportMeta, setReportMeta] = useState<{
     week_index: number;
@@ -412,6 +423,23 @@ export default function Home() {
     setStreak(streakRes);
     setCardio(cardioRes);
     setSleep(sleepRes);
+    // Live-read HealthKit for today so the displayed numbers match
+    // what Apple Health shows right now, not the last synced snapshot.
+    // Only on iOS + today's view; past days stay backed by the
+    // daily_activity server row (already backfilled from HK history).
+    if (isToday && Platform.OS === "ios") {
+      try {
+        const [steps, activeKcal] = await Promise.all([
+          HK.readTodaySteps(),
+          HK.readTodayActiveEnergy(),
+        ]);
+        setLiveToday({ steps, activeKcal });
+      } catch {
+        setLiveToday(null);
+      }
+    } else {
+      setLiveToday(null);
+    }
     setReportMeta(
       reportRes.report
         ? {
@@ -698,22 +726,37 @@ export default function Home() {
             // Steps + burned kcal are now fetched for past days too
             // (cardio endpoint accepts ?day=). Water is still today-only
             // — no historical water logging surface yet.
-            const activeKcal = cardio?.activity.active_kcal ?? null;
+            const serverSteps = cardio?.activity.steps ?? null;
+            const serverActiveKcal = cardio?.activity.active_kcal ?? null;
             const sessionsKcal =
               cardio?.sessions.reduce(
                 (s, x) => s + (x.kcal_burned ?? 0),
                 0
               ) ?? 0;
+            // For today on iOS, prefer the live HealthKit read if it's
+            // non-zero — guarantees parity with Apple Health rather than
+            // showing the last-synced `daily_activity` snapshot (could
+            // be hours stale). Fall back to server if HK returns 0 or
+            // null (permission denied, no watch, etc.) so the server's
+            // record is still respected when HK can't speak.
+            const displayedSteps =
+              isToday && liveToday && liveToday.steps > 0
+                ? liveToday.steps
+                : serverSteps;
+            const displayedActiveKcal =
+              isToday && liveToday && liveToday.activeKcal > 0
+                ? liveToday.activeKcal
+                : serverActiveKcal;
             // Preserve null through to the UI when there's truly no data
             // (no daily_activity row AND no logged sessions). Shows "—"
             // instead of "0" so a day you haven't synced yet doesn't
             // look identical to a day you walked zero steps.
             const burnedKcal =
-              activeKcal == null && sessionsKcal === 0
+              displayedActiveKcal == null && sessionsKcal === 0
                 ? null
-                : (activeKcal ?? 0) + sessionsKcal;
+                : (displayedActiveKcal ?? 0) + sessionsKcal;
             return {
-              steps: cardio?.activity.steps ?? null,
+              steps: displayedSteps,
               burnedKcal,
               waterMl: isToday ? water?.total_ml ?? 0 : 0,
               waterTarget: water?.target_ml ?? 2500,
