@@ -44,6 +44,7 @@ import { restorePurchases, hasProEntitlement } from "@/lib/rc";
 import { track } from "@/lib/analytics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import { Btn } from "@/components/Btn";
+import { MenuRow } from "@/components/SettingsAtoms";
 
 const WEB_BASE = "https://se7a.vercel.app";
 const HEALTH_CONNECTED_KEY = "se7a_health_connected";
@@ -486,17 +487,47 @@ export default function Settings() {
   };
 
   const confirmDelete = () => {
+    // Step 1: warn + describe what's lost. Step 2 (only if they proceed)
+    // requires typing DELETE to confirm — guards against misclicks.
     Alert.alert(
       isArabic ? "احذف الحساب؟" : "Delete account?",
       isArabic
-        ? "سيمحو هذا كل شيء — الملف الشخصي، السجلات، التمارين، الصور. لا يمكن التراجع."
-        : "This erases everything — profile, logs, workouts, photos. Can't be undone.",
+        ? "سيمحو هذا كل شيء نهائياً — الملف الشخصي، السجلات، التمارين، الصور، والاشتراك. لا يمكن التراجع."
+        : "This permanently erases everything — your profile, logs, workouts, photos, and subscription. This action cannot be undone.",
       [
         { text: t("common.cancel"), style: "cancel" },
         {
-          text: isArabic ? "احذف نهائياً" : "Delete forever",
+          text: isArabic ? "متابعة" : "Continue",
           style: "destructive",
-          onPress: doDelete,
+          onPress: () => {
+            Alert.prompt(
+              isArabic ? "اكتب DELETE للتأكيد" : "Type DELETE to confirm",
+              isArabic
+                ? "هذه آخر فرصة للإلغاء. اكتب كلمة DELETE بالضبط."
+                : "This is your last chance to cancel. Type DELETE exactly.",
+              [
+                { text: t("common.cancel"), style: "cancel" },
+                {
+                  text: isArabic ? "احذف نهائياً" : "Delete forever",
+                  style: "destructive",
+                  onPress: (input) => {
+                    if ((input ?? "").trim().toUpperCase() === "DELETE") {
+                      doDelete();
+                    } else {
+                      Alert.alert(
+                        isArabic ? "لم يتم الحذف" : "Not deleted",
+                        isArabic
+                          ? "لم تكتب DELETE بشكل صحيح. حسابك آمن."
+                          : "You didn't type DELETE. Your account is safe."
+                      );
+                    }
+                  },
+                },
+              ],
+              "plain-text",
+              ""
+            );
+          },
         },
       ]
     );
@@ -509,110 +540,36 @@ export default function Settings() {
       </View>
       <Text style={styles.title}>{isArabic ? "الإعدادات" : "Settings"}</Text>
 
-      <Section title={isArabic ? "الحساب" : "Account"}>
-        <Info label={isArabic ? "البريد" : "Email"} value={user?.email ?? "—"} />
-        <RowLink
-          label={isArabic ? "تعديل الملف الشخصي" : "Edit profile"}
-          onPress={() => router.push("/edit-profile" as never)}
-        />
-        <RowLink
-          label={isArabic ? "عدّل الأهداف" : "Change goals"}
-          onPress={() => router.push("/onboarding")}
-        />
-        <RowLink
-          label={isArabic ? "عدّل أهداف التغذية" : "Edit nutrition goals"}
-          onPress={() => router.push("/edit-goals" as never)}
-        />
-        <RowLink
-          label={t("language.title")}
-          value={isArabic ? "العربية" : "English"}
-          onPress={() => router.push("/language")}
-        />
-      </Section>
+      <View style={{ marginTop: spacing.md, gap: spacing.xs }}>
+        <View style={styles.card}>
+          <MenuRow
+            icon="person-outline"
+            label={isArabic ? "الحساب" : "Account"}
+            onPress={() => router.push("/account" as never)}
+          />
+          <MenuRow
+            icon="sparkles-outline"
+            label={isArabic ? "الاشتراك" : "Subscription"}
+            value={ent.is_pro ? "Pro" : isArabic ? "مجاني" : "Free"}
+            onPress={() => router.push("/subscription" as never)}
+          />
+          <MenuRow
+            icon="link-outline"
+            label={isArabic ? "الاتصالات" : "Connections"}
+            onPress={() => router.push("/connections" as never)}
+          />
+          <MenuRow
+            icon="notifications-outline"
+            label={isArabic ? "الإشعارات" : "Notifications"}
+            onPress={() => router.push("/notifications-settings" as never)}
+            last
+          />
+        </View>
+      </View>
 
-      <Section title={isArabic ? "الاشتراك" : "Subscription"}>
-        {ent.is_pro ? (
-          <>
-            <Info
-              label={isArabic ? "الخطة" : "Plan"}
-              value={
-                ent.product_id?.includes("annual")
-                  ? isArabic
-                    ? "Pro سنوي"
-                    : "Pro Annual"
-                  : ent.product_id?.includes("monthly")
-                    ? isArabic
-                      ? "Pro شهري"
-                      : "Pro Monthly"
-                    : "Pro"
-              }
-            />
-            <Info
-              label={isArabic ? "الحالة" : "Status"}
-              value={ent.status}
-            />
-            {ent.expires_at && (
-              <Info
-                label={
-                  ent.will_renew
-                    ? isArabic
-                      ? "يتجدد"
-                      : "Renews"
-                    : isArabic
-                      ? "ينتهي"
-                      : "Expires"
-                }
-                value={shortDate(ent.expires_at)}
-              />
-            )}
-            <RowLink
-              label={isArabic ? "إدارة الاشتراك" : "Manage subscription"}
-              onPress={manageSubscription}
-              external
-            />
-          </>
-        ) : (
-          <>
-            <View style={styles.proHero}>
-              <Text style={styles.proKicker}>SE7A · PRO</Text>
-              <Text style={styles.proBody}>
-                {isArabic
-                  ? "افتح خطط الوجبات، مسح القوائم، تحليل الجسم، وكوتش الذكاء الاصطناعي."
-                  : "Unlock meal plans, menu scans, body composition, and AI coach."}
-              </Text>
-              <Pressable
-                onPress={() => router.push("/paywall")}
-                style={styles.proBtn}
-              >
-                <Text style={styles.proBtnLabel}>
-                  {isArabic ? "افتح Pro" : "Unlock Pro"}
-                </Text>
-              </Pressable>
-            </View>
-            <Pressable
-              onPress={doRestore}
-              disabled={restoring}
-              style={styles.row}
-            >
-              <Text style={styles.rowLabel}>
-                {restoring
-                  ? isArabic
-                    ? "جارٍ الاسترجاع…"
-                    : "Restoring…"
-                  : isArabic
-                    ? "استرجع مشترياتي"
-                    : "Restore purchases"}
-              </Text>
-              <Ionicons
-                name="refresh"
-                size={16}
-                color={colors.dim}
-              />
-            </Pressable>
-          </>
-        )}
-      </Section>
-
+      {/* Subscription section moved to /subscription sub-screen. */}
+      {/* Connections section moved to /connections sub-screen. Removed JSX below. */}
+      <View style={{ display: "none" }}>
       <Section title={isArabic ? "الاتصالات" : "Connections"}>
         <HealthRow isArabic={isArabic} />
         <CardioToTargetRow isArabic={isArabic} />
@@ -690,7 +647,10 @@ export default function Settings() {
           />
         )}
       </Section>
+      </View>
 
+      {/* Notifications section moved to /notifications-settings sub-screen. */}
+      <View style={{ display: "none" }}>
       {prefs && (
         <Section title={isArabic ? "الإشعارات" : "Notifications"}>
           <PrefRow
@@ -732,6 +692,7 @@ export default function Settings() {
           />
         </Section>
       )}
+      </View>
 
       <Section title={isArabic ? "رمضان" : "Ramadan"}>
         <RamadanSettings isArabic={isArabic} />
@@ -952,39 +913,51 @@ export default function Settings() {
         />
       </Section>
 
+      {/* Log out — separate card so it's visually distinct from the
+       * destructive delete action below. Spacing between the two cards
+       * (spacing.xl) gives the eye a clear breakpoint: common sign-out
+       * vs. permanent delete. */}
       <View style={{ marginTop: spacing.xl, gap: spacing.xs }}>
         <View style={styles.card}>
-        <RowLink
-          label={t("common.sign_out")}
-          onPress={async () => {
-            await signOut();
-            router.replace("/landing");
-          }}
-        />
-        <Pressable
-          onPress={confirmDelete}
-          disabled={deleting === "deleting"}
-          style={[styles.dangerBtn, deleting === "deleting" && { opacity: 0.5 }]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            isArabic ? "احذف حسابي" : "Delete my account"
-          }
-          accessibilityHint={
-            isArabic
-              ? "يمسح حسابك وكل بياناتك نهائياً"
-              : "Permanently erases your account and all data"
-          }
-        >
-          <Text style={styles.dangerLabel}>
-            {deleting === "deleting"
-              ? isArabic
-                ? "جارٍ الحذف…"
-                : "Deleting…"
-              : isArabic
-                ? "احذف حسابي"
-                : "Delete my account"}
-          </Text>
-        </Pressable>
+          <RowLink
+            label={t("common.sign_out")}
+            onPress={async () => {
+              await signOut();
+              router.replace("/landing");
+            }}
+          />
+        </View>
+      </View>
+
+      {/* Delete account — fully separated card with extra top margin so
+       * it reads as the "do you really want to do this?" action. Two
+       * confirmation steps live in confirmDelete: first an Alert
+       * describing what's lost, then an Alert.prompt requiring the
+       * user to type DELETE to proceed. Hard to misclick into. */}
+      <View style={{ marginTop: spacing.xl, gap: spacing.xs }}>
+        <View style={styles.card}>
+          <Pressable
+            onPress={confirmDelete}
+            disabled={deleting === "deleting"}
+            style={[styles.dangerBtn, deleting === "deleting" && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? "احذف حسابي" : "Delete my account"}
+            accessibilityHint={
+              isArabic
+                ? "يمسح حسابك وكل بياناتك نهائياً"
+                : "Permanently erases your account and all data"
+            }
+          >
+            <Text style={styles.dangerLabel}>
+              {deleting === "deleting"
+                ? isArabic
+                  ? "جارٍ الحذف…"
+                  : "Deleting…"
+                : isArabic
+                  ? "احذف حسابي"
+                  : "Delete my account"}
+            </Text>
+          </Pressable>
         </View>
       </View>
 
