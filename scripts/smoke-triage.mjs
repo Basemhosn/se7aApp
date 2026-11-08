@@ -25,7 +25,9 @@ const ADMIN_SECRET = requireEnv("ADMIN_SECRET");
 const ANTHROPIC_API_KEY = requireEnv("ANTHROPIC_API_KEY");
 const RESEND_API_KEY = requireEnv("RESEND_API_KEY");
 const NOTIFY_EMAIL = requireEnv("NOTIFY_EMAIL");
-const FROM_EMAIL = process.env.FROM_EMAIL ?? "onboarding@resend.dev";
+// GitHub Actions substitutes missing secrets as "" rather than undefined,
+// so `??` won't fall through. Use truthy check instead.
+const FROM_EMAIL = process.env.FROM_EMAIL || "onboarding@resend.dev";
 
 function requireEnv(name) {
   const v = process.env[name];
