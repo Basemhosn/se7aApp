@@ -1,0 +1,36 @@
+name: smoke-test
+
+# Scheduled health check — hits /api/smoke every 8 hours, hands the
+# report to Claude for triage, emails the developer on warn/fail.
+# Also supports manual dispatch for ad-hoc runs.
+
+on:
+  schedule:
+    # Every 8 hours at the top of the hour (00:00, 08:00, 16:00 UTC).
+    # Picked over nicer local times so the cadence stays constant
+    # across DST shifts.
+    - cron: "0 */8 * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install triage deps
+        # No package.json install — just the two deps the script needs.
+        # Faster + avoids bringing in the whole web build toolchain.
+        run: npm install --no-save --no-audit --no-fund @anthropic-ai/sdk resend
+      - name: Run smoke + triage
+        env:
+          SMOKE_URL: ${{ secrets.SMOKE_URL }}
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+        run: node scripts/smoke-triage.mjs
