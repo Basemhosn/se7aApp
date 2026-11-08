@@ -46,11 +46,12 @@ async function main() {
     // The smoke endpoint itself failed — email the developer about
     // THAT because it means the whole monitor is down.
     const body = await res.text().catch(() => "no body");
+    console.error(`smoke endpoint returned ${res.status}`);
+    console.error(`response body: ${body.slice(0, 2000)}`);
     await sendEmail({
       subject: `SE7A smoke monitor is down (${res.status})`,
       body: `/api/smoke returned HTTP ${res.status}.\n\nResponse body:\n${body.slice(0, 2000)}\n\nCheck Vercel deployment status + ADMIN_SECRET in GitHub secrets.`,
     });
-    console.error(`smoke endpoint returned ${res.status}`);
     process.exit(1);
   }
 
