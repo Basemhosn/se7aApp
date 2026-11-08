@@ -11,6 +11,7 @@ import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Btn } from "@/components/Btn";
 import { DeviceFrame } from "@/components/DeviceFrame";
+import { Wordmark } from "@/components/Wordmark";
 import { font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -118,9 +119,7 @@ export default function Landing() {
       </View>
 
       <View style={styles.copyBlock}>
-        <Text style={styles.wordmark}>
-          SE<Text style={styles.wordmark7}>7</Text>A
-        </Text>
+        <Wordmark size={22} variant="light" />
         <Text style={styles.headline}>{t("landing.hero_h")}</Text>
         <Text style={styles.subhead}>{t("landing.hero_sub")}</Text>
       </View>

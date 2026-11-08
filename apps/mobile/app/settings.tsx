@@ -1556,94 +1556,108 @@ function HealthRow({ isArabic }: { isArabic: boolean }) {
 
   if (!supported) return null;
 
+  // Separate the action handlers so the JSX below reads cleanly.
+  // Previous inline layout crammed three buttons into the header row,
+  // squeezing the "Apple Health" title to 2 chars wide and wrapping it
+  // vertically. Buttons now live in a full-width action row below.
+  const onResync = async () => {
+    if (!user?.id) return;
+    setBusy(true);
+    try {
+      // Force + resyncHistory drops every throttle and the one-shot
+      // 90-day backfill flag, so past-day step counts repopulate when
+      // a user granted Steps permission after the initial silent sync.
+      await syncHealthNow(user.id, {
+        force: true,
+        resyncHistory: true,
+      });
+      Alert.alert(
+        isArabic ? "تم" : "Done",
+        isArabic
+          ? "تمت إعادة مزامنة آخر ٩٠ يوماً من بيانات الصحة."
+          : "Re-synced the past 90 days of Health data."
+      );
+    } catch (e) {
+      Alert.alert(
+        isArabic ? "خطأ" : "Error",
+        (e as Error).message ?? "unknown"
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <View style={styles.integRow}>
-      <View style={styles.integIcon}>
-        <Ionicons
-          name={connected ? "heart" : "heart-outline"}
-          size={20}
-          color={connected ? colors.coral : colors.dim}
-        />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.integTitle}>{platformName}</Text>
-        <Text style={styles.integMeta}>
-          {connected === null
-            ? isArabic
-              ? "…"
-              : "…"
-            : connected
+    <View style={styles.healthCard}>
+      <View style={styles.healthHeaderRow}>
+        <View style={styles.integIcon}>
+          <Ionicons
+            name={connected ? "heart" : "heart-outline"}
+            size={20}
+            color={connected ? colors.coral : colors.dim}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.integTitle}>{platformName}</Text>
+          <Text style={styles.integMeta}>
+            {connected === null
               ? isArabic
-                ? "متصل · يزامن تلقائياً"
-                : "Connected · syncs automatically"
-              : isArabic
-                ? "اضغط للتفعيل"
-                : "Tap to enable"}
-        </Text>
-      </View>
-      {connected ? (
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <Pressable
-            onPress={() => diagnoseHealthKit(isArabic)}
-            disabled={busy}
-            hitSlop={6}
-          >
-            <Text style={styles.healthGhostBtn}>
-              {isArabic ? "افحص" : "Diagnose"}
+                ? "…"
+                : "…"
+              : connected
+                ? isArabic
+                  ? "متصل · يزامن تلقائياً"
+                  : "Connected · syncs automatically"
+                : isArabic
+                  ? "اضغط للتفعيل"
+                  : "Tap to enable"}
+          </Text>
+        </View>
+        {!connected ? (
+          <Pressable onPress={authorize} disabled={busy} hitSlop={6}>
+            <Text style={styles.integConnect}>
+              {busy ? "…" : isArabic ? "فعّل" : "ENABLE"}
             </Text>
           </Pressable>
+        ) : null}
+      </View>
+      {connected ? (
+        <View style={styles.healthActionRow}>
           <Pressable
-            onPress={async () => {
-              if (!user?.id) return;
-              setBusy(true);
-              try {
-                // Force + resyncHistory drops every throttle and the
-                // one-shot 90-day backfill flag, so the past-day step
-                // counts repopulate when a user granted Steps
-                // permission after the initial silent sync.
-                await syncHealthNow(user.id, {
-                  force: true,
-                  resyncHistory: true,
-                });
-                Alert.alert(
-                  isArabic ? "تم" : "Done",
-                  isArabic
-                    ? "تمت إعادة مزامنة آخر ٩٠ يوماً من بيانات الصحة."
-                    : "Re-synced the past 90 days of Health data."
-                );
-              } catch (e) {
-                Alert.alert(
-                  isArabic ? "خطأ" : "Error",
-                  (e as Error).message ?? "unknown"
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
+            style={styles.healthActionBtn}
+            onPress={onResync}
             disabled={busy}
             hitSlop={6}
           >
-            <Text style={styles.healthGhostBtn}>
+            <Ionicons name="refresh" size={14} color={colors.gold} />
+            <Text style={styles.healthActionText}>
               {busy ? "…" : isArabic ? "أعد المزامنة" : "Resync"}
             </Text>
           </Pressable>
           <Pressable
+            style={styles.healthActionBtn}
             onPress={openSystemSettings}
             disabled={busy}
             hitSlop={6}
           >
-            <Text style={styles.healthGhostBtn}>
+            <Ionicons name="settings-outline" size={14} color={colors.gold} />
+            <Text style={styles.healthActionText}>
               {isArabic ? "الأذونات" : "Permissions"}
             </Text>
           </Pressable>
+          <Pressable
+            style={styles.healthActionBtn}
+            onPress={() => diagnoseHealthKit(isArabic)}
+            disabled={busy}
+            hitSlop={6}
+          >
+            <Ionicons name="bug-outline" size={14} color={colors.gold} />
+            <Text style={styles.healthActionText}>
+              {isArabic ? "افحص" : "Diagnose"}
+            </Text>
+          </Pressable>
         </View>
-      ) : (
-        <Pressable onPress={authorize} disabled={busy} hitSlop={6}>
-          <Text style={styles.integConnect}>
-            {busy ? "…" : isArabic ? "فعّل" : "ENABLE"}
-          </Text>
-        </Pressable>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -2224,6 +2238,42 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
+  },
+  /* Apple Health / Health Connect card — distinct from the generic
+   * integRow because it has a secondary action row (Resync /
+   * Permissions / Diagnose) that would otherwise squeeze the title. */
+  healthCard: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  healthHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  healthActionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginLeft: 40 + spacing.md, // align with title column (icon width + gap)
+  },
+  healthActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel2,
+  },
+  healthActionText: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: colors.gold,
+    letterSpacing: 0.4,
   },
   integIcon: {
     width: 40,

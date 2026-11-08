@@ -143,17 +143,38 @@ export function readLatestBodyFatPct(): Promise<{
   });
 }
 
-/** Read step count for today (midnight → now). */
+/** Read step count for today (local midnight → now).
+ *
+ * Uses `getDailyStepCountSamples` with `period: 1440` (24h bucket)
+ * rather than `getStepCount`, because the latter doesn't dedupe
+ * across HealthKit sources (iPhone + Apple Watch) — users would see
+ * SE7A numbers that disagreed with the Health app's own total.
+ * The daily-sample API wraps HKStatisticsCollectionQuery which
+ * dedupes automatically, so this matches Health.app exactly.
+ * Also matches the backfill path (`readActivityByDaySince`) so a
+ * today-fetch and a past-day backfill never return different totals
+ * for the same date. */
 export function readTodaySteps(): Promise<number> {
   if (Platform.OS !== "ios") return Promise.resolve(0);
   return new Promise((resolve) => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
     const opts: HealthInputOptions = {
-      date: new Date().toISOString(),
+      startDate: startOfDay.toISOString(),
+      endDate: new Date().toISOString(),
+      ascending: true,
       includeManuallyAdded: true,
+      period: 1440,
     };
-    AppleHealthKit.getStepCount(opts, (err, res) => {
-      if (err || !res) return resolve(0);
-      resolve(Math.round(Number((res as unknown as HealthValue).value) || 0));
+    AppleHealthKit.getDailyStepCountSamples(opts, (err, buckets) => {
+      if (err || !buckets?.length) return resolve(0);
+      // Single 24h bucket covering today — sum values defensively in
+      // case HK returns partial buckets at edge-of-day boundaries.
+      const total = (buckets as unknown as HealthValue[]).reduce(
+        (s, v) => s + (Number(v.value) || 0),
+        0
+      );
+      resolve(Math.round(total));
     });
   });
 }

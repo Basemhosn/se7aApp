@@ -22,6 +22,7 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { CalorieRing } from "@/components/CalorieRing";
+import { Wordmark } from "@/components/Wordmark";
 import { HealthScorePill } from "@/components/HealthScorePill";
 import { scoreDay } from "@/lib/healthScore";
 import { QuickLogFab } from "@/components/QuickLogFab";
@@ -906,7 +907,7 @@ function Header({
 }) {
   return (
     <View style={styles.headerRow}>
-      <Text style={styles.headerLogo}>SE7A</Text>
+      <Wordmark size={20} />
       <View style={styles.headerRight}>
         {fastingActive ? (
           <Pressable
@@ -1670,14 +1671,14 @@ const ActivityPage = memo(function ActivityPage({
         </View>
       </View>
       {/*
-       * Inline resync CTA — shows only on today, and only when both
-       * steps and burned are unsynced (null / zero). Backfill-by-day
-       * in useHealthSync.syncActivityHistoryOnce is a one-shot per
-       * install, so if it ran before the user granted Steps permission
-       * (or returned empty), this CTA is their explicit path to retry.
-       * Mirrors the Settings "Resync" button for discoverability.
+       * Inline resync CTA — always visible on today so the user has
+       * a one-tap path to refresh Health data even when numbers are
+       * populated but wrong (common when iPhone + Watch step counts
+       * disagree and the daily_activity row is stale). Previous
+       * version hid this unless both steps and burned were empty,
+       * which made it impossible to recover from a bad sync.
        */}
-      {data.isToday && !data.steps && !data.burnedKcal ? (
+      {data.isToday ? (
         <Pressable
           style={styles.resyncInline}
           onPress={data.onResyncHealth}
