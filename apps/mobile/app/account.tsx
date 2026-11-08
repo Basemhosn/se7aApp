@@ -38,10 +38,14 @@ export default function AccountScreen() {
           label={isArabic ? "تعديل الملف الشخصي" : "Edit profile"}
           onPress={() => router.push("/edit-profile" as never)}
         />
-        <RowLink
-          label={isArabic ? "عدّل الأهداف" : "Change goals"}
-          onPress={() => router.push("/onboarding")}
-        />
+        {/*
+         * 'Change goals' was removed in favor of 'Edit profile' alone.
+         * Both routes touched the same macro-affecting fields (height,
+         * weight, activity, goal, rate, goal weight) and the server
+         * (/api/profile/edit) already recomputes macros whenever any
+         * of those fields changes. Keeping two entry points was
+         * confusing — users couldn't tell which was authoritative.
+         */}
         <RowLink
           label={isArabic ? "عدّل أهداف التغذية" : "Edit nutrition goals"}
           onPress={() => router.push("/edit-goals" as never)}

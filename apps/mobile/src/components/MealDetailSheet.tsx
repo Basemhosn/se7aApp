@@ -205,13 +205,29 @@ export function MealDetailSheet({
           onPress={handleBackdropPress}
         />
         <View style={styles.sheet}>
+          {/* Grabber + close button live OUTSIDE the ScrollView so
+           * they don't scroll away with content. Both close the sheet
+           * reliably — the grabber matches iOS bottom-sheet idiom
+           * (tap or drag to dismiss) and the explicit X in the corner
+           * is unmissable for users who don't recognise the grabber. */}
+          <Pressable style={styles.grabberHit} onPress={onClose} hitSlop={12}>
+            <View style={styles.grabber} />
+          </Pressable>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={onClose}
+            hitSlop={14}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? "إغلاق" : "Close"}
+          >
+            <Ionicons name="close" size={20} color={colors.ink} />
+          </Pressable>
           {primary ? (
             <ScrollView
               style={{ flex: 1 }}
               contentContainerStyle={styles.content}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.grabber} />
 
               {primary.photo_url ? (
                 <Image
@@ -452,12 +468,30 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   grabber: {
-    alignSelf: "center",
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.line,
-    marginBottom: spacing.sm,
+  },
+  grabberHit: {
+    alignSelf: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    marginTop: 4,
+  },
+  closeBtn: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
   hero: {
     width: "100%",
