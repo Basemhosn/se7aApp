@@ -97,6 +97,8 @@ export function pushOptimisticLogItems(
           | "saturated_fat_g_low"
           | "saturated_fat_g_high"
           | "eaten_at"
+          | "scan_id"
+          | "photo_url"
         >
       >
   >
@@ -107,8 +109,14 @@ export function pushOptimisticLogItems(
       ...it,
       synthetic_id: `opt-${++nextSynthetic}`,
       eaten_at: it.eaten_at ?? nowIso,
-      scan_id: null,
-      photo_url: null,
+      // Default both to null when the caller doesn't have them (voice-
+      // log, manual meal), but let plate/menu scan callers pass the
+      // scan_id + local image URI so the thumbnail renders immediately
+      // instead of waiting for the server round-trip. The server merge
+      // in (tabs)/index.tsx deduplicates by scan_id when present so
+      // double-rendering is avoided.
+      scan_id: it.scan_id ?? null,
+      photo_url: it.photo_url ?? null,
     });
   }
 }

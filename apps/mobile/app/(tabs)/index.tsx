@@ -400,12 +400,24 @@ export default function Home() {
     // duplicate today's ring. Dedup by lowercased name.
     const pending = isToday ? peekOptimisticLogItems() : [];
     if (pending.length > 0) {
+      // Dedup by scan_id FIRST (plate/menu scans carry one through from
+      // calendarCache). Name-matching is a fallback for sources that
+      // don't have a scan_id (voice-log, manual meal, barcode). Using
+      // scan_id when available fixes the "same dish logged twice in
+      // one scan" edge case where name-only matching would collapse the
+      // optimistic row onto only one of the server rows.
+      const serverScanIds = new Set(
+        ledgerRes.totals.items
+          .map((it) => it.scan_id)
+          .filter((id): id is string => !!id)
+      );
       const serverNames = new Set(
         ledgerRes.totals.items.map((it) => it.name.toLowerCase())
       );
-      const stillPending = pending.filter(
-        (p) => !serverNames.has(p.name.toLowerCase())
-      );
+      const stillPending = pending.filter((p) => {
+        if (p.scan_id && serverScanIds.has(p.scan_id)) return false;
+        return !serverNames.has(p.name.toLowerCase());
+      });
       setLedger(
         stillPending.length > 0
           ? mergePendingIntoLedger(ledgerRes, stillPending)

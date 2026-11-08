@@ -454,7 +454,10 @@ export default function PlateScan() {
       // Plate scan currently doesn't carry micronutrients in the
       // scaled review shape — the server extracts them from scan_id
       // instead. Optimistic merge just uses macros; the fresh fetch
-      // will bring in sodium/fiber/sugar/sat_fat when it lands.
+      // will bring in sodium/fiber/sugar/sat_fat when it lands. We
+      // DO carry scan_id + the local previewUri through so the
+      // thumbnail renders immediately on Home instead of waiting for
+      // the server ledger fetch + storage signed-URL round-trip.
       pushOptimisticLogItems(
         scaledPicked.map((it) => ({
           name: it.name,
@@ -470,6 +473,8 @@ export default function PlateScan() {
           carb_g_high: it.carb_g_high,
           fat_g_low: it.fat_g_low,
           fat_g_high: it.fat_g_high,
+          scan_id: scanId,
+          photo_url: previewUri,
         }))
       );
       haptics.success();
