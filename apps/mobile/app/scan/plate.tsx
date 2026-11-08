@@ -478,6 +478,15 @@ export default function PlateScan() {
         }))
       );
       haptics.success();
+      // Clear the scan screen's local state so the NEXT time the user
+      // comes back to /scan/plate (e.g. tapping the Scan tab after
+      // logging another meal), they see a fresh idle camera — not the
+      // review of the plate they just saved. Expo-router keeps tab
+      // screens mounted, so without this reset the previous items,
+      // photo, and scanId would persist between scans and visually
+      // "re-appear" on the next session. Reset must run BEFORE
+      // navigation so React batches the state updates during unmount.
+      reset();
       router.replace("/");
     } catch (e) {
       haptics.errorHaptic();

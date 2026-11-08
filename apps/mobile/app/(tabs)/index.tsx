@@ -2712,8 +2712,14 @@ function mergePendingIntoLedger(
     // without one (older paths).
     eaten_at: p.eaten_at ?? nowIso,
     meal_slot: (p.meal_slot ?? null) as MealSlot | null,
-    scan_id: null as string | null,
-    photo_url: null as string | null,
+    // Carry through scan_id + photo_url when the optimistic item has
+    // them (plate / menu scan paths). Previously these were hardcoded
+    // null here, which:
+    //   - broke the Home thumbnail (photo_url dropped at merge)
+    //   - broke scan-group collapsing (groupMealItems folds by scan_id,
+    //     and null scan_ids can't collapse with server rows later)
+    scan_id: p.scan_id ?? null,
+    photo_url: p.photo_url ?? null,
     kcal_low: p.kcal_low,
     kcal_high: p.kcal_high,
     protein_g_low: p.protein_g_low,
