@@ -27,10 +27,14 @@ export async function DELETE(
     return NextResponse.json({ error: "invalid_id" }, { status: 400 });
   }
 
+  // Scope by user_id explicitly (belt-and-suspenders alongside RLS) so
+  // a stray delete attempt against another user's row can't accidentally
+  // succeed if RLS is ever misconfigured.
   const { error } = await supabase
     .from("meal_items")
     .delete()
-    .eq("id", numericId);
+    .eq("id", numericId)
+    .eq("user_id", user.id);
   if (error) {
     return NextResponse.json(
       { error: "delete_failed", details: error.message },

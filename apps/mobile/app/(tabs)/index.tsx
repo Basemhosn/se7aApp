@@ -935,31 +935,89 @@ export default function Home() {
         items={selectedMeal}
         onClose={() => setSelectedMeal(null)}
         onDelete={async (ids) => {
-          // Optimistic items get NEGATIVE synthetic IDs from
-          // mergePendingIntoLedger (nextId--, starting at -1). Hitting
-          // the server with those returns "invalid_id" because the
-          // DELETE endpoint expects positive meal_items.id values.
-          // Split: only call the API for server-side IDs, let the
-          // clearOptimisticLogItems call below handle the optimistic
-          // ones in-memory. Fixes the "invalid id" error the user hit
-          // when deleting a meal they'd just added before the server
-          // ledger caught up.
+          // Optimistic delete: strip the items out of local ledger state
+          // + totals IMMEDIATELY so the ring, macros, and meal list
+          // respond within a frame. Without this, the user sees stale
+          // numbers for the full server round-trip (~400ms) + refetch
+          // (~600ms) = >1s of lag on a destructive action, which reads
+          // as "it didn't work". Server call happens below; the final
+          // load() reconciles against authoritative state.
+          const idSet = new Set(ids);
+          // Also drop any pending optimistic items whose scan_id
+          // matches a deleted server row — otherwise mergePendingIntoLedger
+          // on the next focus could re-inject them.
+          clearOptimisticLogItems();
+          setLedger((prev) => {
+            if (!prev) return prev;
+            const keep = prev.totals.items.filter((it) => !idSet.has(it.id));
+            const sum = (
+              getter: (
+                it: (typeof keep)[number]
+              ) => { low: number; high: number } | null
+            ) => {
+              let low = 0;
+              let high = 0;
+              for (const it of keep) {
+                const r = getter(it);
+                if (r) {
+                  low += r.low;
+                  high += r.high;
+                }
+              }
+              return { low, high };
+            };
+            return {
+              ...prev,
+              totals: {
+                items: keep,
+                kcal: sum((it) => ({ low: it.kcal_low, high: it.kcal_high })),
+                protein_g: sum((it) => ({ low: it.protein_g_low, high: it.protein_g_high })),
+                carb_g: sum((it) => ({ low: it.carb_g_low, high: it.carb_g_high })),
+                fat_g: sum((it) => ({ low: it.fat_g_low, high: it.fat_g_high })),
+                sodium_mg: sum((it) =>
+                  it.sodium_mg_low != null && it.sodium_mg_high != null
+                    ? { low: it.sodium_mg_low, high: it.sodium_mg_high }
+                    : null
+                ),
+                fiber_g: sum((it) =>
+                  it.fiber_g_low != null && it.fiber_g_high != null
+                    ? { low: it.fiber_g_low, high: it.fiber_g_high }
+                    : null
+                ),
+                sugar_g: sum((it) =>
+                  it.sugar_g_low != null && it.sugar_g_high != null
+                    ? { low: it.sugar_g_low, high: it.sugar_g_high }
+                    : null
+                ),
+                saturated_fat_g: sum((it) =>
+                  it.saturated_fat_g_low != null && it.saturated_fat_g_high != null
+                    ? { low: it.saturated_fat_g_low, high: it.saturated_fat_g_high }
+                    : null
+                ),
+              },
+            };
+          });
+
+          // Server delete for the real rows. Skip negative synthetic IDs
+          // that come from mergePendingIntoLedger — those live only in
+          // local state (now already dropped by the setLedger above).
           const serverIds = ids.filter((id) => id > 0);
-          // Multi-item plate-scan groups delete all rows at once.
-          // Fire sequentially rather than in parallel so RLS or
-          // transient failure on one surfaces clearly instead of
-          // leaving a half-deleted group.
-          for (const id of serverIds) {
-            await api(`/api/ledger/item/${id}`, { method: "DELETE" });
+          // Fire sequentially so a partial-failure surfaces clearly
+          // instead of leaving a half-deleted plate-scan group.
+          try {
+            for (const id of serverIds) {
+              await api(`/api/ledger/item/${id}`, { method: "DELETE" });
+            }
+          } catch (e) {
+            // Server rejected the delete — restore the ledger from the
+            // authoritative source so the user doesn't see a false
+            // "deleted" state. MealDetailSheet will re-throw the alert.
+            await load();
+            throw e;
           }
           markDayDirty();
-          // Clear any pending optimistic items BEFORE reloading. If
-          // the user deleted a meal that was still in the optimistic
-          // buffer (just logged, not yet server-synced), the next
-          // useFocusEffect merge would re-add it to the ring. Dropping
-          // the buffer here keeps delete authoritative — also covers
-          // the case where EVERY id was optimistic (serverIds empty).
-          clearOptimisticLogItems();
+          // Final reconcile against server. If server drifted (silent
+          // RLS block, etc.), this brings the UI back to truth.
           await load();
         }}
         isArabic={isArabic}
