@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -42,6 +43,7 @@ export function MealDetailSheet({
   onDelete: (ids: number[]) => Promise<void>;
   isArabic: boolean;
 }) {
+  const [deleting, setDeleting] = useState(false);
   // Guard against the open-and-close race: when the user taps the
   // meal row on Home, the modal mounts with a slide animation but
   // iOS still routes the touchEnd event from the originating tap to
@@ -79,27 +81,28 @@ export function MealDetailSheet({
         {
           text: isArabic ? "احذف" : "Delete",
           style: "destructive",
-          onPress: () => {
-            // Close the sheet IMMEDIATELY and fire the delete in the
-            // background. The parent handler strips the row from local
-            // ledger state in the same frame, so the ring + meal list
-            // update instantly behind the dismissing sheet. If the
-            // server rejects, the parent restores from authoritative
-            // state and we surface the error here.
-            //
-            // Previously this awaited onDelete before closing — any
-            // server latency (slow Vercel cold start, flaky connection)
-            // read as "Delete did nothing" because the sheet sat frozen.
-            const ids = items.map((it) => it.id);
-            haptics.success();
-            onClose();
-            onDelete(ids).catch((e: unknown) => {
+          onPress: async () => {
+            // Keep the sheet open with a visible spinner while the
+            // server call is in flight — the Delete button swaps to
+            // an ActivityIndicator so the user has clear feedback that
+            // something is happening. Previously we tried to close the
+            // sheet immediately and fire-and-forget the DELETE, which
+            // meant force-quitting the app mid-request left the row
+            // unremoved on the server. Now the sheet stays open until
+            // the server actually acknowledges.
+            setDeleting(true);
+            try {
+              await onDelete(items.map((it) => it.id));
+              haptics.success();
+              onClose();
+            } catch (e) {
               haptics.errorHaptic();
               Alert.alert(
                 isArabic ? "لم يتم الحذف" : "Delete failed",
                 (e as Error).message
               );
-            });
+            }
+            setDeleting(false);
           },
         },
       ]
@@ -385,18 +388,25 @@ export function MealDetailSheet({
               <Pressable
                 style={styles.deleteBtn}
                 onPress={confirmDelete}
+                disabled={deleting}
                 accessibilityRole="button"
               >
-                <Ionicons name="trash" size={16} color={colors.coral} />
-                <Text style={styles.deleteText}>
-                  {multi
-                    ? isArabic
-                      ? `احذف الوجبة (${items!.length} عناصر)`
-                      : `Delete this meal (${items!.length} items)`
-                    : isArabic
-                      ? "احذف هذه الوجبة"
-                      : "Delete this meal"}
-                </Text>
+                {deleting ? (
+                  <ActivityIndicator color={colors.coral} />
+                ) : (
+                  <>
+                    <Ionicons name="trash" size={16} color={colors.coral} />
+                    <Text style={styles.deleteText}>
+                      {multi
+                        ? isArabic
+                          ? `احذف الوجبة (${items!.length} عناصر)`
+                          : `Delete this meal (${items!.length} items)`
+                        : isArabic
+                          ? "احذف هذه الوجبة"
+                          : "Delete this meal"}
+                    </Text>
+                  </>
+                )}
               </Pressable>
             </ScrollView>
           ) : null}

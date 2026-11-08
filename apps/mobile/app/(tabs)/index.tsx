@@ -360,7 +360,14 @@ export default function Home() {
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle(),
-      api<LedgerDayResponse>(ledgerPath),
+      // If the ledger fetch itself fails (timeout, transient 500), we
+      // want the rest of the screen to still load. null means "keep
+      // existing ledger state" — the user sees their last-known data
+      // instead of a stuck loading spinner. Pull-to-refresh will retry.
+      api<LedgerDayResponse>(ledgerPath).catch((e) => {
+        console.warn("ledger fetch failed", e);
+        return null;
+      }),
       api<WaterTodayResponse>("/api/water/today").catch(() => ({
         total_ml: 0,
         target_ml: 2500,
@@ -392,14 +399,13 @@ export default function Home() {
       return;
     }
     setProfile(profileData as Profile);
-    // Merge any still-pending optimistic items into the fresh server
-    // response so a just-logged meal doesn't vanish if the server
-    // ledger hasn't propagated yet. IMPORTANT: only merge when we're
-    // viewing today. The optimistic buffer holds items eaten NOW —
-    // spraying them into a future-date fetch made every tomorrow
-    // duplicate today's ring. Dedup by lowercased name.
-    const pending = isToday ? peekOptimisticLogItems() : [];
-    if (pending.length > 0) {
+    // If the ledger fetch failed we skip updating ledger state (keep
+    // the last-known good view) but continue applying the other
+    // responses — water, day status, streaks, etc. all still move
+    // forward instead of the whole screen staying stuck.
+    const pending =
+      ledgerRes && isToday ? peekOptimisticLogItems() : [];
+    if (ledgerRes && pending.length > 0) {
       // Dedup by scan_id FIRST (plate/menu scans carry one through from
       // calendarCache). Name-matching is a fallback for sources that
       // don't have a scan_id (voice-log, manual meal, barcode).
@@ -447,7 +453,7 @@ export default function Home() {
       if (stillPending.length === 0) {
         clearOptimisticLogItems();
       }
-    } else {
+    } else if (ledgerRes) {
       setLedger(ledgerRes);
     }
     setWater(waterRes);

@@ -175,12 +175,24 @@ export async function api<T>(
     method === "GET"
       ? `${path}${path.includes("?") ? "&" : "?"}_t=${Date.now()}`
       : path;
-  const res = await fetch(`${BASE}${bustedPath}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
-  return parseOrThrow<T>(res, path.split("?")[0] ?? path);
+  // Hard 20s client-side timeout so a hung request can't stall the UI
+  // indefinitely. iOS URLSession's default is 60s per request — long
+  // enough for a user to force-quit the app, which leaves destructive
+  // actions like DELETE in an undefined state. AI endpoints that need
+  // longer should pass their own AbortSignal and override this.
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), 20000);
+  try {
+    const res = await fetch(`${BASE}${bustedPath}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+      signal: init.signal ?? abort.signal,
+    });
+    return await parseOrThrow<T>(res, path.split("?")[0] ?? path);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
