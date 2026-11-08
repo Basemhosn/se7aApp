@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system";
 import { Screen } from "@/components/Screen";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -169,23 +170,44 @@ export default function More() {
           [{ resize: { width: 400 } }],
           { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
         );
+        // React Native + Supabase storage gotcha: fetch(uri).then(r =>
+        // r.blob()) returns a 0-byte blob on iOS because RN's fetch
+        // doesn't fully support reading local file:// URIs as blobs.
+        // The upload succeeds (0 bytes written), signed URL loads 0
+        // bytes, Image component renders nothing — the visible black
+        // circle was the backgroundColor behind an empty <Image>.
+        //
+        // Correct pattern: read the file as base64 via FileSystem,
+        // decode to a Uint8Array, upload the raw bytes. supabase-js
+        // v2 accepts Uint8Array / ArrayBuffer and writes real bytes.
+        const base64 = await FileSystem.readAsStringAsync(resized.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        if (bytes.byteLength === 0) {
+          throw new Error("resized image is empty — try another photo");
+        }
         const path = `${user.id}/avatar.jpg`;
-        const blob = await fetch(resized.uri).then((r) => r.blob());
         const { error: uploadErr } = await supabase.storage
           .from("profile-pics")
-          .upload(path, blob, {
+          .upload(path, bytes, {
             contentType: "image/jpeg",
             upsert: true,
           });
         if (uploadErr) throw uploadErr;
-        await supabase
+        const { error: profileErr } = await supabase
           .from("profiles")
           .update({ avatar_url: path })
           .eq("user_id", user.id);
-        const { data } = await supabase.storage
+        if (profileErr) throw profileErr;
+        const { data, error: signErr } = await supabase.storage
           .from("profile-pics")
           .createSignedUrl(path, 3600);
-        if (data?.signedUrl) setAvatarUrl(data.signedUrl);
+        if (signErr) throw signErr;
+        if (!data?.signedUrl) {
+          throw new Error("signed URL missing from storage response");
+        }
+        setAvatarUrl(data.signedUrl);
       } catch (e) {
         Alert.alert(
           isArabic ? "فشل الرفع" : "Upload failed",
