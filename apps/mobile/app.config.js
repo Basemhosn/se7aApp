@@ -13,14 +13,14 @@
 export default ({ config }) => {
   const plugins = [...(config.plugins ?? [])];
 
-  // Trim defensively — a trailing space in the Codemagic env var would
-  // get baked into Info.plist's CFBundleURLSchemes and fail App Store
-  // validation 90158 ("URL schemes need to begin with an alphabetic
-  // character, and be comprised of alphanumeric characters, the period,
-  // the hyphen or the plus sign only"). Stripping here prevents a
-  // rebuild cycle if the env var picks up invisible whitespace.
-  const googleIosReversedClientId =
-    process.env.GOOGLE_IOS_REVERSED_CLIENT_ID?.trim();
+  // Strip ALL whitespace defensively (not just edges). A URL scheme
+  // is never allowed to contain whitespace anywhere, and we've seen
+  // Codemagic env vars pick up stray spaces both trailing AND inside
+  // the value (likely from copy/paste splitting a long client ID
+  // across lines). App Store validation 90158 rejects either form —
+  // easier to sanitize once here than chase whitespace in the env.
+  const googleIosReversedClientId = process.env.GOOGLE_IOS_REVERSED_CLIENT_ID
+    ?.replace(/\s+/g, "");
   if (googleIosReversedClientId) {
     plugins.push([
       "@react-native-google-signin/google-signin",
