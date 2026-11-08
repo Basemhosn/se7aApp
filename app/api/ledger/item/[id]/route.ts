@@ -27,20 +27,29 @@ export async function DELETE(
     return NextResponse.json({ error: "invalid_id" }, { status: 400 });
   }
 
-  // Scope by user_id explicitly (belt-and-suspenders alongside RLS) so
-  // a stray delete attempt against another user's row can't accidentally
-  // succeed if RLS is ever misconfigured.
-  const { error } = await supabase
+  // Scope by user_id explicitly (belt-and-suspenders alongside RLS) AND
+  // request the deleted row back so we know whether anything was actually
+  // removed. Without this, an RLS-blocked delete returns {error: null}
+  // and we'd falsely 204 — the client would refetch and see the row
+  // still present, which looks like "delete didn't work".
+  const { data, error } = await supabase
     .from("meal_items")
     .delete()
     .eq("id", numericId)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id");
   if (error) {
     return NextResponse.json(
       { error: "delete_failed", details: error.message },
       { status: 500 }
     );
   }
-
-  return new NextResponse(null, { status: 204 });
+  const removed = data?.length ?? 0;
+  // Return JSON with the count so the client can distinguish "actually
+  // deleted" from "already gone / not owned by this user". We DON'T
+  // 404 on removed=0 because that would break double-tap idempotency —
+  // a slow network can retry and the second DELETE legitimately finds
+  // nothing to remove. Final ledger refetch on the client is the source
+  // of truth; the count is informational.
+  return NextResponse.json({ removed }, { status: 200 });
 }
