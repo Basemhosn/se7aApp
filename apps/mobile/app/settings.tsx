@@ -516,7 +516,7 @@ export default function Settings() {
           onPress={() => router.push("/edit-profile" as never)}
         />
         <RowLink
-          label={t("home.change_my_plan")}
+          label={isArabic ? "عدّل الأهداف" : "Change goals"}
           onPress={() => router.push("/onboarding")}
         />
         <RowLink
@@ -613,7 +613,7 @@ export default function Settings() {
         )}
       </Section>
 
-      <Section title={isArabic ? "التكاملات" : "Integrations"}>
+      <Section title={isArabic ? "الاتصالات" : "Connections"}>
         <HealthRow isArabic={isArabic} />
         <CardioToTargetRow isArabic={isArabic} />
         {STRAVA_ENABLED && (
@@ -952,7 +952,8 @@ export default function Settings() {
         />
       </Section>
 
-      <Section title={isArabic ? "المنطقة الخطرة" : "Danger zone"} tint={colors.coral}>
+      <View style={{ marginTop: spacing.xl, gap: spacing.xs }}>
+        <View style={styles.card}>
         <RowLink
           label={t("common.sign_out")}
           onPress={async () => {
@@ -984,7 +985,8 @@ export default function Settings() {
                 : "Delete my account"}
           </Text>
         </Pressable>
-      </Section>
+        </View>
+      </View>
 
       <Text style={styles.foot}>SE7A · v0.1.0</Text>
     </Screen>
