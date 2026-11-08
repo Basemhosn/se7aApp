@@ -77,5 +77,25 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, inserted: inserted?.length ?? 0 });
+  // Defensive: INSERT via supabase-js returning data:null with no error
+  // would mean rows didn't land (shouldn't happen under RLS but has
+  // been observed with auth edge cases). Fail loud instead of letting
+  // the client think the save worked — the user later reopens and
+  // sees nothing.
+  const insertedCount = inserted?.length ?? 0;
+  if (insertedCount !== rows.length) {
+    return NextResponse.json(
+      {
+        error: "insert_partial",
+        details: `expected ${rows.length} rows, got ${insertedCount}`,
+      },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    inserted: insertedCount,
+    ids: inserted?.map((r) => r.id) ?? [],
+  });
 }

@@ -137,6 +137,18 @@ export interface PlateItem {
   carb_g_high: number;
   fat_g_low: number;
   fat_g_high: number;
+  // Micronutrients returned by the plate.v2+ scan prompt. Optional
+  // because legacy / manual items may skip them. Needs to be on this
+  // type so the save pipeline carries them through to /api/ledger/add
+  // — a missing field here silently drops the DB column to null.
+  sodium_mg_low?: number;
+  sodium_mg_high?: number;
+  fiber_g_low?: number;
+  fiber_g_high?: number;
+  sugar_g_low?: number;
+  sugar_g_high?: number;
+  saturated_fat_g_low?: number;
+  saturated_fat_g_high?: number;
 }
 
 export interface PlateScanResult {

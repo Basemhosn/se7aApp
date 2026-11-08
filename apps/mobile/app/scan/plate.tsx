@@ -313,6 +313,8 @@ export default function PlateScan() {
     const e = edits[i];
     if (!e || e.scale === 1) return it;
     const s = e.scale;
+    const scaleOpt = (n: number | undefined, decimals = 1): number | undefined =>
+      n == null ? undefined : Math.round(n * s * 10 ** decimals) / 10 ** decimals;
     return {
       ...it,
       portion_estimate: e.label ?? it.portion_estimate,
@@ -324,6 +326,17 @@ export default function PlateScan() {
       carb_g_high: Math.round(it.carb_g_high * s * 10) / 10,
       fat_g_low: Math.round(it.fat_g_low * s * 10) / 10,
       fat_g_high: Math.round(it.fat_g_high * s * 10) / 10,
+      // Micronutrients were previously left unscaled, so a 2× portion
+      // kept 1× sodium — and worse, the optimistic ring never showed
+      // them at all because they weren't included in the push below.
+      sodium_mg_low: scaleOpt(it.sodium_mg_low, 0),
+      sodium_mg_high: scaleOpt(it.sodium_mg_high, 0),
+      fiber_g_low: scaleOpt(it.fiber_g_low),
+      fiber_g_high: scaleOpt(it.fiber_g_high),
+      sugar_g_low: scaleOpt(it.sugar_g_low),
+      sugar_g_high: scaleOpt(it.sugar_g_high),
+      saturated_fat_g_low: scaleOpt(it.saturated_fat_g_low),
+      saturated_fat_g_high: scaleOpt(it.saturated_fat_g_high),
     };
   };
 
@@ -482,6 +495,20 @@ export default function PlateScan() {
           carb_g_high: it.carb_g_high,
           fat_g_low: it.fat_g_low,
           fat_g_high: it.fat_g_high,
+          // Carry micronutrients through so the Home ring + meal detail
+          // reflect fiber/sugar/sodium/sat-fat immediately. Previously
+          // these were dropped here, leaving the user's metrics stuck
+          // at pre-scan values until a background refetch caught up —
+          // and silently NULL in the DB if the type-level drop also
+          // stripped them on the way to /api/ledger/add.
+          sodium_mg_low: it.sodium_mg_low ?? null,
+          sodium_mg_high: it.sodium_mg_high ?? null,
+          fiber_g_low: it.fiber_g_low ?? null,
+          fiber_g_high: it.fiber_g_high ?? null,
+          sugar_g_low: it.sugar_g_low ?? null,
+          sugar_g_high: it.sugar_g_high ?? null,
+          saturated_fat_g_low: it.saturated_fat_g_low ?? null,
+          saturated_fat_g_high: it.saturated_fat_g_high ?? null,
           scan_id: scanId,
           photo_url: previewUri,
         }))
