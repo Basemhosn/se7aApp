@@ -203,6 +203,62 @@ export function readTodayActiveEnergy(): Promise<number> {
   });
 }
 
+/**
+ * Read step count for a specific local day (YYYY-MM-DD) using the same
+ * day-bucket API Health.app itself renders. Lets Home live-match
+ * Apple Health on past-day views instead of displaying a stale
+ * `daily_activity` snapshot (backfilled infrequently).
+ */
+export function readDaySteps(dateIso: string): Promise<number> {
+  if (Platform.OS !== "ios") return Promise.resolve(0);
+  return new Promise((resolve) => {
+    const [y, m, d] = dateIso.split("-").map(Number);
+    if (!y || !m || !d) return resolve(0);
+    const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+    const opts: HealthInputOptions = {
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      ascending: true,
+      includeManuallyAdded: true,
+      period: 1440,
+    };
+    AppleHealthKit.getDailyStepCountSamples(opts, (err, buckets) => {
+      if (err || !buckets?.length) return resolve(0);
+      const total = (buckets as unknown as HealthValue[]).reduce(
+        (s, v) => s + (Number(v.value) || 0),
+        0
+      );
+      resolve(Math.round(total));
+    });
+  });
+}
+
+/** Read active energy burned for a specific local day (YYYY-MM-DD). */
+export function readDayActiveEnergy(dateIso: string): Promise<number> {
+  if (Platform.OS !== "ios") return Promise.resolve(0);
+  return new Promise((resolve) => {
+    const [y, m, d] = dateIso.split("-").map(Number);
+    if (!y || !m || !d) return resolve(0);
+    const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+    const opts: HealthInputOptions = {
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      ascending: true,
+      includeManuallyAdded: true,
+    };
+    AppleHealthKit.getActiveEnergyBurned(opts, (err, samples) => {
+      if (err || !samples) return resolve(0);
+      const total = (samples as unknown as HealthValue[]).reduce(
+        (s, v) => s + (Number(v.value) || 0),
+        0
+      );
+      resolve(Math.round(total));
+    });
+  });
+}
+
 export interface DailyActivity {
   day: string; // YYYY-MM-DD (local day)
   steps: number;

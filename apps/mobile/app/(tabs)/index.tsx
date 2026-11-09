@@ -462,16 +462,24 @@ export default function Home() {
     setStreak(streakRes);
     setCardio(cardioRes);
     setSleep(sleepRes);
-    // Live-read HealthKit for today so the displayed numbers match
-    // what Apple Health shows right now, not the last synced snapshot.
-    // Only on iOS + today's view; past days stay backed by the
-    // daily_activity server row (already backfilled from HK history).
-    if (isToday && Platform.OS === "ios") {
+    // Live-read HealthKit for the visible day so numbers match Apple
+    // Health exactly. Previously only today was live-read and past
+    // days fell back to the server's `daily_activity` cache — which
+    // can drift significantly (user reported past days off by thousands
+    // of steps). `getDailyStepCountSamples` with `period: 1440` mirrors
+    // the day totals in the Health app's All Recorded Data view, so
+    // every day the user has ever had the device is now accurate.
+    if (Platform.OS === "ios") {
       try {
-        const [steps, activeKcal] = await Promise.all([
-          HK.readTodaySteps(),
-          HK.readTodayActiveEnergy(),
-        ]);
+        const [steps, activeKcal] = isToday
+          ? await Promise.all([
+              HK.readTodaySteps(),
+              HK.readTodayActiveEnergy(),
+            ])
+          : await Promise.all([
+              HK.readDaySteps(viewDateIso),
+              HK.readDayActiveEnergy(viewDateIso),
+            ]);
         setLiveToday({ steps, activeKcal });
       } catch {
         setLiveToday(null);
@@ -772,18 +780,20 @@ export default function Home() {
                 (s, x) => s + (x.kcal_burned ?? 0),
                 0
               ) ?? 0;
-            // For today on iOS, prefer the live HealthKit read if it's
-            // non-zero — guarantees parity with Apple Health rather than
-            // showing the last-synced `daily_activity` snapshot (could
-            // be hours stale). Fall back to server if HK returns 0 or
-            // null (permission denied, no watch, etc.) so the server's
-            // record is still respected when HK can't speak.
+            // On iOS, prefer the live HealthKit read if it's non-zero —
+            // guarantees parity with Apple Health rather than showing
+            // the last-synced `daily_activity` snapshot (which can be
+            // days stale for past-day views). Fall back to server if
+            // HK returns 0 or null (permission denied, no watch, etc.)
+            // so the server's record is still respected when HK can't
+            // speak. Applies to every day the user navigates to, not
+            // just today.
             const displayedSteps =
-              isToday && liveToday && liveToday.steps > 0
+              liveToday && liveToday.steps > 0
                 ? liveToday.steps
                 : serverSteps;
             const displayedActiveKcal =
-              isToday && liveToday && liveToday.activeKcal > 0
+              liveToday && liveToday.activeKcal > 0
                 ? liveToday.activeKcal
                 : serverActiveKcal;
             // Preserve null through to the UI when there's truly no data
