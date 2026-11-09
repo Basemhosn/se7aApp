@@ -93,20 +93,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const insertedIds = inserted?.map((r) => r.id) ?? [];
-  // TEMP DIAGNOSTIC (2026-11-09): pair with the log in /api/ledger/today
-  // to confirm whether items the client thinks it added can actually be
-  // read back. Remove once diagnosed.
-  console.log("ledger/add", JSON.stringify({
-    user_id_suffix: user.id.slice(-8),
-    source,
-    inserted_count: insertedCount,
-    inserted_ids: insertedIds,
-    scan_id,
-  }));
   return NextResponse.json({
     ok: true,
     inserted: insertedCount,
-    ids: insertedIds,
+    ids: inserted?.map((r) => r.id) ?? [],
   });
 }

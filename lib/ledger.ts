@@ -131,22 +131,6 @@ async function getRangeTotals(
   if (error) throw error;
 
   const items = (data ?? []) as MealItemRow[];
-  // TEMP DIAGNOSTIC: log the raw query boundaries + result to figure
-  // out why POST /api/ledger/add succeeds but the next GET returns 0
-  // for ~60-90s before the rows finally appear.
-  if (items.length === 0) {
-    const { count: unfilteredCount } = await supabase
-      .from("meal_items")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId);
-    console.log("ledger/getRangeTotals EMPTY", JSON.stringify({
-      user_id_suffix: userId.slice(-8),
-      day_start: dayStart,
-      day_end: end.toISOString(),
-      unfiltered_count_for_user: unfilteredCount,
-      now_iso: new Date().toISOString(),
-    }));
-  }
   const sum = (key: keyof MealItemRow) =>
     items.reduce((acc, it) => acc + Number(it[key] ?? 0), 0);
 

@@ -47,20 +47,6 @@ export async function GET(request: Request) {
     getDayTotals(supabase, user.id, effectiveDateIso, effectiveTzOffset),
   ]);
 
-  // TEMP DIAGNOSTIC (2026-11-09): user reported items vanishing on app
-  // restart despite successful POST /api/ledger/add. Log what the
-  // query actually returned so we can tell if the server is holding
-  // the items or if the client isn't rendering them. Remove once
-  // diagnosed — don't leave user_id prefixes in prod logs long term.
-  console.log("ledger/today", JSON.stringify({
-    user_id_suffix: user.id.slice(-8),
-    effective_date_iso: effectiveDateIso,
-    tz_offset_min: effectiveTzOffset,
-    item_count: totals.items.length,
-    item_ids: totals.items.map((it) => it.id).slice(0, 20),
-    kcal_sum: totals.kcal,
-  }));
-
   const enrichedItems = await enrichWithPhotos(supabase, totals.items);
   const totalsWithPhotos = { ...totals, items: enrichedItems };
 
