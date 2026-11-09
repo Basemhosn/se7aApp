@@ -23,7 +23,7 @@ export default function Support() {
         <ul>
           <li>
             <strong>General support &amp; bug reports:</strong>{" "}
-            <a href="mailto:support@se7a.app">support@se7a.app</a> — reply within 24
+            <a href="mailto:hello@se7a.app">hello@se7a.app</a> — reply within 24
             hours on weekdays.
           </li>
           <li>
@@ -32,7 +32,7 @@ export default function Support() {
           </li>
           <li>
             <strong>Billing or subscription issues:</strong>{" "}
-            <a href="mailto:support@se7a.app">support@se7a.app</a> — include the
+            <a href="mailto:hello@se7a.app">hello@se7a.app</a> — include the
             Apple order ID from your email receipt.
           </li>
         </ul>
@@ -78,7 +78,7 @@ export default function Support() {
           Tap <strong>Edit</strong> on the review screen to adjust the grammage
           or uncheck items you didn&apos;t eat. The ranges will re-scale. If a
           dish is consistently misidentified, email us a screenshot at{" "}
-          <a href="mailto:support@se7a.app">support@se7a.app</a> — we use real
+          <a href="mailto:hello@se7a.app">hello@se7a.app</a> — we use real
           misses to improve the vision model.
         </p>
 
@@ -104,7 +104,7 @@ export default function Support() {
           </li>
           <li>
             Still stuck? Email{" "}
-            <a href="mailto:support@se7a.app">support@se7a.app</a> from the
+            <a href="mailto:hello@se7a.app">hello@se7a.app</a> from the
             address you&apos;re trying to sign in with and we&apos;ll
             investigate.
           </li>
@@ -160,7 +160,7 @@ export default function Support() {
           board (scans failing for everyone, home not loading), it&apos;s almost
           always a provider issue and usually resolves within minutes. For
           anything persistent, email{" "}
-          <a href="mailto:support@se7a.app">support@se7a.app</a> — we monitor
+          <a href="mailto:hello@se7a.app">hello@se7a.app</a> — we monitor
           every endpoint on an 8-hour rolling health check and respond to
           incidents within the hour.
         </p>
