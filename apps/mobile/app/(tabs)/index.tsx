@@ -59,6 +59,7 @@ import {
 } from "@/lib/scanStore";
 import * as haptics from "@/lib/haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { readCachedLedger, writeCachedLedger } from "@/lib/ledgerCache";
 import { colors, font, radius, spacing } from "@/lib/theme";
 
 /**
@@ -232,6 +233,12 @@ export default function Home() {
       if (v === "eaten" || v === "remaining") setMacroMode(v);
     });
   }, []);
+  // Paint the last-known ledger from AsyncStorage before any network
+  // fetch completes. Cold-opens show the ring + meal list in the first
+  // frame instead of a loading spinner — huge perceived-speed win. The
+  // real fetch (load()) overwrites this shortly after if it differs.
+  // Only applies to the currently-viewed date; past-day navigation
+  // does its own cache read via the date-change effect below.
   const toggleMacroMode = useCallback(() => {
     setMacroMode((prev) => {
       const next = prev === "remaining" ? "eaten" : "remaining";
@@ -453,8 +460,13 @@ export default function Home() {
       if (stillPending.length === 0) {
         clearOptimisticLogItems();
       }
+      // Cache the authoritative server ledger (not the pending-merged
+      // one) so the next cold-open paints from the real data, not an
+      // optimistic overlay that may no longer apply.
+      writeCachedLedger(viewDateIso, ledgerWithFallbackPhotos);
     } else if (ledgerRes) {
       setLedger(ledgerRes);
+      writeCachedLedger(viewDateIso, ledgerRes);
     }
     setWater(waterRes);
     setDayStatus(dayRes);
@@ -545,11 +557,30 @@ export default function Home() {
       initialDateMountRef.current = false;
       return;
     }
-    // Clear stale ledger before the new fetch resolves so the ring
-    // doesn't flash yesterday's totals under tomorrow's date.
-    setLedger(null);
+    // Instead of clearing to null (which flashes a spinner), paint the
+    // cached ledger for the new date if we have one. The fresh fetch
+    // via load() replaces it shortly after.
+    void readCachedLedger(viewDateIso).then((cached) => {
+      if (cached) setLedger(cached);
+      else setLedger(null);
+    });
     load();
   }, [viewDateIso, load]);
+
+  // Mount-time cache read: paint the last-known ledger for today before
+  // useFocusEffect's load() even starts. First frame of a cold-open now
+  // shows the ring + meals instead of a loading spinner.
+  useEffect(() => {
+    void readCachedLedger(viewDateIso).then((cached) => {
+      if (cached) {
+        setLedger(cached);
+        setLoading(false);
+      }
+    });
+    // Intentionally one-shot on mount; date changes are handled by the
+    // effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addWater = async (ml: number) => {
     if (!water) return;
