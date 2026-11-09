@@ -40,6 +40,8 @@ export function getServerClient(): SupabaseClient {
         }
       },
     },
+    // Opt out of Next.js Data Cache — see noStoreFetch comment above.
+    global: { fetch: noStoreFetch },
   });
 }
 
@@ -52,6 +54,23 @@ export function getServerClient(): SupabaseClient {
  * the user identified by the JWT, so all existing row-level policies
  * continue to enforce ownership the same way.
  */
+/**
+ * Supabase's client uses the global `fetch` under the hood. On Vercel
+ * / Next.js 14, that fetch is instrumented with the Data Cache — so
+ * every `select()` call to PostgREST gets cached unless we opt out
+ * explicitly. Route-level `export const dynamic = "force-dynamic"` is
+ * NOT enough; it disables route output caching but leaves fetch-level
+ * caching intact. Result: after an INSERT / UPDATE / DELETE commits,
+ * subsequent reads keep returning the pre-write snapshot for minutes.
+ *
+ * Wrapping the client's fetch to always pass `cache: "no-store"` forces
+ * every request to bypass the Data Cache. This was the root cause of
+ * the "items reappear / deleted items still show / optimistic UI never
+ * reconciles with server" bugs we've been chasing.
+ */
+const noStoreFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
+
 export function getRouteClient(request: Request): SupabaseClient {
   const { url, key } = readEnv();
   const authHeader = request.headers.get("authorization");
@@ -59,7 +78,10 @@ export function getRouteClient(request: Request): SupabaseClient {
     const token = authHeader.replace(/^bearer\s+/i, "").trim();
     if (token) {
       return createClient(url, key, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
+        global: {
+          headers: { Authorization: `Bearer ${token}` },
+          fetch: noStoreFetch,
+        },
         auth: {
           persistSession: false,
           autoRefreshToken: false,
@@ -91,5 +113,7 @@ export function getAdminClient(): SupabaseClient {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
+    // Opt out of Next.js Data Cache — see noStoreFetch comment above.
+    global: { fetch: noStoreFetch },
   });
 }
