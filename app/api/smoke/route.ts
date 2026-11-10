@@ -83,8 +83,16 @@ export async function GET(request: Request) {
     );
   }
 
+  // Force-no-store fetch so Next.js Data Cache can't hand supabase-js
+  // a stale response for the signin POST or any subsequent auth call
+  // (fixes the Next.js+Supabase cache gotcha that was silently making
+  // every .select() 60s stale — see feedback_nextjs_supabase_fetch_cache).
+  const noStoreFetch: typeof fetch = (input, init) =>
+    fetch(input, { ...init, cache: "no-store" });
+
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false },
+    global: { fetch: noStoreFetch },
   });
 
   // Try to sign in as the reviewer account so we can exercise user-
@@ -92,20 +100,41 @@ export async function GET(request: Request) {
   // checks still run but will mostly return 401 — that's fine, the
   // auth_signin check itself flags the real problem.
   let userToken: string | null = null;
+  let signinDetail: string | null = null;
   const testEmail = process.env.TEST_ACCOUNT_EMAIL;
   const testPassword = process.env.TEST_ACCOUNT_PASSWORD;
   if (testEmail && testPassword) {
     try {
       const anon = createClient(supabaseUrl, anonKey, {
         auth: { persistSession: false },
+        global: { fetch: noStoreFetch },
       });
-      const { data } = await anon.auth.signInWithPassword({
+      const { data, error } = await anon.auth.signInWithPassword({
         email: testEmail,
         password: testPassword,
       });
       userToken = data?.session?.access_token ?? null;
-    } catch {
-      /* sign-in check below will report the failure detail */
+      if (error) signinDetail = `signin error: ${error.message}`;
+      // Immediately validate the fresh token against auth.getUser() so
+      // auth_signin reports the REAL state — previously we only checked
+      // that a token string was returned, which hid the "token returned
+      // but rejected on first use" symptom we hit after Token Pass.
+      if (userToken) {
+        const verify = createClient(supabaseUrl, anonKey, {
+          auth: { persistSession: false },
+          global: {
+            fetch: noStoreFetch,
+            headers: { Authorization: `Bearer ${userToken}` },
+          },
+        });
+        const { data: verifyData, error: verifyErr } = await verify.auth.getUser();
+        if (verifyErr || !verifyData?.user) {
+          signinDetail = `token rejected by getUser: ${verifyErr?.message ?? "no user returned"}`;
+          userToken = null;
+        }
+      }
+    } catch (e) {
+      signinDetail = `signin threw: ${(e as Error).message}`;
     }
   }
 
@@ -148,7 +177,12 @@ export async function GET(request: Request) {
             "TEST_ACCOUNT_EMAIL / TEST_ACCOUNT_PASSWORD not set in Vercel env — endpoint checks will 401",
         };
       }
-      if (!userToken) return { status: "fail", detail: "no session returned" };
+      if (!userToken) {
+        return {
+          status: "fail",
+          detail: signinDetail ?? "no session returned",
+        };
+      }
       return { status: "ok", detail: `token_len=${userToken.length}` };
     }),
     runCheck("db_connectivity", async () => {
