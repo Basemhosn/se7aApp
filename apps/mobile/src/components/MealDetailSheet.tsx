@@ -22,6 +22,7 @@ import * as haptics from "@/lib/haptics";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import { scoreDay } from "@/lib/healthScore";
 import { HealthScorePill } from "@/components/HealthScorePill";
+import { parsePortion, formatPortion, unitLongName } from "@/lib/portion";
 
 /**
  * Bottom-sheet meal detail view. Renders the meal's photo (if any),
@@ -36,11 +37,20 @@ export function MealDetailSheet({
   items,
   onClose,
   onDelete,
+  onEditPortion,
   isArabic,
 }: {
   items: MealItemRow[] | null;
   onClose: () => void;
   onDelete: (ids: number[]) => Promise<void>;
+  /** Called when the user confirms a portion edit on an already-logged
+   *  item. Parent owns the API PATCH + optimistic update; we just send
+   *  the new scale + label string. */
+  onEditPortion?: (
+    id: number,
+    scale: number,
+    portionEstimate: string
+  ) => Promise<void>;
   isArabic: boolean;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -62,6 +72,80 @@ export function MealDetailSheet({
 
   const primary = items && items.length > 0 ? items[0]! : null;
   const multi = (items?.length ?? 0) > 1;
+
+  /**
+   * Open the native Alert.prompt for editing a single logged item's
+   * portion. Mirrors the review-screen editPortion in plate.tsx so the
+   * UX feels the same whether the user adjusts before or after save.
+   * Fires the parent callback; parent handles optimistic update + PATCH.
+   */
+  const handleEditPortion = (item: MealItemRow) => {
+    if (!onEditPortion) return;
+    const parsed = parsePortion(item.portion_estimate);
+    if (parsed) {
+      Alert.prompt(
+        isArabic ? "عدّل الحصة" : "Edit portion",
+        isArabic
+          ? `كم ${unitLongName(parsed.unit)}؟ حالياً ${formatPortion(parsed)}.`
+          : `How many ${unitLongName(parsed.unit)}? Currently ${formatPortion(parsed)}.`,
+        [
+          { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+          {
+            text: isArabic ? "حفظ" : "Save",
+            onPress: async (val) => {
+              const n = Number((val ?? "").trim());
+              if (!Number.isFinite(n) || n <= 0) return;
+              const scale = n / parsed.value;
+              const label = formatPortion({ value: n, unit: parsed.unit });
+              try {
+                await onEditPortion(item.id, scale, label);
+                haptics.success();
+              } catch (e) {
+                haptics.errorHaptic();
+                Alert.alert(
+                  isArabic ? "فشل التعديل" : "Couldn't update",
+                  (e as Error).message
+                );
+              }
+            },
+          },
+        ],
+        "plain-text",
+        String(parsed.value)
+      );
+    } else {
+      // Unparseable portion ("a plate", "handful") — fall back to a
+      // multiplier so the user can still proportionally rescale.
+      Alert.prompt(
+        isArabic ? "ضاعف الحصة" : "Scale portion",
+        isArabic
+          ? "اكتب مضاعف (مثل 1.5 أو 0.5)."
+          : "Enter a multiplier (e.g. 1.5 or 0.5).",
+        [
+          { text: isArabic ? "إلغاء" : "Cancel", style: "cancel" },
+          {
+            text: isArabic ? "طبّق" : "Apply",
+            onPress: async (val) => {
+              const n = Number((val ?? "").trim());
+              if (!Number.isFinite(n) || n <= 0) return;
+              try {
+                await onEditPortion(item.id, n, item.portion_estimate ?? "");
+                haptics.success();
+              } catch (e) {
+                haptics.errorHaptic();
+                Alert.alert(
+                  isArabic ? "فشل التعديل" : "Couldn't update",
+                  (e as Error).message
+                );
+              }
+            },
+          },
+        ],
+        "plain-text",
+        "1"
+      );
+    }
+  };
 
   const confirmDelete = () => {
     if (!items || items.length === 0) return;
@@ -250,7 +334,26 @@ export function MealDetailSheet({
 
               <Text style={styles.name}>{displayName}</Text>
               {!multi && primary.portion_estimate ? (
-                <Text style={styles.portion}>{primary.portion_estimate}</Text>
+                onEditPortion ? (
+                  <Pressable
+                    onPress={() => handleEditPortion(primary)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isArabic ? "عدّل الحصة" : "Edit portion"
+                    }
+                  >
+                    <Text style={styles.portionEditable}>
+                      {primary.portion_estimate}
+                      <Text style={styles.portionEditHint}>
+                        {"  "}
+                        {isArabic ? "تعديل" : "edit"}
+                      </Text>
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.portion}>{primary.portion_estimate}</Text>
+                )
               ) : null}
               {multi ? (
                 <Text style={styles.portion}>
@@ -340,16 +443,49 @@ export function MealDetailSheet({
                   <Text style={styles.detailHead}>
                     {(isArabic ? "عناصر" : "Items").toUpperCase()}
                   </Text>
-                  {items!.map((it) => (
-                    <View key={it.id} style={styles.itemRow}>
-                      <Text style={styles.itemName} numberOfLines={1}>
-                        {it.name}
-                      </Text>
-                      <Text style={styles.itemKcal}>
-                        {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
-                      </Text>
-                    </View>
-                  ))}
+                  {items!.map((it) => {
+                    const row = (
+                      <View style={styles.itemRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.itemName} numberOfLines={1}>
+                            {it.name}
+                          </Text>
+                          {it.portion_estimate ? (
+                            <Text style={styles.itemPortion}>
+                              {it.portion_estimate}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.itemKcal}>
+                          {Math.round((it.kcal_low + it.kcal_high) / 2)} kcal
+                        </Text>
+                        {onEditPortion ? (
+                          <Ionicons
+                            name="create-outline"
+                            size={14}
+                            color={colors.dim}
+                            style={{ marginLeft: 6 }}
+                          />
+                        ) : null}
+                      </View>
+                    );
+                    return onEditPortion ? (
+                      <Pressable
+                        key={it.id}
+                        onPress={() => handleEditPortion(it)}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          isArabic
+                            ? `عدّل حصة ${it.name}`
+                            : `Edit portion of ${it.name}`
+                        }
+                      >
+                        {row}
+                      </Pressable>
+                    ) : (
+                      <View key={it.id}>{row}</View>
+                    );
+                  })}
                 </View>
               ) : null}
 
@@ -523,6 +659,23 @@ const styles = StyleSheet.create({
     color: colors.dim,
     fontFamily: font.body,
     fontSize: 13,
+  },
+  portionEditable: {
+    color: colors.ink,
+    fontFamily: font.body,
+    fontSize: 13,
+  },
+  portionEditHint: {
+    color: colors.gold,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  itemPortion: {
+    color: colors.dim,
+    fontFamily: font.body,
+    fontSize: 11,
+    marginTop: 2,
   },
   badges: {
     flexDirection: "row",

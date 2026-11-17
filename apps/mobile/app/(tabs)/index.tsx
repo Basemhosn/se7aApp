@@ -1067,6 +1067,110 @@ export default function Home() {
           // RLS block, etc.), this brings the UI back to truth.
           await load();
         }}
+        onEditPortion={async (itemId, scale, portionEstimate) => {
+          // Optimistic rescale: multiply the targeted row's macros by
+          // `scale` in local state so the ring + meal detail reflect
+          // the change in the same frame. Server PATCH follows; final
+          // load() reconciles. Keep the sheet's locally-held `items`
+          // in sync too via setSelectedMeal so the open sheet re-renders.
+          const scaleNum = (n: number | null) =>
+            n == null ? null : Math.round(Number(n) * scale);
+          const scaleDec = (n: number | null) =>
+            n == null ? null : Math.round(Number(n) * scale * 10) / 10;
+          const rescale = <T extends MealItemRow>(it: T): T => ({
+            ...it,
+            portion_estimate: portionEstimate,
+            kcal_low: scaleNum(it.kcal_low)!,
+            kcal_high: scaleNum(it.kcal_high)!,
+            protein_g_low: scaleDec(it.protein_g_low)!,
+            protein_g_high: scaleDec(it.protein_g_high)!,
+            carb_g_low: scaleDec(it.carb_g_low)!,
+            carb_g_high: scaleDec(it.carb_g_high)!,
+            fat_g_low: scaleDec(it.fat_g_low)!,
+            fat_g_high: scaleDec(it.fat_g_high)!,
+            sodium_mg_low: scaleNum(it.sodium_mg_low ?? null),
+            sodium_mg_high: scaleNum(it.sodium_mg_high ?? null),
+            fiber_g_low: scaleDec(it.fiber_g_low ?? null),
+            fiber_g_high: scaleDec(it.fiber_g_high ?? null),
+            sugar_g_low: scaleDec(it.sugar_g_low ?? null),
+            sugar_g_high: scaleDec(it.sugar_g_high ?? null),
+            saturated_fat_g_low: scaleDec(it.saturated_fat_g_low ?? null),
+            saturated_fat_g_high: scaleDec(it.saturated_fat_g_high ?? null),
+          });
+
+          setLedger((prev) => {
+            if (!prev) return prev;
+            const nextItems = prev.totals.items.map((it) =>
+              it.id === itemId ? rescale(it) : it
+            );
+            const sum = (
+              getter: (
+                it: (typeof nextItems)[number]
+              ) => { low: number; high: number } | null
+            ) => {
+              let low = 0;
+              let high = 0;
+              for (const it of nextItems) {
+                const r = getter(it);
+                if (r) {
+                  low += r.low;
+                  high += r.high;
+                }
+              }
+              return { low, high };
+            };
+            return {
+              ...prev,
+              totals: {
+                items: nextItems,
+                kcal: sum((it) => ({ low: it.kcal_low, high: it.kcal_high })),
+                protein_g: sum((it) => ({ low: it.protein_g_low, high: it.protein_g_high })),
+                carb_g: sum((it) => ({ low: it.carb_g_low, high: it.carb_g_high })),
+                fat_g: sum((it) => ({ low: it.fat_g_low, high: it.fat_g_high })),
+                sodium_mg: sum((it) =>
+                  it.sodium_mg_low != null && it.sodium_mg_high != null
+                    ? { low: it.sodium_mg_low, high: it.sodium_mg_high }
+                    : null
+                ),
+                fiber_g: sum((it) =>
+                  it.fiber_g_low != null && it.fiber_g_high != null
+                    ? { low: it.fiber_g_low, high: it.fiber_g_high }
+                    : null
+                ),
+                sugar_g: sum((it) =>
+                  it.sugar_g_low != null && it.sugar_g_high != null
+                    ? { low: it.sugar_g_low, high: it.sugar_g_high }
+                    : null
+                ),
+                saturated_fat_g: sum((it) =>
+                  it.saturated_fat_g_low != null && it.saturated_fat_g_high != null
+                    ? { low: it.saturated_fat_g_low, high: it.saturated_fat_g_high }
+                    : null
+                ),
+              },
+            };
+          });
+          // Keep the open sheet showing the rescaled numbers.
+          setSelectedMeal((prev) =>
+            prev
+              ? prev.map((it) => (it.id === itemId ? rescale(it) : it))
+              : prev
+          );
+
+          try {
+            await api(`/api/ledger/item/${itemId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ scale, portion_estimate: portionEstimate }),
+            });
+          } catch (e) {
+            // Server rejected — restore truth and re-throw so the sheet
+            // surfaces the error alert.
+            await load();
+            throw e;
+          }
+          markDayDirty();
+          await load();
+        }}
         isArabic={isArabic}
       />
     </SafeAreaView>

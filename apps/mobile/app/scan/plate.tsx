@@ -29,6 +29,7 @@ import { supabase } from "@/lib/supabase";
 import { colors, font, radius, spacing } from "@/lib/theme";
 import type { LedgerDayResponse, MealSlot, PlateItem } from "@/types";
 import { slotForNow } from "@/lib/slot";
+import { parsePortion, formatPortion, unitLongName } from "@/lib/portion";
 
 type Phase = "idle" | "analyzing" | "review" | "saving";
 
@@ -343,15 +344,18 @@ export default function PlateScan() {
   const editPortion = (i: number) => {
     const it = items[i];
     if (!it) return;
-    const parsed = parsePortionGrams(it.portion_estimate);
-    const currentGrams = parsed !== null && edits[i]
-      ? Math.round(parsed * edits[i]!.scale)
-      : parsed;
-
+    const parsed = parsePortion(it.portion_estimate);
     if (parsed !== null) {
+      const currentValue = edits[i]
+        ? parsed.value * edits[i]!.scale
+        : parsed.value;
+      const displayCurrent =
+        currentValue < 10
+          ? Math.round(currentValue * 10) / 10
+          : Math.round(currentValue);
       Alert.prompt(
         t("scan.plate.edit_portion_title"),
-        t("scan.plate.edit_portion_grams_body", { g: parsed }),
+        `How many ${unitLongName(parsed.unit)}? Currently ${formatPortion({ value: currentValue, unit: parsed.unit })}.`,
         [
           { text: t("common.cancel"), style: "cancel" },
           {
@@ -359,16 +363,19 @@ export default function PlateScan() {
             onPress: (val) => {
               const n = Number((val ?? "").trim());
               if (!Number.isFinite(n) || n <= 0) return;
-              const scale = n / parsed;
+              const scale = n / parsed.value;
               setEdits((prev) => ({
                 ...prev,
-                [i]: { scale, label: `${Math.round(n)}g` },
+                [i]: {
+                  scale,
+                  label: formatPortion({ value: n, unit: parsed.unit }),
+                },
               }));
             },
           },
         ],
         "plain-text",
-        String(currentGrams ?? parsed)
+        String(displayCurrent)
       );
     } else {
       Alert.prompt(
@@ -804,15 +811,6 @@ function FitScoreCard({
       ))}
     </View>
   );
-}
-
-function parsePortionGrams(portion: string): number | null {
-  const trimmed = portion.trim();
-  const m = /^(\d+(?:\.\d+)?)\s*(kg|g|grams?)\b/i.exec(trimmed);
-  if (!m) return null;
-  const n = Number(m[1]);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return /^kg$/i.test(m[2]!) ? Math.round(n * 1000) : Math.round(n);
 }
 
 function fmt(n: number): string {
